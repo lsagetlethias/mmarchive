@@ -1,0 +1,39 @@
+# Secrets - JAMAIS dans le repo
+.env
+.env.*
+!.env.example
+
+# Archives extraites - volumineuses et potentiellement sensibles
+archive/
+*.ndjson
+index.db
+index.db-*
+
+# Fichier de selection genere (contient la topologie de l instance)
+channels.yaml
+channels.*.yaml
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Dependances
+node_modules/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Caches
+.cache/
+.eslintcache
+.turbo/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
