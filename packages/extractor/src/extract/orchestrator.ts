@@ -290,6 +290,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       includeEmails: runOptions.includeEmails,
       skipFiles: runOptions.skipFiles,
       maxFileSizeBytes: runOptions.maxFileSizeBytes,
+      downloadConcurrency: runOptions.concurrency,
       alreadyDone: new Set(state.state.downloaded_file_ids),
     });
     warnings.push(...fileResult.warnings);

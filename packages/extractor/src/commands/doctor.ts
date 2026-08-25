@@ -53,6 +53,51 @@ export function estimateRun(input: RunEstimateInput): RunEstimate {
   };
 }
 
+export interface Recommendation {
+  readonly rateLimit: number;
+  readonly concurrency: number;
+  /** Debit theorique atteignable, requetes par seconde. */
+  readonly achievableRate: number;
+}
+
+/** Debit vise quand le serveur n annonce aucune limite. Prudent volontairement. */
+const UNTHROTTLED_TARGET_RATE = 30;
+
+/**
+ * Traduit une latence mesuree en reglages concrets.
+ *
+ * Une requete est dominee par la latence, pas par le debit : a 90 ms, une seule
+ * requete en vol plafonne a 11 par seconde. Le nombre de requetes simultanees
+ * necessaires pour atteindre un debit vise est donc debit x latence, et c est ce
+ * que --concurrency controle indirectement.
+ */
+export function recommendSettings(input: {
+  latencyMs: number;
+  serverLimit: number | undefined;
+}): Recommendation {
+  const latencySeconds = Math.max(input.latencyMs, 1) / 1000;
+  const target =
+    input.serverLimit === undefined
+      ? UNTHROTTLED_TARGET_RATE
+      : Math.max(1, Math.floor(input.serverLimit * 0.8));
+  // Marge de 50 % : les latences varient, et une requete lente ne doit pas
+  // laisser le lien inutilise.
+  const concurrency = Math.min(32, Math.max(1, Math.ceil(target * latencySeconds * 1.5)));
+  return {
+    rateLimit: target,
+    concurrency,
+    achievableRate: Math.round(concurrency / latencySeconds),
+  };
+}
+
+export function medianLatency(samples: readonly number[]): number {
+  if (samples.length === 0) return 0;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[middle] ?? 0;
+  return Math.round(((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2);
+}
+
 function biggestReadableChannel(file: SelectionFile): SelectionChannel | undefined {
   let best: SelectionChannel | undefined;
   for (const team of file.teams) {
@@ -118,6 +163,7 @@ export async function doctorCommand(
 
   logger.section("Taille de page des messages");
   let bestPageSize = 200;
+  const latencies: number[] = [];
   if (target === undefined) {
     logger.warn(
       "Aucun canal lisible fourni : passez --file channels.yaml pour mesurer la taille de page.",
@@ -136,6 +182,7 @@ export async function doctorCommand(
         mmPostListSchema,
       );
       const elapsed = Date.now() - started;
+      latencies.push(elapsed);
       const received = list.order.length;
       rows.push([String(size), String(received), `${String(elapsed)} ms`]);
       if (received >= size) bestPageSize = size;
@@ -165,8 +212,12 @@ export async function doctorCommand(
     }
   }
 
-  const rateLimit =
-    snapshot.limit === undefined ? 8 : Math.max(1, Math.floor(snapshot.limit * 0.8));
+  // La premiere requete porte l etablissement de la connexion TLS : elle n est
+  // pas representative du regime permanent.
+  const steady = latencies.length > 1 ? latencies.slice(1) : latencies;
+  const latencyMs = medianLatency(steady);
+  const advice = recommendSettings({ latencyMs, serverLimit: snapshot.limit });
+  const rateLimit = advice.rateLimit;
   const before = estimateRun({
     channels,
     messages,
@@ -186,11 +237,29 @@ export async function doctorCommand(
     rateLimit,
   });
 
+  logger.section("Reglages conseilles");
+  if (latencyMs > 0) {
+    logger.info(`Latence mediane mesuree : ${String(latencyMs)} ms.`);
+    logger.info(
+      `Une seule requete en vol plafonnerait donc a ${String(Math.round(1000 / latencyMs))} req/s.`,
+    );
+  }
+  logger.success(
+    `--rate-limit ${String(advice.rateLimit)} --concurrency ${String(advice.concurrency)}`,
+  );
+  if (!snapshot.observed) {
+    logger.warn(
+      "L absence d en-tetes ne prouve pas l absence de limite : un proxy en amont peut en " +
+        "appliquer une sans les emettre. Montez par paliers et surveillez les 429.",
+    );
+  }
+
   logger.table(
     ["", "Par defaut", "Calibre"],
     [
       ["Taille de page", "200", String(bestPageSize)],
       ["Debit", "8 req/s", `${String(rateLimit)} req/s`],
+      ["Canaux en parallele", "4", String(advice.concurrency)],
       ["Pages de messages", formatCount(before.postPages), formatCount(after.postPages)],
       ["Requetes totales", formatCount(before.totalRequests), formatCount(after.totalRequests)],
       ["Duree estimee", formatDuration(before.durationMs), formatDuration(after.durationMs)],

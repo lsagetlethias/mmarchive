@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateRun } from "../src/commands/doctor.js";
+import { estimateRun, medianLatency, recommendSettings } from "../src/commands/doctor.js";
 
 const BASE = {
   channels: 758,
@@ -49,5 +49,59 @@ describe("estimateRun", () => {
     const estimate = estimateRun({ ...BASE, channels: 0, messages: 0, users: 0, emojis: 0 });
     expect(estimate.postPages).toBe(0);
     expect(estimate.attachments).toBe(0);
+  });
+});
+
+describe("medianLatency", () => {
+  it("prend la valeur centrale sur un nombre impair", () => {
+    expect(medianLatency([90, 80, 400])).toBe(90);
+  });
+
+  it("moyenne les deux valeurs centrales sur un nombre pair", () => {
+    expect(medianLatency([80, 90, 100, 120])).toBe(95);
+  });
+
+  it("resiste a une valeur aberrante", () => {
+    // Le premier appel porte l etablissement de la connexion TLS : la mediane
+    // ne doit pas s en trouver deformee.
+    expect(medianLatency([372, 90, 80])).toBe(90);
+  });
+
+  it("renvoie zero sans echantillon", () => {
+    expect(medianLatency([])).toBe(0);
+  });
+});
+
+describe("recommendSettings", () => {
+  it("vise 80 % de la limite annoncee par le serveur", () => {
+    const advice = recommendSettings({ latencyMs: 100, serverLimit: 10 });
+    expect(advice.rateLimit).toBe(8);
+  });
+
+  it("vise un debit prudent quand le serveur n annonce aucune limite", () => {
+    const advice = recommendSettings({ latencyMs: 90, serverLimit: undefined });
+    expect(advice.rateLimit).toBe(30);
+  });
+
+  it("deduit la concurrence de la latence, pas d une constante", () => {
+    // A debit vise egal, une instance lointaine exige plus de requetes en vol.
+    const proche = recommendSettings({ latencyMs: 20, serverLimit: undefined });
+    const lointaine = recommendSettings({ latencyMs: 300, serverLimit: undefined });
+    expect(lointaine.concurrency).toBeGreaterThan(proche.concurrency);
+  });
+
+  it("propose une concurrence suffisante pour atteindre le debit vise", () => {
+    const advice = recommendSettings({ latencyMs: 90, serverLimit: undefined });
+    expect(advice.achievableRate).toBeGreaterThanOrEqual(advice.rateLimit);
+  });
+
+  it("ne depasse jamais la borne acceptee par --concurrency", () => {
+    const advice = recommendSettings({ latencyMs: 5000, serverLimit: undefined });
+    expect(advice.concurrency).toBeLessThanOrEqual(32);
+  });
+
+  it("ne descend jamais sous une requete en vol", () => {
+    const advice = recommendSettings({ latencyMs: 1, serverLimit: 1 });
+    expect(advice.concurrency).toBeGreaterThanOrEqual(1);
   });
 });

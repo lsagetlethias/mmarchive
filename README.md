@@ -195,8 +195,15 @@ durée d'une extraction :
   divisé par cinq (`--posts-page-size`) ;
 - **une estimation du run** avant et après calibrage.
 
-Augmenter la parallélisation, elle, ne sert à rien : toutes les requêtes passent par un
-même limiteur de débit, et la concurrence sert à le saturer, pas à le dépasser.
+Le résultat décide de la stratégie. **Si le serveur applique une limite**, elle borne tout
+et augmenter la parallélisation ne sert à rien : la concurrence sert alors à saturer le
+débit autorisé, pas à le dépasser. **Si aucune limite ne s'applique**, le facteur limitant
+devient la latence : à 90 ms, une seule requête en vol plafonne à 11 par seconde, et il
+faut plusieurs requêtes simultanées pour utiliser le lien. `doctor` mesure la latence et
+en déduit le couple `--rate-limit` / `--concurrency` à utiliser.
+
+Dans tous les cas, montez par paliers : l'absence d'en-têtes ne prouve pas l'absence de
+limite, un proxy en amont peut en appliquer une sans les émettre.
 
 ### 2. Sélection
 

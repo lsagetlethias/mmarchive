@@ -1,0 +1,128 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createArchivePaths } from "../src/archive/paths.js";
+import { extractFiles } from "../src/extract/assets.js";
+import type { MattermostApi } from "../src/mattermost/api.js";
+import type { MmFileInfo } from "../src/mattermost/types.js";
+
+const CHANNEL = "c".repeat(26);
+
+function fileInfo(index: number): MmFileInfo {
+  return {
+    id: `f${String(index).padStart(25, "0")}`,
+    user_id: "u".repeat(26),
+    post_id: "p".repeat(26),
+    create_at: 1,
+    update_at: 1,
+    delete_at: 0,
+    name: `piece-${String(index)}.png`,
+    extension: "png",
+    size: 10,
+    mime_type: "image/png",
+    width: 0,
+    height: 0,
+    has_preview_image: false,
+  };
+}
+
+/** Api simulee qui mesure combien de telechargements sont en vol simultanement. */
+function trackingApi(delayMs = 5) {
+  let inFlight = 0;
+  let peak = 0;
+  const api = {
+    downloadFile: async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      inFlight -= 1;
+      return { bytes: new Uint8Array([1, 2, 3]), contentType: "image/png", size: 3 };
+    },
+  } as unknown as MattermostApi;
+  return { api, peak: () => peak };
+}
+
+let workDir: string;
+beforeEach(async () => {
+  workDir = await mkdtemp(join(tmpdir(), "mmarchive-assets-"));
+});
+afterEach(async () => {
+  await rm(workDir, { recursive: true, force: true });
+});
+
+async function run(downloadConcurrency: number | undefined, count = 12) {
+  const { api, peak } = trackingApi();
+  const result = await extractFiles({
+    api,
+    paths: createArchivePaths(workDir),
+    includeEmails: false,
+    skipFiles: false,
+    maxFileSizeBytes: 1024,
+    ...(downloadConcurrency === undefined ? {} : { downloadConcurrency }),
+    files: Array.from({ length: count }, (_, i) => fileInfo(i)),
+    channelId: CHANNEL,
+    alreadyDone: new Set<string>(),
+  });
+  const lines = (await readFile(join(workDir, "files.ndjson"), "utf8"))
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+  return { result, lines, peak: peak() };
+}
+
+describe("concurrence des telechargements de pieces jointes", () => {
+  it("telecharge un par un par defaut", () => {
+    return run(undefined).then(({ peak }) => {
+      expect(peak).toBe(1);
+    });
+  });
+
+  it("mene plusieurs telechargements de front quand on le demande", async () => {
+    // Les pieces jointes dominent le nombre de requetes et chacune est bornee
+    // par la latence : sans concurrence, le lien reste inutilise.
+    const { peak } = await run(4);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(4);
+  });
+
+  it("ecrit exactement un enregistrement par fichier, quel que soit le lot", async () => {
+    const { result, lines } = await run(4, 10);
+    expect(result.downloaded).toBe(10);
+    expect(lines).toHaveLength(10);
+    expect(new Set(lines.map((l) => l.id)).size).toBe(10);
+  });
+
+  it("produit le meme resultat en sequentiel et en concurrent", async () => {
+    const sequential = await run(1, 7);
+    await rm(join(workDir, "files.ndjson"), { force: true });
+    const concurrent = await run(4, 7);
+    expect(concurrent.result.downloaded).toBe(sequential.result.downloaded);
+    expect(concurrent.lines.map((l) => l.id).sort()).toEqual(
+      sequential.lines.map((l) => l.id).sort(),
+    );
+  });
+
+  it("n ecrit aucun binaire mais garde les metadonnees avec --skip-files", async () => {
+    const { api } = trackingApi();
+    const result = await extractFiles({
+      api,
+      paths: createArchivePaths(workDir),
+      includeEmails: false,
+      skipFiles: true,
+      maxFileSizeBytes: 1024,
+      downloadConcurrency: 4,
+      files: [fileInfo(0), fileInfo(1)],
+      channelId: CHANNEL,
+      alreadyDone: new Set<string>(),
+    });
+    expect(result.downloaded).toBe(0);
+    expect(result.skipped).toBe(2);
+    const lines = (await readFile(join(workDir, "files.ndjson"), "utf8"))
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]?.skip_reason).toBe("skipped_by_option");
+  });
+});

@@ -18,6 +18,8 @@ export interface AssetOptions {
   readonly includeEmails: boolean;
   readonly skipFiles: boolean;
   readonly maxFileSizeBytes: number;
+  /** Telechargements de pieces jointes menes de front. Defaut : 1 (sequentiel). */
+  readonly downloadConcurrency?: number | undefined;
   readonly onProgress?: ((done: number, total: number, label: string) => void) | undefined;
 }
 
@@ -198,63 +200,81 @@ export async function extractFiles(
   }
   if (unique.size === 0) return { downloaded, bytes, skipped, warnings };
 
+  /** Telecharge un fichier sans rien ecrire : la sortie reste sequentielle. */
+  async function fetchOne(
+    file: MmFileInfo,
+  ): Promise<{ path: string | null; skipReason: FileSkipReason | undefined; size: number }> {
+    if (options.skipFiles) {
+      return { path: null, skipReason: "skipped_by_option", size: 0 };
+    }
+    if (file.size > options.maxFileSizeBytes) {
+      warnings.push({
+        code: "FILE_TOO_LARGE",
+        channel_id: options.channelId,
+        detail: `${file.name} (${String(file.size)} octets) au dessus de la limite.`,
+      });
+      return { path: null, skipReason: "too_large", size: 0 };
+    }
+    try {
+      const binary = await options.api.downloadFile(file.id);
+      const target = options.paths.attachmentFile(file.id, file.name);
+      await writeBinary(target, binary.bytes);
+      return { path: options.paths.relative(target), skipReason: undefined, size: binary.size };
+    } catch (error) {
+      warnings.push({
+        code: "FILE_DOWNLOAD_FAILED",
+        channel_id: options.channelId,
+        detail: `${file.name} : ${error instanceof Error ? error.message : "erreur inconnue"}`,
+      });
+      return { path: null, skipReason: "download_failed", size: 0 };
+    }
+  }
+
   const writer = await NdjsonWriter.open(options.paths.files, { append: true });
+  const pending = [...unique.values()];
+  // Les pieces jointes representent l essentiel des requetes d une extraction,
+  // et chacune est dominee par la latence reseau plutot que par le debit. Les
+  // traiter par lots concurrents laisse plusieurs requetes en vol ; le limiteur
+  // de debit reste le seul garde-fou du rythme reel.
+  const batchSize = Math.max(1, options.downloadConcurrency ?? 1);
   let done = 0;
   try {
-    for (const file of unique.values()) {
-      done += 1;
-      options.onProgress?.(done, unique.size, file.name);
+    for (let index = 0; index < pending.length; index += batchSize) {
+      const batch = pending.slice(index, index + batchSize);
+      const results = await Promise.all(batch.map(fetchOne));
 
-      let path: string | null = null;
-      let skipReason: FileSkipReason | undefined;
+      for (const [position, file] of batch.entries()) {
+        const result = results[position];
+        if (result === undefined) continue;
+        done += 1;
+        options.onProgress?.(done, pending.length, file.name);
 
-      if (options.skipFiles) {
-        skipReason = "skipped_by_option";
-      } else if (file.size > options.maxFileSizeBytes) {
-        skipReason = "too_large";
-        warnings.push({
-          code: "FILE_TOO_LARGE",
-          channel_id: options.channelId,
-          detail: `${file.name} (${String(file.size)} octets) au dessus de la limite.`,
-        });
-      } else {
-        try {
-          const binary = await options.api.downloadFile(file.id);
-          const target = options.paths.attachmentFile(file.id, file.name);
-          await writeBinary(target, binary.bytes);
-          path = options.paths.relative(target);
+        if (result.path === null) {
+          skipped += 1;
+        } else {
           downloaded += 1;
-          bytes += binary.size;
-        } catch (error) {
-          skipReason = "download_failed";
-          warnings.push({
-            code: "FILE_DOWNLOAD_FAILED",
-            channel_id: options.channelId,
-            detail: `${file.name} : ${error instanceof Error ? error.message : "erreur inconnue"}`,
-          });
+          bytes += result.size;
         }
+
+        const record: ArchiveFile = {
+          id: file.id,
+          post_id: file.post_id,
+          channel_id: options.channelId,
+          user_id: file.user_id,
+          name: file.name,
+          extension: file.extension,
+          size: file.size,
+          mime_type: file.mime_type,
+          width: file.width,
+          height: file.height,
+          has_preview_image: file.has_preview_image,
+          create_at: file.create_at,
+          delete_at: file.delete_at,
+          path: result.path,
+          ...(result.skipReason === undefined ? {} : { skip_reason: result.skipReason }),
+        };
+        await writer.write(record);
       }
-
-      if (path === null) skipped += 1;
-
-      const record: ArchiveFile = {
-        id: file.id,
-        post_id: file.post_id,
-        channel_id: options.channelId,
-        user_id: file.user_id,
-        name: file.name,
-        extension: file.extension,
-        size: file.size,
-        mime_type: file.mime_type,
-        width: file.width,
-        height: file.height,
-        has_preview_image: file.has_preview_image,
-        create_at: file.create_at,
-        delete_at: file.delete_at,
-        path,
-        ...(skipReason === undefined ? {} : { skip_reason: skipReason }),
-      };
-      await writer.write(record);
     }
   } finally {
     await writer.close();
