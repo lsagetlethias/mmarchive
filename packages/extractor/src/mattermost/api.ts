@@ -1,22 +1,22 @@
-import { z } from "zod";
 import { isPublicChannel } from "@mmarchive/shared";
+import { z } from "zod";
 import { MM } from "./endpoints.js";
 import { MattermostForbiddenError, MattermostNotFoundError } from "./errors.js";
 import type { BinaryResponse, MattermostClient } from "./http-client.js";
 import {
-  mmChannelListSchema,
-  mmFileInfoSchema,
-  mmEmojiListSchema,
-  mmPostListSchema,
-  mmTeamListSchema,
-  mmUserListSchema,
-  mmUserSchema,
   type MmChannel,
   type MmEmoji,
   type MmFileInfo,
   type MmPostList,
   type MmTeam,
   type MmUser,
+  mmChannelListSchema,
+  mmEmojiListSchema,
+  mmFileInfoSchema,
+  mmPostListSchema,
+  mmTeamListSchema,
+  mmUserListSchema,
+  mmUserSchema,
 } from "./types.js";
 
 /**

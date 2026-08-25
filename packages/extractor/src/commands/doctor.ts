@@ -1,5 +1,5 @@
 import { categorizeChannel, type SelectionChannel, type SelectionFile } from "@mmarchive/shared";
-import { resolveConnection, type RawOptions } from "../config/options.js";
+import { type RawOptions, resolveConnection } from "../config/options.js";
 import { createContext } from "../context.js";
 import { readSelectionFile } from "../inventory/yaml-file.js";
 import { MM } from "../mattermost/endpoints.js";

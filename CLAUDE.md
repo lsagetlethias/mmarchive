@@ -58,11 +58,17 @@ de tampon mémoire global, virtualisation obligatoire côté rendu.
 
 ## Stack
 
-- Node.js >= 22.12 (`.nvmrc` verrouille la majeure sur 24)
-- pnpm 10, workspaces
+- Node.js >= 24 (`.nvmrc` verrouille la majeure)
+- pnpm 11, workspaces. La politique `minimumReleaseAge` refuse les paquets publies
+  depuis moins d'une heure : c'est voulu, on epingle plutot que de la desactiver.
 - TypeScript 6 strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`),
-  tsgo (`@typescript/native-preview`) pour le typecheck rapide
-- ESLint 10 + typescript-eslint (strictTypeChecked + stylisticTypeChecked) + Prettier
+  tsgo (`@typescript/native-preview` 7) pour le typecheck rapide.
+  Le paquet `typescript` reste en 6 : typescript-eslint ne supporte pas encore
+  l'API TS 7 (issue 10940), et les regles type-aware ont trouve plusieurs bugs reels.
+- **Biome** pour le formatage et le lint syntaxique. **ESLint reduit au strict
+  type-aware** (`no-unnecessary-condition`, `no-base-to-string`, ...), sans aucune
+  regle de style : deux outils qui se disputent un fichier produisent des
+  allers-retours a chaque enregistrement.
 - Vitest 4
 - zod pour la validation aux frontières
 - commander (CLI), yaml (fichier de sélection avec commentaires préservés),
@@ -109,13 +115,32 @@ mmarchive/
 | -------------------------- | ------------------------------------------- |
 | `pnpm typecheck`           | `tsgo --noEmit` (rapide)                    |
 | `pnpm typecheck:tsc`       | Fallback `tsc --noEmit` (stable)            |
-| `pnpm lint` / `lint:fix`   | ESLint 10                                   |
-| `pnpm fmt` / `fmt:check`   | Prettier                                    |
+| `pnpm lint`                | Biome (avec correction) puis ESLint type-aware |
+| `pnpm lint:check`          | Les deux, sans rien modifier                |
+| `pnpm fmt` / `fmt:check`   | Biome                                       |
+| `pnpm mm:*`                | Lance le CLI sans build, via tsx            |
 | `pnpm test` / `test:watch` | Vitest                                      |
 | `pnpm build`               | Bundle les packages qui ont un script build |
 | `pnpm verify`              | typecheck + lint + fmt:check + test + build |
 
 `pnpm verify` doit passer avant de livrer quoi que ce soit (skill `/verif`).
+
+En developpement, le CLI se lance sans build : `pnpm mm:verify --archive ./archive`,
+`pnpm mm:doctor --file channels.yaml`, etc. Le fichier d'environnement est charge
+nativement par Node, sans dependance.
+
+**Verifier une archive apres toute extraction** : `pnpm mm:verify --archive ./archive`.
+C'est ce controle qui a revele qu'une archive assemblee en plusieurs runs pouvait
+etre incoherente avec elle-meme.
+
+## Commits et pull requests
+
+Conventional commits, **en anglais**, valides par commitlint. Le reste du depot
+(documentation, commentaires, messages du CLI) reste en francais pour l'instant.
+
+Portees autorisees : `shared`, `extractor`, `viewer`, `format`, `cli`, `ci`,
+`deps`, `docs`. Le titre de la pull request suit la meme convention, puisque
+c'est lui que reprend le commit de fusion.
 
 ## Hard rules
 

@@ -1,14 +1,14 @@
-import { describe, expect, it } from "vitest";
 import {
   NonPublicChannelError,
   type SelectionChannel,
   type SelectionFile,
 } from "@mmarchive/shared";
+import { describe, expect, it } from "vitest";
 import {
-  SelectionMismatchError,
   assertSelectionMatchesTarget,
   buildPlan,
   restrictToAccessible,
+  SelectionMismatchError,
 } from "../src/extract/plan.js";
 
 function channel(over: Partial<SelectionChannel> = {}): SelectionChannel {

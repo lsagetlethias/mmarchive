@@ -1,6 +1,6 @@
+import type { ConnectionOptions } from "./config/options.js";
 import { MattermostApi } from "./mattermost/api.js";
 import { MattermostClient } from "./mattermost/http-client.js";
-import type { ConnectionOptions } from "./config/options.js";
 import type { Logger } from "./ui/logger.js";
 
 export interface ClientContext {

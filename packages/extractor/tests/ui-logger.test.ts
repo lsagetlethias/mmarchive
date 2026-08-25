@@ -35,7 +35,7 @@ class MemoryStream extends Writable {
 }
 
 /** Octet d echappement suivi d une sequence CSI: la signature d une couleur ANSI. */
-// eslint-disable-next-line no-control-regex -- detecter l octet ESC est le but du test
+
 const ANSI = /\u001B\[[0-9;]*[A-Za-z]/;
 /** Traits de casse, coches, croix et autres glyphes decoratifs hors ASCII. */
 const DECORATIVE = /[\u2500-\u257F\u2714\u2716\u26A0\u00B7]/;
@@ -128,7 +128,6 @@ describe("Logger en mode colore", () => {
     const lines = err.lines;
     expect(lines).toHaveLength(2);
     for (const line of lines) {
-      // eslint-disable-next-line no-control-regex -- detecter l octet ESC est le but du test
       expect(line).toMatch(/\u001B\[39m$/);
     }
   });

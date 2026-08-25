@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { DECLARED_MUTATION_TEMPLATES, MM, type EndpointCall } from "../src/mattermost/endpoints.js";
+import { DECLARED_MUTATION_TEMPLATES, type EndpointCall, MM } from "../src/mattermost/endpoints.js";
 import { ConsentViolationError, ForbiddenMutationError } from "../src/mattermost/errors.js";
 import { MattermostClient } from "../src/mattermost/http-client.js";
-import { MutationGate, grantConsent, noConsent } from "../src/mattermost/mutation-gate.js";
+import { grantConsent, MutationGate, noConsent } from "../src/mattermost/mutation-gate.js";
 
 /** L URL d une requete fetch, quelle que soit la forme de son premier argument. */
 function requestUrl(input: string | URL | Request): string {

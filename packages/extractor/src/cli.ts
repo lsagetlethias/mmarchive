@@ -1,6 +1,6 @@
 import { Command } from "commander";
-import { inventoryCommand } from "./commands/inventory.js";
 import { doctorCommand } from "./commands/doctor.js";
+import { inventoryCommand } from "./commands/inventory.js";
 import { runCommand } from "./commands/run.js";
 import { selectCommand } from "./commands/select.js";
 import { verifyCommand } from "./commands/verify.js";

@@ -1,15 +1,15 @@
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SelectionFile } from "@mmarchive/shared";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { RunOptions } from "../src/config/options.js";
+import { runExtraction } from "../src/extract/orchestrator.js";
 import { MattermostApi } from "../src/mattermost/api.js";
 import { MattermostClient } from "../src/mattermost/http-client.js";
-import { runExtraction } from "../src/extract/orchestrator.js";
 import { Logger } from "../src/ui/logger.js";
 import { RunReporter } from "../src/ui/run-reporter.js";
-import type { RunOptions } from "../src/config/options.js";
 
 function requestUrl(input: string | URL | Request): string {
   if (typeof input === "string") return input;

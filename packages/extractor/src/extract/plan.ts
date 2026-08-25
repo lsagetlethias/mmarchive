@@ -1,10 +1,10 @@
 import {
   assertPublicChannel,
   categorizeChannel,
-  summarizeSelection,
   type SelectionChannel,
   type SelectionFile,
   type SelectionSummary,
+  summarizeSelection,
 } from "@mmarchive/shared";
 
 export interface PlannedChannel {

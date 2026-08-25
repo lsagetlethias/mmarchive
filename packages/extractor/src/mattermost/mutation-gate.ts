@@ -1,5 +1,5 @@
-import { ConsentViolationError } from "./errors.js";
 import { MM } from "./endpoints.js";
+import { ConsentViolationError } from "./errors.js";
 import type { RawExecutor } from "./http-client.js";
 
 /**

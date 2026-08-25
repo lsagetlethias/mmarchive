@@ -8,10 +8,10 @@ import type {
   FileSkipReason,
 } from "@mmarchive/shared";
 import { NdjsonWriter, readNdjson } from "../archive/ndjson.js";
-import { mapWithConcurrency } from "./concurrency.js";
 import type { ArchivePaths } from "../archive/paths.js";
 import type { MattermostApi } from "../mattermost/api.js";
-import { isBotUser, type MmFileInfo, type MmUser } from "../mattermost/types.js";
+import { isBotUser, type MmEmoji, type MmFileInfo, type MmUser } from "../mattermost/types.js";
+import { mapWithConcurrency } from "./concurrency.js";
 
 export interface AssetOptions {
   readonly api: MattermostApi;
@@ -158,7 +158,7 @@ export interface EmojisResult {
  */
 export async function extractEmojis(options: AssetOptions): Promise<EmojisResult> {
   const warnings: ArchiveWarning[] = [];
-  let emojis;
+  let emojis: MmEmoji[];
   try {
     emojis = await options.api.getCustomEmojis();
   } catch (error) {
@@ -298,37 +298,35 @@ export async function extractFiles(
 
   const writer = await NdjsonWriter.open(options.paths.files, { append: true });
   try {
-    {
-      for (const [position, file] of pending.entries()) {
-        const result = results[position];
-        if (result === undefined) continue;
+    for (const [position, file] of pending.entries()) {
+      const result = results[position];
+      if (result === undefined) continue;
 
-        if (result.path === null) {
-          skipped += 1;
-        } else {
-          downloaded += 1;
-          bytes += result.size;
-        }
-
-        const record: ArchiveFile = {
-          id: file.id,
-          post_id: file.post_id,
-          channel_id: options.channelId,
-          user_id: file.user_id,
-          name: file.name,
-          extension: file.extension,
-          size: file.size,
-          mime_type: file.mime_type,
-          width: file.width,
-          height: file.height,
-          has_preview_image: file.has_preview_image,
-          create_at: file.create_at,
-          delete_at: file.delete_at,
-          path: result.path,
-          ...(result.skipReason === undefined ? {} : { skip_reason: result.skipReason }),
-        };
-        await writer.write(record);
+      if (result.path === null) {
+        skipped += 1;
+      } else {
+        downloaded += 1;
+        bytes += result.size;
       }
+
+      const record: ArchiveFile = {
+        id: file.id,
+        post_id: file.post_id,
+        channel_id: options.channelId,
+        user_id: file.user_id,
+        name: file.name,
+        extension: file.extension,
+        size: file.size,
+        mime_type: file.mime_type,
+        width: file.width,
+        height: file.height,
+        has_preview_image: file.has_preview_image,
+        create_at: file.create_at,
+        delete_at: file.delete_at,
+        path: result.path,
+        ...(result.skipReason === undefined ? {} : { skip_reason: result.skipReason }),
+      };
+      await writer.write(record);
     }
   } finally {
     await writer.close();

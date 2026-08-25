@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
 import { summarizeSelection } from "@mmarchive/shared";
+import { describe, expect, it } from "vitest";
+import { buildInventory } from "../src/inventory/build-inventory.js";
 import { MattermostApi } from "../src/mattermost/api.js";
 import { MattermostClient } from "../src/mattermost/http-client.js";
-import { buildInventory } from "../src/inventory/build-inventory.js";
 
 /** L URL d une requete fetch, quelle que soit la forme de son premier argument. */
 function requestUrl(input: string | URL | Request): string {

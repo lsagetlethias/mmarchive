@@ -1,6 +1,8 @@
 import type { ZodType, ZodTypeDef } from "zod";
+import type { EndpointCall } from "./endpoints.js";
 import {
   ForbiddenMutationError,
+  type MattermostAppError,
   MattermostAuthError,
   MattermostForbiddenError,
   MattermostHttpError,
@@ -8,9 +10,7 @@ import {
   MattermostRateLimitError,
   MattermostResponseError,
   NetworkError,
-  type MattermostAppError,
 } from "./errors.js";
-import type { EndpointCall } from "./endpoints.js";
 import { TokenBucketRateLimiter } from "./rate-limiter.js";
 
 export interface MattermostClientOptions {

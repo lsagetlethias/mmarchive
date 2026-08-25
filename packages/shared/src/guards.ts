@@ -1,4 +1,4 @@
-import { CHANNEL_TYPE, MM_ID_LENGTH, type ChannelType } from "./constants.js";
+import { CHANNEL_TYPE, type ChannelType, MM_ID_LENGTH } from "./constants.js";
 
 /**
  * Filtre defensif central. Tout canal qui traverse mmarchive doit passer par

@@ -1,14 +1,14 @@
 import { rm } from "node:fs/promises";
 import type { ArchivePost, ArchiveWarning, ChannelProgress } from "@mmarchive/shared";
-import type { ArchivePaths } from "../archive/paths.js";
 import { NdjsonWriter, readNdjson } from "../archive/ndjson.js";
+import type { ArchivePaths } from "../archive/paths.js";
 import { reverseLines } from "../archive/reverse-file.js";
 import type { MattermostApi } from "../mattermost/api.js";
 import {
-  normalizedHashtags,
-  postsInOrder,
   type MmFileInfo,
   type MmPost,
+  normalizedHashtags,
+  postsInOrder,
 } from "../mattermost/types.js";
 
 /** Pages ecrites entre deux forcages sur disque. */

@@ -1,20 +1,20 @@
 import { readFile, writeFile } from "node:fs/promises";
 import {
+  categorizeChannel,
+  type SelectionFile,
+  type SelectionSummary,
+  selectionFileSchema,
+  summarizeSelection,
+} from "@mmarchive/shared";
+import {
   Document,
-  type YAMLMap,
   isMap,
   isScalar,
   isSeq,
-  parse as parseYaml,
   type Pair,
+  parse as parseYaml,
+  type YAMLMap,
 } from "yaml";
-import {
-  categorizeChannel,
-  selectionFileSchema,
-  summarizeSelection,
-  type SelectionFile,
-  type SelectionSummary,
-} from "@mmarchive/shared";
 
 export class SelectionFileError extends Error {
   readonly filePath: string;
@@ -35,7 +35,7 @@ function pairOf(node: YAMLMap, key: string): Pair | undefined {
  * sont des noeuds Scalar, et une comparaison directe a true renverrait toujours
  * false sans ce dereferencement.
  */
-function valueOf(node: YAMLMap, key: string): unknown {
+function scalarValue(node: YAMLMap, key: string): unknown {
   const pair = pairOf(node, key);
   if (pair === undefined) return undefined;
   return isScalar(pair.value) ? pair.value.value : pair.value;
@@ -108,7 +108,7 @@ export function renderSelectionFile(file: SelectionFile, summary?: SelectionSumm
     for (const teamItem of teamsNode.items) {
       if (!isMap(teamItem)) continue;
       const teamMap = teamItem;
-      if (valueOf(teamMap, "joined") === false) {
+      if (scalarValue(teamMap, "joined") === false) {
         commentValue(teamMap, "joined", "compte NON membre de cette team");
       }
       const channelsNode: unknown = teamMap.get("channels", true);
@@ -117,9 +117,9 @@ export function renderSelectionFile(file: SelectionFile, summary?: SelectionSumm
       for (const channelItem of channelsNode.items) {
         if (!isMap(channelItem)) continue;
         const channelMap = channelItem;
-        const joined = valueOf(channelMap, "joined") === true;
-        const archived = valueOf(channelMap, "archived") === true;
-        const readableRaw = valueOf(channelMap, "readable");
+        const joined = scalarValue(channelMap, "joined") === true;
+        const archived = scalarValue(channelMap, "archived") === true;
+        const readableRaw = scalarValue(channelMap, "readable");
         const readable = readableRaw === undefined ? undefined : readableRaw === true;
 
         const category = categorizeChannel({ joined, archived, readable });
@@ -182,7 +182,7 @@ export async function readSelectionFile(filePath: string): Promise<SelectionFile
     if (code === "ENOENT") {
       throw new SelectionFileError(
         filePath,
-        "fichier introuvable. Lancer d abord: mmarchive-extract inventory --out " + filePath,
+        `fichier introuvable. Lancer d abord: mmarchive-extract inventory --out ${filePath}`,
       );
     }
     throw new SelectionFileError(filePath, "lecture impossible.");

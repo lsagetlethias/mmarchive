@@ -2,16 +2,16 @@ import { writeFile } from "node:fs/promises";
 import * as prompts from "@clack/prompts";
 import type { Manifest, SelectionFile, SelectionMode } from "@mmarchive/shared";
 import { createArchivePaths } from "../archive/paths.js";
-import { parseRunOptions, rateLimitNotice, type RawOptions } from "../config/options.js";
+import { parseRunOptions, type RawOptions, rateLimitNotice } from "../config/options.js";
 import { createContext } from "../context.js";
-import { buildInventory } from "../inventory/build-inventory.js";
-import { readSelectionFile } from "../inventory/yaml-file.js";
+import { runExtraction } from "../extract/orchestrator.js";
 import {
   assertSelectionMatchesTarget,
-  restrictToAccessible,
   type ExtractionPlan,
+  restrictToAccessible,
 } from "../extract/plan.js";
-import { runExtraction } from "../extract/orchestrator.js";
+import { buildInventory } from "../inventory/build-inventory.js";
+import { readSelectionFile } from "../inventory/yaml-file.js";
 import { Logger } from "../ui/logger.js";
 import { TOOL_VERSION } from "../version.js";
 

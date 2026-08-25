@@ -4,9 +4,9 @@ import {
   defaultSelected,
   isExtractable,
   requiresJoin,
-  summarizeSelection,
   type SelectionChannel,
   type SelectionTeam,
+  summarizeSelection,
 } from "../src/selection.js";
 
 function channel(overrides: Partial<SelectionChannel> = {}): SelectionChannel {

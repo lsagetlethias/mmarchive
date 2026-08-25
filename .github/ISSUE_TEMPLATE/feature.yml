@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest a change
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard or impossible today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints this must respect
+      options:
+        - label: Public channels only
+        - label: No implicit join, no write without explicit consent
+        - label: The archive format stays independent from any viewer

@@ -1,8 +1,8 @@
 import {
   categorizeChannel,
-  summarizeSelection,
   type SelectionFile,
   type SelectionSummary,
+  summarizeSelection,
 } from "@mmarchive/shared";
 
 /**

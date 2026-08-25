@@ -19,7 +19,6 @@ const RESERVED_STEMS = new Set([
   ...Array.from({ length: 9 }, (_, index) => `LPT${String(index + 1)}`),
 ]);
 
-// eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
 const INVISIBLE_CHARS = /[\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/;
 

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  NonPublicChannelError,
   assertPublicChannel,
   isArchivedChannel,
   isChannelType,
   isDeactivatedUser,
   isMattermostId,
   isPublicChannel,
+  NonPublicChannelError,
 } from "../src/guards.js";
 
 const NON_PUBLIC_TYPES = ["P", "D", "G"] as const;

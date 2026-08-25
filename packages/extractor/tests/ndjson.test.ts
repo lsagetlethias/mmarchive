@@ -3,12 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  countNdjsonLines,
   NdjsonParseError,
   NdjsonReadError,
   NdjsonSerializeError,
   NdjsonWriteError,
   NdjsonWriter,
-  countNdjsonLines,
   readNdjson,
 } from "../src/archive/ndjson.js";
 

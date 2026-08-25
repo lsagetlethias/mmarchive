@@ -1,9 +1,9 @@
+import { type SelectionFile, summarizeSelection } from "@mmarchive/shared";
 import { describe, expect, it } from "vitest";
-import { summarizeSelection, type SelectionFile } from "@mmarchive/shared";
 import {
-  SelectionFileError,
   parseSelectionFile,
   renderSelectionFile,
+  SelectionFileError,
 } from "../src/inventory/yaml-file.js";
 
 function sampleFile(): SelectionFile {

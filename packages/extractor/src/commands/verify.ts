@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
-import { verifyArchive } from "../verify/checks.js";
 import { Logger } from "../ui/logger.js";
+import { RunReporter } from "../ui/run-reporter.js";
+import { verifyArchive } from "../verify/checks.js";
 
 export interface VerifyCommandOptions {
   readonly archive?: string | undefined;
@@ -20,13 +21,27 @@ export async function verifyCommand(
   logger.section("Verification de l archive");
   logger.info(archiveDir);
 
+  // Une verification complete lit toute l archive : plusieurs minutes sans le
+  // moindre signe si l on n affiche rien.
+  const progress = new RunReporter({ estimatedMessages: 0 });
+  progress.start();
+  progress.phase("Lecture de l archive");
+
   const report = await verifyArchive({
     archiveDir,
     checkBlobs: raw.blobs ?? true,
-    onProgress: (step) => {
-      logger.debug(`Controle : ${step}`);
+    onProgress: (step, done, total) => {
+      if (total !== undefined && total > 0) {
+        progress.phase(step, total);
+        if (done !== undefined) progress.phaseProgress(done);
+      } else if (done !== undefined) {
+        progress.phaseProgress(done);
+      } else {
+        progress.phase(step);
+      }
     },
   });
+  progress.stop();
 
   for (const result of report.results) {
     if (result.severity === "error") {

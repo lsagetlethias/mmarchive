@@ -5,10 +5,10 @@ import {
   OptionsError,
   optionsFingerprint,
   parseRunOptions,
-  rateLimitNotice,
-  resolveConnection,
   type RawOptions,
   type RunOptions,
+  rateLimitNotice,
+  resolveConnection,
 } from "../src/config/options.js";
 
 const SECRET = "xoxb-token-tres-secret-a-ne-jamais-afficher";

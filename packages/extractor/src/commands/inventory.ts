@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { categorizeChannel } from "@mmarchive/shared";
-import { resolveConnection, type RawOptions } from "../config/options.js";
+import { type RawOptions, resolveConnection } from "../config/options.js";
 import { createContext } from "../context.js";
 import { buildInventory } from "../inventory/build-inventory.js";
 import { writeSelectionFile } from "../inventory/yaml-file.js";

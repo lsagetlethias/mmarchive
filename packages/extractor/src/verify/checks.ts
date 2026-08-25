@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  SCHEMA_VERSION,
+  type ArchiveChannel,
   archiveChannelSchema,
   archiveEmojiSchema,
   archiveFileSchema,
@@ -9,12 +9,12 @@ import {
   archiveTeamSchema,
   archiveUserSchema,
   isPublicChannel,
-  manifestSchema,
-  type ArchiveChannel,
   type Manifest,
+  manifestSchema,
+  SCHEMA_VERSION,
 } from "@mmarchive/shared";
 import { readNdjson } from "../archive/ndjson.js";
-import { createArchivePaths, type ArchivePaths } from "../archive/paths.js";
+import { type ArchivePaths, createArchivePaths } from "../archive/paths.js";
 
 export type Severity = "error" | "warning" | "info";
 
@@ -38,7 +38,7 @@ export interface VerifyOptions {
    * sur une archive de production.
    */
   readonly checkBlobs?: boolean | undefined;
-  readonly onProgress?: ((step: string) => void) | undefined;
+  readonly onProgress?: ((step: string, done?: number, total?: number) => void) | undefined;
 }
 
 interface Counters {
@@ -64,8 +64,8 @@ export async function verifyArchive(options: VerifyOptions): Promise<VerifyRepor
   const add = (severity: Severity, label: string, detail?: string): void => {
     results.push(detail === undefined ? { severity, label } : { severity, label, detail });
   };
-  const report = (step: string): void => {
-    options.onProgress?.(step);
+  const report = (step: string, done?: number, total?: number): void => {
+    options.onProgress?.(step, done, total);
   };
 
   report("manifeste");
@@ -82,11 +82,11 @@ export async function verifyArchive(options: VerifyOptions): Promise<VerifyRepor
   const files = await checkFiles(paths, add);
 
   report("messages");
-  const counters = await checkPosts(paths, channels, userIds, files.ids, add);
+  const counters = await checkPosts(paths, channels, userIds, files.ids, add, report);
 
   if (options.checkBlobs === true) {
     report("binaires");
-    await checkBlobs(paths, add);
+    await checkBlobs(paths, add, report);
   }
 
   report("coherence du manifeste");
@@ -304,6 +304,7 @@ async function checkPosts(
   userIds: ReadonlySet<string>,
   fileIds: ReadonlySet<string>,
   add: (severity: Severity, label: string, detail?: string) => void,
+  report: (step: string, done?: number, total?: number) => void,
 ): Promise<Counters> {
   const { readdir } = await import("node:fs/promises");
   const counters: Counters = {
@@ -330,7 +331,10 @@ async function checkPosts(
   const undescribed: string[] = [];
   let invalid = 0;
 
+  let scanned = 0;
   for (const name of postFiles) {
+    scanned += 1;
+    report("messages", scanned, postFiles.length);
     const channelId = name.replace(/\.ndjson$/, "");
     if (!channels.byId.has(channelId)) undescribed.push(channelId);
 
@@ -432,11 +436,15 @@ async function checkPosts(
 async function checkBlobs(
   paths: ArchivePaths,
   add: (severity: Severity, label: string, detail?: string) => void,
+  report: (step: string, done?: number, total?: number) => void,
 ): Promise<void> {
   let missing = 0;
   let present = 0;
 
+  let seen = 0;
   for await (const record of readNdjson<{ path: string | null }>(paths.files)) {
+    seen += 1;
+    if (seen % 500 === 0) report("binaires", seen);
     if (record.path === null) continue;
     try {
       await stat(join(paths.root, record.path));

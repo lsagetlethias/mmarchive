@@ -1,29 +1,29 @@
 import { mkdir } from "node:fs/promises";
 import {
-  CHANNEL_TYPE,
-  SCHEMA_VERSION,
   type ArchiveChannel,
   type ArchiveTeam,
   type ArchiveWarning,
+  CHANNEL_TYPE,
   type JoinedChannelRecord,
   type Manifest,
+  SCHEMA_VERSION,
   type SelectionFile,
   type SelectionMode,
 } from "@mmarchive/shared";
-import { NdjsonWriter, countNdjsonLines, readNdjson } from "../archive/ndjson.js";
-import { createArchivePaths, type ArchivePaths } from "../archive/paths.js";
+import { countNdjsonLines, NdjsonWriter, readNdjson } from "../archive/ndjson.js";
+import { type ArchivePaths, createArchivePaths } from "../archive/paths.js";
 import { StateStore } from "../archive/state-store.js";
 import type { RunOptions } from "../config/options.js";
 import type { MattermostApi } from "../mattermost/api.js";
 import type { MattermostClient } from "../mattermost/http-client.js";
-import { MutationGate, grantConsent, noConsent } from "../mattermost/mutation-gate.js";
+import { grantConsent, MutationGate, noConsent } from "../mattermost/mutation-gate.js";
 import type { MmFileInfo, MmUser } from "../mattermost/types.js";
 import type { Logger } from "../ui/logger.js";
 import { RunReporter } from "../ui/run-reporter.js";
+import { TOOL_VERSION } from "../version.js";
 import { extractEmojis, extractFiles, extractUsers, repairMissingFiles } from "./assets.js";
 import { extractChannelPosts } from "./channel-posts.js";
 import { buildPlan, type ExtractionPlan } from "./plan.js";
-import { TOOL_VERSION } from "../version.js";
 
 export interface RunExtractionOptions {
   readonly api: MattermostApi;

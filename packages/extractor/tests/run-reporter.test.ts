@@ -1,10 +1,10 @@
 import { Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import {
-  RunReporter,
   displayWidth,
   formatCount,
   formatDuration,
+  RunReporter,
   truncateToWidth,
 } from "../src/ui/run-reporter.js";
 
@@ -282,7 +282,7 @@ describe("RunReporter", () => {
     reporter.channelStarted("🏉 CNR - Conseil national de la refondation");
     reporter.channelFinished(100);
     reporter.stop();
-    for (const line of out.text.split(ESC + "[2K")) {
+    for (const line of out.text.split(`${ESC}[2K`)) {
       const visible = line.replace(/\r/g, "");
       if (visible.length === 0) continue;
       expect(displayWidth(visible)).toBeLessThanOrEqual(40);

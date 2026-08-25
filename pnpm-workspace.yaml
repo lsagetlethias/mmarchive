@@ -1,5 +1,16 @@
 packages:
   - "packages/*"
 
-onlyBuiltDependencies:
-  - esbuild
+# pnpm 11 exige une autorisation explicite pour chaque script de post-installation.
+allowBuilds:
+  esbuild: true
+
+# pnpm 11 refuse par defaut les paquets publies depuis moins d'une heure, une
+# protection contre les compromissions de chaine d'approvisionnement. On epingle
+# plutot que de desactiver la politique : picomatch 4.0.7 venait de sortir, la
+# version precedente fait le meme travail.
+overrides:
+  picomatch: 4.0.6
+
+minimumReleaseAgeExclude:
+  - picomatch@4.0.6
