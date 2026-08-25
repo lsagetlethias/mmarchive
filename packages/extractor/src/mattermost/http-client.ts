@@ -85,6 +85,28 @@ function parseAppError(bodyText: string): MattermostAppError | undefined {
  */
 const MAX_RATE_LIMIT_WAIT_MS = 300_000;
 
+/**
+ * Extrait la version du serveur du header X-Version-Id.
+ *
+ * Ce header n est pas contractuel : la spec ne le declare nulle part, et aucun
+ * endpoint ne renvoie la version dans son corps. Sa valeur observee agrege
+ * plusieurs champs separes par des points, par exemple
+ * "10.12.4.19423977602.e5239d09275ad2a214c812215220c92b.false".
+ * Seuls les trois premiers segments numeriques forment la version publiee ;
+ * le reste est un numero de build, un hash et un drapeau entreprise, qui n ont
+ * aucun sens pour un lecteur d archive.
+ */
+export function parseServerVersion(headerValue: string): string | undefined {
+  const segments = headerValue.split(".");
+  const semantic: string[] = [];
+  for (const segment of segments) {
+    if (semantic.length === 3 || !/^\d+$/.test(segment)) break;
+    semantic.push(segment);
+  }
+  if (semantic.length === 3) return semantic.join(".");
+  return headerValue.length > 0 ? headerValue : undefined;
+}
+
 export function rateLimitDelayMs(headers: Headers, attempt: number, nowSeconds: number): number {
   const capped = (ms: number): number => Math.min(Math.ceil(ms), MAX_RATE_LIMIT_WAIT_MS);
 
@@ -245,7 +267,9 @@ export class MattermostClient {
       }
 
       const version = response.headers.get("x-version-id");
-      if (version !== null && version.length > 0) this.detectedServerVersion = version;
+      if (version !== null && version.length > 0) {
+        this.detectedServerVersion = parseServerVersion(version);
+      }
 
       if (response.ok) return response;
 
