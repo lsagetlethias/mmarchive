@@ -214,6 +214,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       includeEmails: runOptions.includeEmails,
       skipFiles: runOptions.skipFiles,
       maxFileSizeBytes: runOptions.maxFileSizeBytes,
+      downloadConcurrency: runOptions.concurrency,
       onProgress: (done, total) => {
         if (total > 0) reporter.phaseTotalIs(total);
         reporter.phaseProgress(done);
@@ -350,6 +351,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     includeEmails: runOptions.includeEmails,
     skipFiles: runOptions.skipFiles,
     maxFileSizeBytes: runOptions.maxFileSizeBytes,
+    downloadConcurrency: runOptions.concurrency,
     onProgress: (done, total) => {
       if (total > 0) reporter.phaseTotalIs(total);
       reporter.phaseProgress(done);

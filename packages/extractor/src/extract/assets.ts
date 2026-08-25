@@ -28,6 +28,28 @@ async function writeBinary(path: string, bytes: Uint8Array): Promise<void> {
   await writeFile(path, bytes);
 }
 
+/**
+ * Applique un traitement par lots concurrents, en conservant l ordre des
+ * resultats.
+ *
+ * Les telechargements sont domines par la latence : les enchainer un par un
+ * laisse une seule requete en vol, quel que soit le debit autorise. Sur 762
+ * emojis a 80 ms, la difference est d une minute.
+ */
+async function mapInBatches<T, R>(
+  items: readonly T[],
+  batchSize: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const size = Math.max(1, batchSize);
+  const results: R[] = [];
+  for (let index = 0; index < items.length; index += size) {
+    const batch = items.slice(index, index + size);
+    results.push(...(await Promise.all(batch.map(worker))));
+  }
+  return results;
+}
+
 export interface UsersResult {
   readonly count: number;
   readonly warnings: readonly ArchiveWarning[];
@@ -60,27 +82,31 @@ export async function extractUsers(
     return { count: 0, warnings };
   }
 
-  const writer = await NdjsonWriter.open(options.paths.users, { append: true });
   let done = 0;
-  try {
-    for (const user of users) {
+  const avatars = await mapInBatches(users, options.downloadConcurrency ?? 1, async (user) => {
+    try {
+      const image = await options.api.downloadAvatar(user.id);
+      const path = options.paths.avatarFile(user.id);
+      await writeBinary(path, image.bytes);
+      return options.paths.relative(path);
+    } catch (error) {
+      warnings.push({
+        code: "AVATAR_DOWNLOAD_FAILED",
+        detail: `Avatar de ${user.username} indisponible : ${
+          error instanceof Error ? error.message : "erreur inconnue"
+        }`,
+      });
+      return null;
+    } finally {
       done += 1;
       options.onProgress?.(done, users.length, user.username);
+    }
+  });
 
-      let avatar: string | null = null;
-      try {
-        const image = await options.api.downloadAvatar(user.id);
-        const path = options.paths.avatarFile(user.id);
-        await writeBinary(path, image.bytes);
-        avatar = options.paths.relative(path);
-      } catch (error) {
-        warnings.push({
-          code: "AVATAR_DOWNLOAD_FAILED",
-          detail: `Avatar de ${user.username} indisponible : ${
-            error instanceof Error ? error.message : "erreur inconnue"
-          }`,
-        });
-      }
+  const writer = await NdjsonWriter.open(options.paths.users, { append: true });
+  try {
+    for (const [index, user] of users.entries()) {
+      const avatar = avatars[index] ?? null;
 
       const record: ArchiveUser = {
         id: user.id,
@@ -130,27 +156,31 @@ export async function extractEmojis(options: AssetOptions): Promise<EmojisResult
     return { count: 0, warnings };
   }
 
-  const writer = await NdjsonWriter.open(options.paths.emojis);
   let done = 0;
-  try {
-    for (const emoji of emojis) {
+  const images = await mapInBatches(emojis, options.downloadConcurrency ?? 1, async (emoji) => {
+    try {
+      const binary = await options.api.downloadEmojiImage(emoji.id);
+      const path = options.paths.emojiFile(emoji.id);
+      await writeBinary(path, binary.bytes);
+      return options.paths.relative(path);
+    } catch (error) {
+      warnings.push({
+        code: "EMOJI_DOWNLOAD_FAILED",
+        detail: `Image de l emoji ${emoji.name} indisponible : ${
+          error instanceof Error ? error.message : "erreur inconnue"
+        }`,
+      });
+      return null;
+    } finally {
       done += 1;
       options.onProgress?.(done, emojis.length, emoji.name);
+    }
+  });
 
-      let image: string | null = null;
-      try {
-        const binary = await options.api.downloadEmojiImage(emoji.id);
-        const path = options.paths.emojiFile(emoji.id);
-        await writeBinary(path, binary.bytes);
-        image = options.paths.relative(path);
-      } catch (error) {
-        warnings.push({
-          code: "EMOJI_DOWNLOAD_FAILED",
-          detail: `Image de l emoji ${emoji.name} indisponible : ${
-            error instanceof Error ? error.message : "erreur inconnue"
-          }`,
-        });
-      }
+  const writer = await NdjsonWriter.open(options.paths.emojis);
+  try {
+    for (const [index, emoji] of emojis.entries()) {
+      const image = images[index] ?? null;
 
       const record: ArchiveEmoji = {
         id: emoji.id,

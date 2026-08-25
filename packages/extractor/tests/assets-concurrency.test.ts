@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createArchivePaths } from "../src/archive/paths.js";
-import { extractFiles } from "../src/extract/assets.js";
+import { extractEmojis, extractFiles, extractUsers } from "../src/extract/assets.js";
 import type { MattermostApi } from "../src/mattermost/api.js";
 import type { MmFileInfo } from "../src/mattermost/types.js";
 
@@ -124,5 +124,95 @@ describe("concurrence des telechargements de pieces jointes", () => {
       .map((line) => JSON.parse(line) as Record<string, unknown>);
     expect(lines).toHaveLength(2);
     expect(lines[0]?.skip_reason).toBe("skipped_by_option");
+  });
+});
+
+describe("concurrence des emojis et des avatars", () => {
+  it("telecharge les emojis de front", async () => {
+    // 762 emojis en serie a 80 ms coutent une minute avec une seule requete en
+    // vol, alors que le limiteur en autorise quarante.
+    let inFlight = 0;
+    let peak = 0;
+    const api = {
+      getCustomEmojis: () =>
+        Promise.resolve(
+          Array.from({ length: 12 }, (_, i) => ({
+            id: `e${String(i).padStart(25, "0")}`,
+            name: `emoji-${String(i)}`,
+            creator_id: "u".repeat(26),
+            create_at: 1,
+            update_at: 1,
+            delete_at: 0,
+          })),
+        ),
+      downloadEmojiImage: async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return { bytes: new Uint8Array([1]), contentType: "image/png", size: 1 };
+      },
+    } as unknown as MattermostApi;
+
+    const result = await extractEmojis({
+      api,
+      paths: createArchivePaths(workDir),
+      includeEmails: false,
+      skipFiles: false,
+      maxFileSizeBytes: 1024,
+      downloadConcurrency: 4,
+    });
+
+    expect(result.count).toBe(12);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(4);
+  });
+
+  it("associe chaque avatar au bon utilisateur malgre la concurrence", async () => {
+    // Les telechargements se terminent dans le desordre : l ecriture doit rester
+    // alignee sur l ordre des utilisateurs.
+    const api = {
+      getUsersByIds: (ids: readonly string[]) =>
+        Promise.resolve(
+          ids.map((id, i) => ({
+            id,
+            username: `user-${String(i)}`,
+            nickname: "",
+            first_name: "",
+            last_name: "",
+            position: "",
+            roles: "system_user",
+            create_at: 1,
+            delete_at: 0,
+          })),
+        ),
+      downloadAvatar: async (userId: string) => {
+        // Les derniers repondent en premier.
+        const delay = 20 - Number(userId.slice(-2).replace(/\D/g, "")) * 2;
+        await new Promise((resolve) => setTimeout(resolve, Math.max(1, delay)));
+        return { bytes: new Uint8Array([1]), contentType: "image/png", size: 1 };
+      },
+    } as unknown as MattermostApi;
+
+    const ids = Array.from({ length: 8 }, (_, i) => `u${String(i).padStart(25, "0")}`);
+    const result = await extractUsers({
+      api,
+      paths: createArchivePaths(workDir),
+      includeEmails: false,
+      skipFiles: false,
+      maxFileSizeBytes: 1024,
+      downloadConcurrency: 4,
+      userIds: new Set(ids),
+      alreadyDone: new Set<string>(),
+    });
+
+    expect(result.count).toBe(8);
+    const lines = (await readFile(join(workDir, "users.ndjson"), "utf8"))
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    for (const line of lines) {
+      expect(String(line.avatar)).toContain(String(line.id));
+    }
   });
 });
