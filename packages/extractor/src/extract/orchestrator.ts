@@ -10,7 +10,7 @@ import {
   type SelectionFile,
   type SelectionMode,
 } from "@mmarchive/shared";
-import { NdjsonWriter } from "../archive/ndjson.js";
+import { NdjsonWriter, countNdjsonLines } from "../archive/ndjson.js";
 import { createArchivePaths, type ArchivePaths } from "../archive/paths.js";
 import { StateStore } from "../archive/state-store.js";
 import type { RunOptions } from "../config/options.js";
@@ -296,6 +296,17 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
   warnings.push(...usersResult.warnings);
   state.state.fetched_user_ids.push(...allUserIds);
 
+  // Compte relu sur le fichier plutot que sur le resultat de l extraction :
+  // en reprise, les emojis ne sont pas reextraits et le compteur serait a zero.
+  let emojiCount: number;
+  try {
+    emojiCount = await countNdjsonLines(paths.emojis);
+  } catch {
+    // Le fichier peut ne pas exister si le listing des emojis a echoue : c est
+    // deja consigne en warning, le compteur reste simplement a zero.
+    emojiCount = 0;
+  }
+
   const teamsWriter = await NdjsonWriter.open(paths.teams);
   try {
     const usedTeamIds = new Set(plan.channels.map((c) => c.teamId));
@@ -375,7 +386,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       channels: archivedChannels.length,
       posts: totalPosts,
       users: usersResult.count,
-      emojis: 0,
+      emojis: emojiCount,
       attachments,
       attachments_bytes: attachmentBytes,
     },

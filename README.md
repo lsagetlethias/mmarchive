@@ -298,6 +298,11 @@ nécessaire ensuite.
 
 ## Sécurité
 
+- **`--include-emails` ne suffit pas à anonymiser une archive.** Le flag ne contrôle que
+  le champ `email` de l'API. Les champs de profil libres (`nickname`, `position`) et le
+  corps des messages contiennent fréquemment des adresses, des numéros de téléphone ou
+  d'autres données personnelles. Traitez toute archive comme contenant des données
+  personnelles. Pour honorer une demande d'effacement, voir `mmarchive-redact`.
 - **Le token donne un accès en écriture à toute l'instance.** Ne le committez jamais.
   Le `.gitignore` couvre `.env`, les archives, les fichiers de sélection et les index.
 - Une archive contient des échanges internes. Même publics au sein d'une organisation,

@@ -3,8 +3,14 @@
 .env.*
 !.env.example
 
-# Archives extraites - volumineuses et potentiellement sensibles
+# Archives extraites - volumineuses et contenant des echanges internes.
+# Le motif couvre tout repertoire commencant par "archive" (archive-essai,
+# archive-2026-08, etc.) : une archive de test contient exactement les memes
+# donnees qu une archive de production.
 archive/
+archive*/
+manifest.json
+.extract-state.json
 *.ndjson
 index.db
 index.db-*

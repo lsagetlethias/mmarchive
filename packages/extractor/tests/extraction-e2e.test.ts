@@ -96,7 +96,22 @@ function makeServer(): { fetchImpl: typeof fetch; requests: Recorded[] } {
     if (path === "/users/me") return json({ id: SELF_ID, username: "alice", roles: "system_user" });
     if (path === "/system/ping") return json({ status: "OK" });
     if (path === `/channels/${CHANNEL_ID}/pinned`) return json({ order: [], posts: {} });
-    if (path === "/emoji") return json([]);
+    if (path === "/emoji") {
+      return json(
+        url.searchParams.get("page") === "0"
+          ? [
+              {
+                id: "e".repeat(26),
+                name: "parrot",
+                creator_id: SELF_ID,
+                create_at: 1,
+                update_at: 1,
+                delete_at: 0,
+              },
+            ]
+          : [],
+      );
+    }
 
     if (path === `/channels/${CHANNEL_ID}/posts`) {
       const before = url.searchParams.get("before");
@@ -318,6 +333,17 @@ describe("extraction de bout en bout", () => {
     expect(posts.every((p) => (p.create_at as number) >= cutoff)).toBe(true);
     expect(manifest.options.since).toBe(new Date(cutoff).toISOString());
     expect(requests.some((r) => r.path.includes("since="))).toBe(false);
+  });
+
+  it("compte les emojis personnalises dans le manifeste", async () => {
+    // Le compteur etait code en dur a zero : releve sur une archive reelle ou
+    // 762 emojis avaient bien ete extraits mais n apparaissaient nulle part.
+    const { manifest } = await extract();
+    expect(manifest.counts.emojis).toBe(1);
+    const lines = (await readFile(join(workDir, "emojis.ndjson"), "utf8"))
+      .split("\n")
+      .filter((line) => line.length > 0);
+    expect(manifest.counts.emojis).toBe(lines.length);
   });
 
   it("produit un manifeste coherent et auditable", async () => {

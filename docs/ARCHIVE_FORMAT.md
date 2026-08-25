@@ -276,6 +276,14 @@ avec les warnings.
 - `email` n'est présent **que** si l'extraction a été lancée avec `--include-emails`.
   Aucun autre champ de contact (téléphone, `auth_data`) n'est jamais archivé.
 
+> **`--include-emails` ne garantit pas une archive sans adresse e-mail.** Le flag ne
+> contrôle que le champ `email` renvoyé par l'API. `nickname` et `position` sont des
+> champs de profil libres, et les utilisateurs y écrivent fréquemment leur adresse
+> (constaté sur des archives réelles : `position` valant
+> `"📧 prenom.nom@exemple.org - CTO"`). Le corps même des messages peut en contenir.
+> Une archive doit donc être traitée comme contenant des données personnelles, quelle
+> que soit la valeur de ce flag.
+
 ---
 
 ## 8. `teams.ndjson`
