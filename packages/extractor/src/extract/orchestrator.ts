@@ -52,6 +52,31 @@ export class ExtractionCancelled extends Error {
   }
 }
 
+/**
+ * Auteurs et pieces jointes citees par les messages deja archives d un canal.
+ * Sert a rattraper ce qu une session precedente a ecrit sans le declarer.
+ */
+async function collectFromArchivedPosts(
+  postsFile: string,
+): Promise<{ userIds: Set<string>; fileIds: Set<string> }> {
+  const userIds = new Set<string>();
+  const fileIds = new Set<string>();
+  try {
+    for await (const post of readNdjson<{
+      user_id: string;
+      file_ids?: string[];
+      reactions?: { user_id: string }[];
+    }>(postsFile)) {
+      if (post.user_id.length > 0) userIds.add(post.user_id);
+      for (const reaction of post.reactions ?? []) userIds.add(reaction.user_id);
+      for (const fileId of post.file_ids ?? []) fileIds.add(fileId);
+    }
+  } catch {
+    // Fichier absent : rien a rattraper, l anomalie est signalee ailleurs.
+  }
+  return { userIds, fileIds };
+}
+
 async function mapWithConcurrency<T>(
   items: readonly T[],
   limit: number,
@@ -222,8 +247,12 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       },
     });
     warnings.push(...result.warnings);
-    state.state.emojis_done = true;
-    await state.saveNow();
+    // Un drapeau de progression ne se pose que sur un succes constate.
+    if (result.listed) {
+      state.state.emojis_done = true;
+      state.touch();
+      await state.saveNow();
+    }
     reporter.note(`Emojis personnalises : ${String(result.count)}`);
   }
 
@@ -234,8 +263,12 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
   const downloadedFileIds = new Set<string>(state.state.downloaded_file_ids);
 
   const allUserIds = new Set<string>();
-  /** Canaux extraits pendant cette session : les autres sont a relire. */
-  const extractedThisSession = new Set<string>();
+  /**
+   * Canaux extraits INTEGRALEMENT pendant cette session, donc dont tous les
+   * messages ont ete lus en memoire. Un canal repris a mi-parcours n en fait
+   * pas partie : sa portion heritee doit etre relue.
+   */
+  const fullyExtractedThisSession = new Set<string>();
   // Ces bornes sont ecrites depuis des taches concurrentes : les porter dans un
   // objet evite que le controle de flux ne les considere figees a null.
   const range: { first: number | null; last: number | null } = { first: null, last: null };
@@ -252,6 +285,26 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     }
 
     reporter.channelStarted(planned.channel.display_name || planned.channel.name);
+
+    /**
+     * Les messages sont deja finalises : seules les pieces jointes restent.
+     *
+     * Ce cas apparait quand une session s arrete entre la finalisation des
+     * posts et la fin de leur phase de pieces jointes. Rejouer la pagination
+     * ne rapporterait rien et risquerait d ecraser un fichier complet ; on
+     * relit donc les file_ids depuis les messages deja ecrits.
+     */
+    if (progress.finalized && progress.posts_written > 0) {
+      const inherited = await collectFromArchivedPosts(paths.postsFile(channelId));
+      for (const userId of inherited.userIds) allUserIds.add(userId);
+      for (const fileId of inherited.fileIds) referencedFileIds.set(fileId, channelId);
+      state.updateProgress(channelId, { status: "complete" });
+      await state.saveNow();
+      reporter.channelEnded(planned.channel.display_name || planned.channel.name);
+      reporter.channelSkipped(progress.posts_written);
+      return;
+    }
+
     // Les messages epingles ne conditionnent pas la premiere page : les attendre
     // laisserait le slot avec une seule requete en vol la ou il peut en avoir
     // deux. Sur un canal median de deux pages, c est un tiers des aller-retours.
@@ -260,6 +313,8 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
 
     let files: readonly MmFileInfo[];
     let postsWritten: number;
+    // Un canal repris conserve des messages ecrits par une session anterieure.
+    const startedFromScratch = progress.posts_written === 0;
     try {
       const result = await extractChannelPosts({
         api,
@@ -298,7 +353,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
         posts_written: result.postsWritten,
       });
       await state.saveNow();
-      extractedThisSession.add(channelId);
+      if (startedFromScratch) fullyExtractedThisSession.add(channelId);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "erreur inconnue";
       warnings.push({ code: "CHANNEL_INCOMPLETE", channel_id: channelId, detail });
@@ -353,8 +408,18 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
    */
   /** Pieces jointes citees par un message, avec le canal qui les cite. */
   const referencedFileIds = new Map<string, string>();
+  /**
+   * Tous les canaux termines sont relus, pas seulement ceux que la session n a
+   * pas touches.
+   *
+   * Un canal interrompu puis acheve a la session suivante figure bien dans
+   * extractedThisSession, alors que la portion heritee de son fichier de
+   * travail n a jamais ete relue : ses auteurs et ses pieces jointes
+   * manquaient. C est le defaut meme que ce rattrapage devait fermer, branche
+   * sur le mauvais predicat.
+   */
   const resumedChannels = plan.channels.filter(
-    (planned) => !extractedThisSession.has(planned.channel.id),
+    (planned) => !fullyExtractedThisSession.has(planned.channel.id),
   );
   if (resumedChannels.length > 0) {
     reporter.phase("Relecture des auteurs", resumedChannels.length);
@@ -532,6 +597,24 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     await teamsWriter.close();
   }
 
+  /**
+   * Messages reellement presents, comptes sur les fichiers. L etat peut diverger
+   * du disque, et le manifeste est la seule piece auditable une fois l instance
+   * disparue : il doit decrire ce qui existe, pas ce qui etait prevu.
+   */
+  let postsOnDisk = 0;
+  for (const channel of archivedChannels) {
+    const real = await countLines(paths.postsFile(channel.id));
+    postsOnDisk += real;
+    if (real !== channel.archived_post_count) {
+      warnings.push({
+        code: "CHANNEL_INCOMPLETE",
+        channel_id: channel.id,
+        detail: `L etat annonce ${String(channel.archived_post_count)} messages, le fichier en contient ${String(real)}.`,
+      });
+    }
+  }
+
   const channelsWriter = await NdjsonWriter.open(paths.channels);
   try {
     await channelsWriter.writeMany(archivedChannels);
@@ -609,7 +692,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     counts: {
       teams: new Set(plan.channels.map((c) => c.teamId)).size,
       channels: archivedChannels.length,
-      posts: archivedChannels.reduce((sum, c) => sum + c.archived_post_count, 0),
+      posts: postsOnDisk,
       users: userCount,
       emojis: emojiCount,
       attachments: attachmentsOnDisk,

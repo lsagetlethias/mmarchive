@@ -149,6 +149,13 @@ async function rewriteUsers(path: string, records: readonly ArchiveUser[]): Prom
 
 export interface EmojisResult {
   readonly count: number;
+  /**
+   * false quand le listing lui-meme a echoue. Une liste vide est un resultat
+   * legitime, un echec ne l est pas : les confondre ferait poser le drapeau
+   * emojis_done et perdrait definitivement la table des emojis, que rien ne
+   * permettrait plus de redemander.
+   */
+  readonly listed: boolean;
   readonly warnings: readonly ArchiveWarning[];
 }
 
@@ -168,7 +175,7 @@ export async function extractEmojis(options: AssetOptions): Promise<EmojisResult
         error instanceof Error ? error.message : "erreur inconnue"
       }`,
     });
-    return { count: 0, warnings };
+    return { count: 0, listed: false, warnings };
   }
 
   let done = 0;
@@ -216,7 +223,7 @@ export async function extractEmojis(options: AssetOptions): Promise<EmojisResult
     await writer.close();
   }
 
-  return { count: emojis.length, warnings };
+  return { count: emojis.length, listed: true, warnings };
 }
 
 export interface FilesResult {

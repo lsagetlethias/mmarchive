@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
 import type { ArchivePost, ArchiveWarning, ChannelProgress } from "@mmarchive/shared";
-import { NdjsonWriter, readNdjson } from "../archive/ndjson.js";
+import { countNdjsonLines, NdjsonWriter, readNdjson } from "../archive/ndjson.js";
 import type { ArchivePaths } from "../archive/paths.js";
 import { reverseLines } from "../archive/reverse-file.js";
 import type { MattermostApi } from "../mattermost/api.js";
@@ -243,10 +243,32 @@ export async function extractChannelPosts(
     await writer.close();
   }
 
-  // Inversion en flux : le .part est en ordre decroissant, le format impose
-  // l ordre croissant.
-  await reverseLines(partPath, finalPath);
-  await rm(partPath, { force: true });
+  /**
+   * Inversion en flux : le .part est en ordre decroissant, le format impose
+   * l ordre croissant.
+   *
+   * Garde-fou capital : on ne finalise QUE si le fichier de travail contient
+   * quelque chose. Un canal dont les posts etaient deja finalises lors d une
+   * session precedente n a plus de .part ; le recreer vide puis l inverser
+   * tronquerait a zero le fichier final, deja complet. Mesure sur un cas
+   * reproduit : 450 messages ramenes a 0, avec un manifeste qui en annoncait
+   * toujours 450.
+   */
+  const partLines = await countNdjsonLines(partPath).catch(() => 0);
+  if (partLines > 0) {
+    await reverseLines(partPath, finalPath);
+    await rm(partPath, { force: true });
+  } else {
+    await rm(partPath, { force: true });
+    if (written > 0 && (await countNdjsonLines(finalPath).catch(() => 0)) === 0) {
+      warnings.push({
+        code: "CHANNEL_INCOMPLETE",
+        channel_id: channelId,
+        detail:
+          "Le fichier de travail est vide alors que des messages etaient attendus : le canal doit etre reextrait.",
+      });
+    }
+  }
 
   const orphanRootIds = [...rootIds].filter((rootId) => !seenIds.has(rootId));
   if (orphanRootIds.length > 0 && options.sinceMillis === undefined) {

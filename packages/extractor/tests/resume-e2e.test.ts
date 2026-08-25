@@ -295,6 +295,40 @@ describe("reprise apres interruption", () => {
     expect(dates).toEqual([...dates].sort((a, b) => a - b));
   });
 
+  it("ne detruit pas un canal dont les messages etaient deja finalises", async () => {
+    // Regression grave : une interruption entre la finalisation des messages et
+    // la fin de leur phase de pieces jointes laissait le canal en in_progress
+    // sans fichier de travail. La reprise recreait un .part vide, l inversait,
+    // et tronquait a zero un fichier complet, pendant que le manifeste
+    // continuait d annoncer le compte d origine.
+    await extractOnce(99, false);
+    const before = await readPosts();
+    expect(before).toHaveLength(TOTAL_POSTS);
+
+    // On rejoue l etat exact d une interruption a ce moment precis.
+    const statePath = join(workDir, ".extract-state.json");
+    const state = JSON.parse(await readFile(statePath, "utf8")) as {
+      channels: Record<string, { status: string; finalized: boolean }>;
+    };
+    const progress = state.channels[CHANNEL_ID];
+    expect(progress?.finalized).toBe(true);
+    if (progress) progress.status = "in_progress";
+    await writeFile(statePath, JSON.stringify(state), "utf8");
+
+    const manifest = await extractOnce(99, true);
+
+    const after = await readPosts();
+    expect(after).toHaveLength(TOTAL_POSTS);
+    expect(after.map((p) => p.id)).toEqual(before.map((p) => p.id));
+    expect(manifest.counts.posts).toBe(TOTAL_POSTS);
+  });
+
+  it("annonce dans le manifeste le nombre de messages reellement sur disque", async () => {
+    const manifest = await extractOnce(99, false);
+    const posts = await readPosts();
+    expect(manifest.counts.posts).toBe(posts.length);
+  });
+
   it("survit a deux interruptions successives", async () => {
     await extractOnce(1, false);
     await extractOnce(1, true);

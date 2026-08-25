@@ -326,6 +326,7 @@ async function checkPosts(
     return counters;
   }
 
+  let unreadableFiles = 0;
   const missingAuthors = new Set<string>();
   const missingFiles = new Set<string>();
   const undescribed: string[] = [];
@@ -343,7 +344,20 @@ async function checkPosts(
     let previous = Number.NEGATIVE_INFINITY;
     let sorted = true;
 
-    for await (const record of readNdjson(join(paths.root, "posts", name))) {
+    // Une ligne illisible ne doit pas tuer la verification : c est precisement
+    // le cas ou l on a le plus besoin du rapport. On la compte et on poursuit.
+    let unreadable = 0;
+    const posts = readNdjson(join(paths.root, "posts", name));
+    for (;;) {
+      let next: IteratorResult<unknown>;
+      try {
+        next = await posts.next();
+      } catch {
+        unreadable += 1;
+        break;
+      }
+      if (next.done === true) break;
+      const record = next.value;
       const parsed = archivePostSchema.safeParse(record);
       if (!parsed.success) {
         invalid += 1;
@@ -366,8 +380,17 @@ async function checkPosts(
       if (post.create_at > counters.lastCreateAt) counters.lastCreateAt = post.create_at;
     }
 
+    if (unreadable > 0) unreadableFiles += 1;
     if (!sorted) counters.unsortedChannels += 1;
     for (const root of roots) if (!ids.has(root)) counters.orphanRoots += 1;
+  }
+
+  if (unreadableFiles > 0) {
+    add(
+      "error",
+      "tous les fichiers de messages sont lisibles",
+      `${String(unreadableFiles)} fichier(s) contiennent une ligne illisible`,
+    );
   }
 
   if (invalid > 0) {
