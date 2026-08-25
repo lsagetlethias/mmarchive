@@ -1,6 +1,12 @@
 import { Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { RunReporter, formatCount, formatDuration } from "../src/ui/run-reporter.js";
+import {
+  RunReporter,
+  displayWidth,
+  formatCount,
+  formatDuration,
+  truncateToWidth,
+} from "../src/ui/run-reporter.js";
 
 const ESC = "\u001B";
 
@@ -49,6 +55,49 @@ describe("formatCount", () => {
   });
 });
 
+describe("displayWidth", () => {
+  it("compte deux colonnes pour un emoji et un ideogramme", () => {
+    expect(displayWidth("ab")).toBe(2);
+    expect(displayWidth("🏉")).toBe(2);
+    expect(displayWidth("漢字")).toBe(4);
+  });
+
+  it("ne compte pas les selecteurs de variation", () => {
+    expect(displayWidth("\u2764\uFE0F")).toBe(1);
+  });
+});
+
+describe("truncateToWidth", () => {
+  it("laisse intact ce qui tient dans la largeur", () => {
+    expect(truncateToWidth("abcdef", 10)).toBe("abcdef");
+  });
+
+  it("tronque et signale la coupe", () => {
+    const result = truncateToWidth("abcdefghij", 5);
+    expect(displayWidth(result)).toBeLessThanOrEqual(5);
+    expect(result.endsWith("…")).toBe(true);
+  });
+
+  it("ne coupe jamais au milieu d un emoji", () => {
+    // Couper un caractere multi-octets en deux produirait un octet de
+    // remplacement et decalerait la largeur reelle.
+    const result = truncateToWidth("🏉🏉🏉🏉", 5);
+    expect(displayWidth(result)).toBeLessThanOrEqual(5);
+    expect(result).not.toContain("\uFFFD");
+  });
+
+  it("respecte la largeur meme avec des caracteres larges", () => {
+    for (const width of [3, 8, 15, 40]) {
+      const result = truncateToWidth("🏉 CNR - Conseil national de la refondation", width);
+      expect(displayWidth(result)).toBeLessThanOrEqual(width);
+    }
+  });
+
+  it("renvoie une chaine vide sur une largeur nulle", () => {
+    expect(truncateToWidth("abc", 0)).toBe("");
+  });
+});
+
 describe("RunReporter", () => {
   function make(out: Capture, clock: ReturnType<typeof makeClock>, interactive = false) {
     return new RunReporter({
@@ -57,6 +106,7 @@ describe("RunReporter", () => {
       now: clock.now,
       interactive,
       intervalMs: 1000,
+      width: 200,
     });
   }
 
@@ -184,6 +234,45 @@ describe("RunReporter", () => {
     expect(reporter.statusLine()).not.toContain("reste");
     reporter.phase("Finalisation");
     expect(reporter.statusLine()).not.toContain("reste");
+  });
+
+  it("ne laisse jamais la ligne interactive depasser la largeur du terminal", () => {
+    // Une ligne trop longue passe a la ligne suivante, et l effacement par \r ne
+    // nettoie que la derniere ligne physique : les precedentes restent a l ecran
+    // et ressemblent a des doublons.
+    const out = new Capture();
+    const reporter = new RunReporter({
+      estimatedMessages: 1000,
+      out,
+      now: makeClock().now,
+      interactive: true,
+      intervalMs: 1000,
+      width: 40,
+    });
+    reporter.phase("Canaux", 758, { estimate: true });
+    reporter.channelStarted("🏉 CNR - Conseil national de la refondation");
+    reporter.channelFinished(100);
+    reporter.stop();
+    for (const line of out.text.split(ESC + "[2K")) {
+      const visible = line.replace(/\r/g, "");
+      if (visible.length === 0) continue;
+      expect(displayWidth(visible)).toBeLessThanOrEqual(40);
+    }
+  });
+
+  it("n annonce pas de temps restant sur un echantillon trop faible", () => {
+    // Les canaux sont tries par nom, pas par taille : apres cinq petits canaux,
+    // l estimation annoncait plus de deux cents heures.
+    const out = new Capture();
+    const clock = makeClock();
+    const reporter = make(out, clock);
+    reporter.phase("Canaux", 758, { estimate: true });
+    clock.advance(60_000);
+    reporter.channelFinished(5);
+    expect(reporter.statusLine()).not.toContain("reste");
+
+    reporter.channelFinished(300);
+    expect(reporter.statusLine()).toContain("reste");
   });
 
   it("stop() est idempotent", () => {

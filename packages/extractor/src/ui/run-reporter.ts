@@ -1,5 +1,11 @@
 const CLEAR_LINE = "\r\u001B[2K";
 
+/** Part des messages a traiter avant d oser annoncer un temps restant. */
+const MIN_SAMPLE_RATIO = 0.02;
+
+/** Largeur retenue quand le terminal n en declare aucune. */
+const DEFAULT_WIDTH = 100;
+
 function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
@@ -20,6 +26,55 @@ export function formatCount(value: number): string {
   return value.toLocaleString("fr-FR");
 }
 
+/**
+ * Largeur d affichage approximative d un caractere dans un terminal.
+ *
+ * Les emojis et les ideogrammes occupent deux colonnes. Les noms de canaux en
+ * contiennent (un canal peut s appeler "🏉 CNR"), et sous-estimer la largeur
+ * ferait passer la ligne de statut a la ligne suivante.
+ */
+function charWidth(codePoint: number): number {
+  if (codePoint >= 0x1100 && codePoint <= 0x115f) return 2;
+  if (codePoint >= 0x2e80 && codePoint <= 0xa4cf) return 2;
+  if (codePoint >= 0xac00 && codePoint <= 0xd7a3) return 2;
+  if (codePoint >= 0xf900 && codePoint <= 0xfaff) return 2;
+  if (codePoint >= 0xfe30 && codePoint <= 0xfe6f) return 2;
+  if (codePoint >= 0xff00 && codePoint <= 0xff60) return 2;
+  if (codePoint >= 0xffe0 && codePoint <= 0xffe6) return 2;
+  if (codePoint >= 0x1f300 && codePoint <= 0x1faff) return 2;
+  // Les selecteurs de variation et jointures ne consomment aucune colonne.
+  if (codePoint === 0xfe0f || codePoint === 0x200d) return 0;
+  return 1;
+}
+
+export function displayWidth(text: string): number {
+  let width = 0;
+  for (const char of text) width += charWidth(char.codePointAt(0) ?? 0);
+  return width;
+}
+
+/**
+ * Tronque a une largeur d affichage donnee.
+ *
+ * Indispensable en mode interactif : une ligne plus large que le terminal passe
+ * a la ligne suivante, et l effacement par \r ne nettoie alors que la derniere
+ * ligne physique. Les precedentes restent a l ecran et ressemblent a des
+ * doublons.
+ */
+export function truncateToWidth(text: string, maxWidth: number): string {
+  if (maxWidth <= 0) return "";
+  if (displayWidth(text) <= maxWidth) return text;
+  let width = 0;
+  let result = "";
+  for (const char of text) {
+    const next = width + charWidth(char.codePointAt(0) ?? 0);
+    if (next > maxWidth - 1) break;
+    result += char;
+    width = next;
+  }
+  return `${result}…`;
+}
+
 export interface RunReporterOptions {
   /** Messages attendus, d apres les compteurs de l inventaire. */
   readonly estimatedMessages: number;
@@ -33,6 +88,8 @@ export interface RunReporterOptions {
    * codes d echappement illisibles.
    */
   readonly interactive?: boolean | undefined;
+  /** Largeur du terminal. Defaut : process.stdout.columns, sinon 100. */
+  readonly width?: number | undefined;
 }
 
 /**
@@ -48,6 +105,7 @@ export class RunReporter {
   private readonly intervalMs: number;
   private readonly now: () => number;
   private readonly interactive: boolean;
+  private readonly width: number;
   private readonly startedAt: number;
 
   private channelsDone = 0;
@@ -69,6 +127,11 @@ export class RunReporter {
     this.intervalMs = options.intervalMs ?? 1000;
     this.now = options.now ?? (() => Date.now());
     this.interactive = options.interactive ?? process.stdout.isTTY;
+    // process.stdout.columns est type number, mais vaut undefined des que la
+    // sortie n est pas un terminal. On verifie la valeur plutot que le type.
+    const columns: unknown = process.stdout.columns;
+    const detected = typeof columns === "number" && columns > 0 ? columns : DEFAULT_WIDTH;
+    this.width = options.width ?? detected;
     this.startedAt = this.now();
   }
 
@@ -184,6 +247,10 @@ export class RunReporter {
   private estimateRemainingMs(elapsed: number): number | undefined {
     if (this.messages <= 0 || this.estimatedMessages <= 0) return undefined;
     if (this.messages >= this.estimatedMessages) return 0;
+    // Les canaux sont tries par nom, pas par taille : les premiers traites ne
+    // disent rien du rythme moyen. Sur un echantillon trop faible l estimation
+    // annonce des centaines d heures et ne sert qu a inquieter.
+    if (this.messages / this.estimatedMessages < MIN_SAMPLE_RATIO) return undefined;
     const rate = this.messages / elapsed;
     if (!Number.isFinite(rate) || rate <= 0) return undefined;
     return (this.estimatedMessages - this.messages) / rate;
@@ -202,7 +269,8 @@ export class RunReporter {
     this.lastRenderAt = now;
 
     if (this.interactive) {
-      this.out.write(`${CLEAR_LINE}${this.statusLine()}`);
+      // Une seule ligne physique, sinon l effacement laisse des restes a l ecran.
+      this.out.write(`${CLEAR_LINE}${truncateToWidth(this.statusLine(), this.width - 1)}`);
       this.lineShown = true;
       return;
     }
