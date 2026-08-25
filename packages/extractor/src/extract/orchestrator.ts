@@ -10,7 +10,7 @@ import {
   type SelectionFile,
   type SelectionMode,
 } from "@mmarchive/shared";
-import { NdjsonWriter, countNdjsonLines } from "../archive/ndjson.js";
+import { NdjsonWriter, countNdjsonLines, readNdjson } from "../archive/ndjson.js";
 import { createArchivePaths, type ArchivePaths } from "../archive/paths.js";
 import { StateStore } from "../archive/state-store.js";
 import type { RunOptions } from "../config/options.js";
@@ -234,8 +234,8 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
   const downloadedFileIds = new Set<string>(state.state.downloaded_file_ids);
 
   const allUserIds = new Set<string>();
-  const archivedChannels: ArchiveChannel[] = [];
-  let totalPosts = 0;
+  /** Canaux extraits pendant cette session : les autres sont a relire. */
+  const extractedThisSession = new Set<string>();
   // Ces bornes sont ecrites depuis des taches concurrentes : les porter dans un
   // objet evite que le controle de flux ne les considere figees a null.
   const range: { first: number | null; last: number | null } = { first: null, last: null };
@@ -278,7 +278,6 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       files = result.files;
       warnings.push(...result.warnings);
       for (const userId of result.userIds) allUserIds.add(userId);
-      totalPosts += result.postsWritten;
       if (result.firstCreateAt !== null) {
         range.first =
           range.first === null ? result.firstCreateAt : Math.min(range.first, result.firstCreateAt);
@@ -294,24 +293,9 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
         posts_written: result.postsWritten,
       });
       await state.saveNow();
+      extractedThisSession.add(channelId);
       reporter.channelEnded(planned.channel.display_name || planned.channel.name);
       reporter.channelFinished(result.postsWritten);
-
-      archivedChannels.push({
-        id: channelId,
-        team_id: planned.teamId,
-        name: planned.channel.name,
-        display_name: planned.channel.display_name,
-        type: CHANNEL_TYPE.PUBLIC,
-        header: "",
-        purpose: "",
-        create_at: 0,
-        delete_at: planned.channel.archived ? 1 : 0,
-        total_msg_count: planned.channel.message_count,
-        last_post_at: result.lastCreateAt ?? 0,
-        was_joined_by_tool: joinedByTool.has(channelId),
-        archived_post_count: result.postsWritten,
-      });
     } catch (error) {
       const detail = error instanceof Error ? error.message : "erreur inconnue";
       warnings.push({ code: "CHANNEL_INCOMPLETE", channel_id: channelId, detail });
@@ -348,6 +332,39 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     await state.saveThrottled();
   });
 
+  /**
+   * Complete la liste des auteurs en relisant les messages deja archives.
+   *
+   * allUserIds ne contient que les auteurs vus pendant CETTE session. Apres une
+   * reprise, ou apres un run interrompu avant l etape des utilisateurs, les
+   * auteurs des canaux repris n auraient jamais de fiche : l archive
+   * referencerait des user_id introuvables. Constate sur une archive reelle,
+   * 2 084 auteurs sans fiche.
+   */
+  const resumedChannels = plan.channels.filter(
+    (planned) => !extractedThisSession.has(planned.channel.id),
+  );
+  if (resumedChannels.length > 0) {
+    reporter.phase("Relecture des auteurs", resumedChannels.length);
+    let scanned = 0;
+    for (const planned of resumedChannels) {
+      const progress = state.progressFor(planned.channel.id);
+      scanned += 1;
+      reporter.phaseProgress(scanned);
+      if (progress.status !== "complete") continue;
+      try {
+        for await (const post of readNdjson<{ user_id: string; reactions?: { user_id: string }[] }>(
+          paths.postsFile(planned.channel.id),
+        )) {
+          if (post.user_id.length > 0) allUserIds.add(post.user_id);
+          for (const reaction of post.reactions ?? []) allUserIds.add(reaction.user_id);
+        }
+      } catch {
+        // Fichier absent ou illisible : deja signale par ailleurs.
+      }
+    }
+  }
+
   reporter.phase("Utilisateurs et avatars", allUserIds.size);
   const usersResult = await extractUsers({
     api,
@@ -369,6 +386,30 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
 
   // Compte relu sur le fichier plutot que sur le resultat de l extraction :
   // en reprise, les emojis ne sont pas reextraits et le compteur serait a zero.
+  /**
+   * Compteurs relus sur les fichiers de l archive, pas cumules sur la session.
+   * Apres une reprise, les totaux de la session ne decrivent qu une fraction du
+   * contenu, et le manifeste doit rester auditable.
+   */
+  const countLines = async (file: string): Promise<number> => {
+    try {
+      return await countNdjsonLines(file);
+    } catch {
+      return 0;
+    }
+  };
+  const userCount = await countLines(paths.users);
+  // Pieces jointes reellement presentes : celles dont le binaire manque gardent
+  // leur metadonnee mais ne doivent pas etre comptees comme archivees.
+  let attachmentsOnDisk = 0;
+  try {
+    for await (const entry of readNdjson<{ path: string | null }>(paths.files)) {
+      if (entry.path !== null) attachmentsOnDisk += 1;
+    }
+  } catch {
+    attachmentsOnDisk = attachments;
+  }
+
   let emojiCount: number;
   try {
     emojiCount = await countNdjsonLines(paths.emojis);
@@ -379,9 +420,39 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
   }
 
   reporter.phase("Finalisation");
+  /**
+   * Decrit tous les canaux presents dans l archive, pas seulement ceux extraits
+   * pendant cette session.
+   *
+   * Le fichier est reecrit a chaque run : n y mettre que le travail de la
+   * session laissait une archive dont les posts existaient sans que le canal
+   * correspondant ne soit decrit. Constate sur une archive reelle, 758 fichiers
+   * de posts pour 120 canaux decrits.
+   */
+  const archivedChannels: ArchiveChannel[] = [];
+  for (const planned of plan.channels) {
+    const progress = state.progressFor(planned.channel.id);
+    if (progress.status !== "complete") continue;
+    archivedChannels.push({
+      id: planned.channel.id,
+      team_id: planned.teamId,
+      name: planned.channel.name,
+      display_name: planned.channel.display_name,
+      type: CHANNEL_TYPE.PUBLIC,
+      header: "",
+      purpose: "",
+      create_at: 0,
+      delete_at: planned.channel.archived ? 1 : 0,
+      total_msg_count: planned.channel.message_count,
+      last_post_at: progress.newest_create_at ?? 0,
+      was_joined_by_tool: joinedByTool.has(planned.channel.id),
+      archived_post_count: progress.posts_written,
+    });
+  }
+
   const teamsWriter = await NdjsonWriter.open(paths.teams);
   try {
-    const usedTeamIds = new Set(plan.channels.map((c) => c.teamId));
+    const usedTeamIds = new Set(archivedChannels.map((c) => c.team_id));
     for (const team of options.selection.teams) {
       if (!usedTeamIds.has(team.id)) continue;
       await teamsWriter.write(
@@ -456,10 +527,10 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     counts: {
       teams: new Set(plan.channels.map((c) => c.teamId)).size,
       channels: archivedChannels.length,
-      posts: totalPosts,
-      users: usersResult.count,
+      posts: archivedChannels.reduce((sum, c) => sum + c.archived_post_count, 0),
+      users: userCount,
       emojis: emojiCount,
-      attachments,
+      attachments: attachmentsOnDisk,
       attachments_bytes: attachmentBytes,
     },
     ...(range.first === null || range.last === null

@@ -435,3 +435,56 @@ describe("countNdjsonLines", () => {
     expect(await countNdjsonLines(target)).toBe(10_000);
   });
 });
+
+describe("separateurs de ligne unicode", () => {
+  it("ne coupe pas une ligne sur U+2028 ni U+2029", async () => {
+    // Constate sur une archive reelle : JSON.stringify n echappe pas ces
+    // caracteres, legaux dans une chaine JSON, mais readline les traite comme
+    // des fins de ligne. Onze occurrences suffisaient a faire passer un fichier
+    // sain pour corrompu.
+    const path = join(workDir, "separateurs.ndjson");
+    const writer = await NdjsonWriter.open(path);
+    await writer.write({ id: "a", message: "avant\u2028apres" });
+    await writer.write({ id: "b", message: "para\u2029graphe" });
+    await writer.write({ id: "c", message: "normal" });
+    await writer.close();
+
+    const records: { id: string; message: string }[] = [];
+    for await (const rec of readNdjson<{ id: string; message: string }>(path)) {
+      records.push(rec);
+    }
+
+    expect(records).toHaveLength(3);
+    expect(records[0]?.message).toBe("avant\u2028apres");
+    expect(records[1]?.message).toBe("para\u2029graphe");
+    expect(await countNdjsonLines(path)).toBe(3);
+  });
+
+  it("compte les memes lignes que le lecteur en presence de U+2028", async () => {
+    const path = join(workDir, "coherence.ndjson");
+    const writer = await NdjsonWriter.open(path);
+    for (let i = 0; i < 20; i++) {
+      await writer.write({ i, message: `ligne\u2028${String(i)}\u2029fin` });
+    }
+    await writer.close();
+
+    let read = 0;
+    for await (const record of readNdjson(path)) {
+      void record;
+      read += 1;
+    }
+    expect(read).toBe(20);
+    expect(await countNdjsonLines(path)).toBe(20);
+  });
+
+  it("preserve un retour chariot a l interieur d un message", async () => {
+    const path = join(workDir, "cr.ndjson");
+    const writer = await NdjsonWriter.open(path);
+    await writer.write({ message: "avec\r\nretour" });
+    await writer.close();
+
+    const records: { message: string }[] = [];
+    for await (const rec of readNdjson<{ message: string }>(path)) records.push(rec);
+    expect(records[0]?.message).toBe("avec\r\nretour");
+  });
+});
