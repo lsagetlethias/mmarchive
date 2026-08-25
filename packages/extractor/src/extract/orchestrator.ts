@@ -178,25 +178,33 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
   const reporter =
     options.reporter ??
     new RunReporter({
-      totalChannels: plan.channels.length,
       estimatedMessages: plan.channels.reduce((sum, c) => sum + c.channel.message_count, 0),
     });
   reporter.start();
 
-  // Emojis : une seule fois pour toute l archive.
+  // Emojis : une seule fois pour toute l archive. C est la premiere etape du
+  // run et elle peut durer une minute, d ou son affichage explicite.
   if (!state.state.emojis_done) {
+    reporter.phase("Emojis personnalises");
     const result = await extractEmojis({
       api,
       paths,
       includeEmails: runOptions.includeEmails,
       skipFiles: runOptions.skipFiles,
       maxFileSizeBytes: runOptions.maxFileSizeBytes,
+      onProgress: (done, total) => {
+        if (total > 0) reporter.phaseTotalIs(total);
+        reporter.phaseProgress(done);
+        reporter.setRequestCount(options.client.requestCount);
+      },
     });
     warnings.push(...result.warnings);
     state.state.emojis_done = true;
     await state.saveNow();
     reporter.note(`Emojis personnalises : ${String(result.count)}`);
   }
+
+  reporter.phase("Canaux", plan.channels.length, { estimate: true });
 
   const allUserIds = new Set<string>();
   const archivedChannels: ArchiveChannel[] = [];
@@ -303,7 +311,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     await state.saveThrottled();
   });
 
-  reporter.note("Resolution des utilisateurs et des avatars...");
+  reporter.phase("Utilisateurs et avatars", allUserIds.size);
   const usersResult = await extractUsers({
     api,
     paths,
@@ -312,6 +320,11 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     includeEmails: runOptions.includeEmails,
     skipFiles: runOptions.skipFiles,
     maxFileSizeBytes: runOptions.maxFileSizeBytes,
+    onProgress: (done, total) => {
+      if (total > 0) reporter.phaseTotalIs(total);
+      reporter.phaseProgress(done);
+      reporter.setRequestCount(options.client.requestCount);
+    },
   });
   warnings.push(...usersResult.warnings);
   state.state.fetched_user_ids.push(...allUserIds);
@@ -327,6 +340,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     emojiCount = 0;
   }
 
+  reporter.phase("Finalisation");
   const teamsWriter = await NdjsonWriter.open(paths.teams);
   try {
     const usedTeamIds = new Set(plan.channels.map((c) => c.teamId));

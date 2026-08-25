@@ -192,7 +192,6 @@ async function exists(path: string): Promise<boolean> {
 /** Reporter muet : les tests ne doivent rien ecrire sur la sortie standard. */
 function silentReporter(): RunReporter {
   return new RunReporter({
-    totalChannels: 0,
     estimatedMessages: 0,
     out: new Writable({
       write(_chunk, _enc, cb: () => void) {

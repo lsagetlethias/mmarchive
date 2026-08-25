@@ -52,7 +52,6 @@ describe("formatCount", () => {
 describe("RunReporter", () => {
   function make(out: Capture, clock: ReturnType<typeof makeClock>, interactive = false) {
     return new RunReporter({
-      totalChannels: 10,
       estimatedMessages: 1000,
       out,
       now: clock.now,
@@ -64,9 +63,40 @@ describe("RunReporter", () => {
   it("annonce la progression en canaux et en messages", () => {
     const out = new Capture();
     const reporter = make(out, makeClock());
+    reporter.phase("Canaux", 10);
     reporter.channelFinished(120);
-    expect(reporter.statusLine()).toContain("1/10 canaux");
+    expect(reporter.statusLine()).toContain("Canaux 1/10");
     expect(plain(reporter.statusLine())).toContain("120 messages");
+  });
+
+  it("nomme l etape en cours des le demarrage, avant tout canal", () => {
+    // Un run commence par les emojis : sans nommer l etape, l affichage
+    // resterait a zero et ressemblerait a un blocage.
+    const out = new Capture();
+    const reporter = make(out, makeClock());
+    expect(reporter.statusLine()).toContain("Preparation");
+    reporter.phase("Emojis personnalises");
+    reporter.phaseTotalIs(762);
+    reporter.phaseProgress(340);
+    expect(reporter.statusLine()).toContain("Emojis personnalises 340/762");
+    expect(reporter.statusLine()).not.toContain("messages");
+  });
+
+  it("remet la progression a zero en changeant d etape", () => {
+    const out = new Capture();
+    const reporter = make(out, makeClock());
+    reporter.phase("Emojis personnalises", 762);
+    reporter.phaseProgress(700);
+    reporter.phase("Utilisateurs et avatars", 82);
+    expect(reporter.statusLine()).toContain("Utilisateurs et avatars 0/82");
+  });
+
+  it("affiche une etape sans total quand sa taille est inconnue", () => {
+    const out = new Capture();
+    const reporter = make(out, makeClock());
+    reporter.phase("Finalisation");
+    expect(reporter.statusLine()).toContain("Finalisation");
+    expect(reporter.statusLine()).not.toContain("/");
   });
 
   it("estime le temps restant a partir des messages, pas des canaux", () => {
@@ -75,6 +105,7 @@ describe("RunReporter", () => {
     const out = new Capture();
     const clock = makeClock();
     const reporter = make(out, clock);
+    reporter.phase("Canaux", 10, { estimate: true });
     clock.advance(10_000);
     reporter.channelFinished(250);
     // 250 messages en 10 s, il en reste 750 : environ 30 s.
@@ -131,10 +162,28 @@ describe("RunReporter", () => {
   it("compte un canal deja termine sans le reextraire", () => {
     const out = new Capture();
     const reporter = make(out, makeClock());
+    reporter.phase("Canaux", 10, { estimate: true });
     reporter.channelFinished(500);
     reporter.channelFinished(500);
-    expect(reporter.statusLine()).toContain("2/10 canaux");
+    expect(reporter.statusLine()).toContain("Canaux 2/10");
     expect(reporter.statusLine()).toContain("reste ~0s");
+  });
+
+  it("n affiche pas de temps restant hors de l etape des canaux", () => {
+    // Pendant les avatars ou la finalisation, les messages n avancent plus :
+    // un temps restant fige serait trompeur.
+    const out = new Capture();
+    const clock = makeClock();
+    const reporter = make(out, clock);
+    reporter.phase("Canaux", 10, { estimate: true });
+    clock.advance(10_000);
+    reporter.channelFinished(250);
+    expect(reporter.statusLine()).toContain("reste");
+
+    reporter.phase("Utilisateurs et avatars", 82);
+    expect(reporter.statusLine()).not.toContain("reste");
+    reporter.phase("Finalisation");
+    expect(reporter.statusLine()).not.toContain("reste");
   });
 
   it("stop() est idempotent", () => {

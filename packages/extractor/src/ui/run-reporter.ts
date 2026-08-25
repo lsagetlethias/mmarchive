@@ -21,8 +21,6 @@ export function formatCount(value: number): string {
 }
 
 export interface RunReporterOptions {
-  /** Canaux a traiter. Sert a la progression. */
-  readonly totalChannels: number;
   /** Messages attendus, d apres les compteurs de l inventaire. */
   readonly estimatedMessages: number;
   readonly out?: NodeJS.WritableStream | undefined;
@@ -46,7 +44,6 @@ export interface RunReporterOptions {
  */
 export class RunReporter {
   private readonly out: NodeJS.WritableStream;
-  private readonly totalChannels: number;
   private readonly estimatedMessages: number;
   private readonly intervalMs: number;
   private readonly now: () => number;
@@ -57,6 +54,10 @@ export class RunReporter {
   private messages = 0;
   private files = 0;
   private requests = 0;
+  private phaseLabel = "Preparation";
+  private phaseDone = 0;
+  private phaseTotal = 0;
+  private phaseEstimates = false;
   private lastRenderAt = 0;
   private lineShown = false;
   private timer: NodeJS.Timeout | undefined;
@@ -64,7 +65,6 @@ export class RunReporter {
 
   constructor(options: RunReporterOptions) {
     this.out = options.out ?? process.stdout;
-    this.totalChannels = Math.max(options.totalChannels, 0);
     this.estimatedMessages = Math.max(options.estimatedMessages, 0);
     this.intervalMs = options.intervalMs ?? 1000;
     this.now = options.now ?? (() => Date.now());
@@ -83,6 +83,35 @@ export class RunReporter {
     }
   }
 
+  /**
+   * Declare l etape en cours.
+   *
+   * Un run ne commence pas par les canaux : les emojis personnalises sont
+   * telecharges d abord, ce qui peut prendre une minute. Sans nommer l etape,
+   * l affichage resterait a "0 canaux, 0 messages" et serait indistinguable
+   * d un blocage.
+   */
+  phase(label: string, total = 0, options: { estimate?: boolean } = {}): void {
+    this.phaseLabel = label;
+    this.phaseTotal = total;
+    this.phaseDone = 0;
+    this.current = "";
+    // Le temps restant se deduit des messages : l afficher pendant une etape qui
+    // n en produit plus donnerait un chiffre fige et trompeur.
+    this.phaseEstimates = options.estimate ?? false;
+    this.render(true);
+  }
+
+  /** Ajuste le total d une etape dont la taille n est connue qu au demarrage. */
+  phaseTotalIs(total: number): void {
+    this.phaseTotal = total;
+  }
+
+  phaseProgress(done: number): void {
+    this.phaseDone = done;
+    this.render();
+  }
+
   channelStarted(label: string): void {
     this.current = label;
     this.render();
@@ -90,6 +119,7 @@ export class RunReporter {
 
   channelFinished(messages: number): void {
     this.channelsDone += 1;
+    this.phaseDone = this.channelsDone;
     this.messages += messages;
     this.render(true);
   }
@@ -122,11 +152,15 @@ export class RunReporter {
   /** Ligne de statut courante. Exposee pour les tests. */
   statusLine(): string {
     const elapsed = this.now() - this.startedAt;
-    const parts = [
-      `[${formatDuration(elapsed)}]`,
-      `${formatCount(this.channelsDone)}/${formatCount(this.totalChannels)} canaux`,
-      `${formatCount(this.messages)} messages`,
-    ];
+    const parts = [`[${formatDuration(elapsed)}]`];
+
+    parts.push(
+      this.phaseTotal > 0
+        ? `${this.phaseLabel} ${formatCount(this.phaseDone)}/${formatCount(this.phaseTotal)}`
+        : this.phaseLabel,
+    );
+
+    if (this.messages > 0) parts.push(`${formatCount(this.messages)} messages`);
     if (this.files > 0) parts.push(`${formatCount(this.files)} fichiers`);
 
     const seconds = elapsed / 1000;
@@ -134,8 +168,10 @@ export class RunReporter {
       parts.push(`${(this.requests / seconds).toFixed(1)} req/s`);
     }
 
-    const remaining = this.estimateRemainingMs(elapsed);
-    if (remaining !== undefined) parts.push(`reste ~${formatDuration(remaining)}`);
+    if (this.phaseEstimates) {
+      const remaining = this.estimateRemainingMs(elapsed);
+      if (remaining !== undefined) parts.push(`reste ~${formatDuration(remaining)}`);
+    }
     if (this.current.length > 0) parts.push(this.current);
     return parts.join("  ");
   }
