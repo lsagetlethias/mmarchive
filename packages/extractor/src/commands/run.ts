@@ -14,6 +14,8 @@ import { buildInventory } from "../inventory/build-inventory.js";
 import { readSelectionFile } from "../inventory/yaml-file.js";
 import { isInteractive } from "../ui/environment.js";
 import { Logger } from "../ui/logger.js";
+import { RunReporter } from "../ui/run-reporter.js";
+import { verifyArchive } from "../verify/checks.js";
 import { TOOL_VERSION } from "../version.js";
 
 /**
@@ -57,11 +59,17 @@ async function confirmJoinsInteractively(
   return !prompts.isCancel(answer) && answer;
 }
 
+export interface RunCommandResult {
+  readonly manifest: Manifest;
+  /** Controles de coherence en echec. Non nul, l archive n est pas fiable. */
+  readonly verificationErrors: number;
+}
+
 export async function runCommand(
-  raw: RawOptions,
+  raw: RawOptions & { verify?: boolean | undefined },
   env: Record<string, string | undefined>,
   logger = new Logger(),
-): Promise<Manifest> {
+): Promise<RunCommandResult> {
   const options = parseRunOptions(raw, env);
   const notice = rateLimitNotice(options.rateLimit);
   if (notice !== undefined) logger.warn(notice);
@@ -136,5 +144,58 @@ export async function runCommand(
         "Partir publierait un second message systeme dans chacun.",
     );
   }
-  return manifest;
+
+  /**
+   * Verification immediate de l archive produite.
+   *
+   * Une extraction assemblee en plusieurs sessions peut etre incoherente avec
+   * elle-meme sans que rien ne le signale sur le moment. Detecter l ecart des
+   * la fin du run, plutot que des heures ou des jours plus tard, est la
+   * difference entre relancer une reprise et decouvrir le probleme quand
+   * l instance n existe plus.
+   *
+   * La presence des binaires n est pas recontrolee : ils viennent d etre
+   * ecrits, et cela couterait un appel systeme par piece jointe.
+   */
+  if (raw.verify === false) {
+    logger.warn("Verification de l archive sautee (--no-verify).");
+    return { manifest, verificationErrors: 0 };
+  }
+
+  logger.section("Verification de l archive");
+  const progress = new RunReporter({ estimatedMessages: 0 });
+  progress.start();
+  const report = await verifyArchive({
+    archiveDir: paths.root,
+    checkBlobs: false,
+    onProgress: (step, done, total) => {
+      if (total !== undefined && total > 0) {
+        progress.phase(step, total);
+        if (done !== undefined) progress.phaseProgress(done);
+      } else {
+        progress.phase(step);
+      }
+    },
+  });
+  progress.stop();
+
+  for (const result of report.results) {
+    if (result.severity === "error") {
+      logger.error(`${result.label}${result.detail === undefined ? "" : ` : ${result.detail}`}`);
+    } else if (result.severity === "warning") {
+      logger.warn(`${result.label}${result.detail === undefined ? "" : ` : ${result.detail}`}`);
+    }
+  }
+
+  if (report.errors === 0) {
+    logger.success("Archive coherente.");
+  } else {
+    logger.error(
+      `${String(report.errors)} controle(s) de coherence en echec. ` +
+        "L archive n est pas fiable en l etat : relancez avec --resume, " +
+        "puis inspectez le detail avec mmarchive-extract verify.",
+    );
+  }
+
+  return { manifest, verificationErrors: report.errors };
 }

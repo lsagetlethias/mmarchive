@@ -88,6 +88,7 @@ program
   .option("--include-emails", "Inclut les adresses e-mail des utilisateurs")
   .option("--concurrency <n>", "Canaux traites en parallele", "4")
   .option("--rate-limit <n>", "Requetes par seconde", "8")
+  .option("--no-verify", "Ne verifie pas la coherence de l archive en fin de run")
   .option(
     "--posts-page-size <n>",
     "Messages demandes par requete. 200 par defaut ; mesurer la valeur acceptee avec la sous-commande doctor.",

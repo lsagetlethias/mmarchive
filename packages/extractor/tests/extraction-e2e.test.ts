@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -10,6 +10,7 @@ import { MattermostApi } from "../src/mattermost/api.js";
 import { MattermostClient } from "../src/mattermost/http-client.js";
 import { Logger } from "../src/ui/logger.js";
 import { RunReporter } from "../src/ui/run-reporter.js";
+import { verifyArchive } from "../src/verify/checks.js";
 
 /** L URL d une requete fetch, quelle que soit la forme de son premier argument. */
 function requestUrl(input: string | URL | Request): string {
@@ -361,6 +362,20 @@ describe("extraction de bout en bout", () => {
       .split("\n")
       .filter((line) => line.length > 0);
     expect(manifest.counts.emojis).toBe(lines.length);
+  });
+
+  it("l archive produite passe sa propre verification", async () => {
+    // Le run verifie desormais son resultat : une archive incoherente doit etre
+    // detectee tout de suite, pas des jours plus tard quand l instance a
+    // disparu et que plus rien n est rejouable.
+    const { manifest } = await extract();
+    // runExtraction rend le manifeste, c est la commande qui l ecrit.
+    await writeFile(join(workDir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
+
+    const report = await verifyArchive({ archiveDir: workDir, checkBlobs: true });
+    const failures = report.results.filter((r) => r.severity === "error");
+    expect(failures.map((r) => `${r.label} ${r.detail ?? ""}`)).toEqual([]);
+    expect(report.errors).toBe(0);
   });
 
   it("produit un manifeste coherent et auditable", async () => {

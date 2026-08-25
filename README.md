@@ -225,6 +225,12 @@ mmarchive-extract run --file channels.yaml --out ./archive
 Si la sélection implique de rejoindre des canaux, le CLI affiche la liste nominative, le
 nombre de messages système que cela publiera, et demande une confirmation explicite.
 
+À la fin du run, l'archive est **automatiquement vérifiée**. Une extraction assemblée en
+plusieurs sessions peut être incohérente avec elle-même sans que rien ne le signale sur le
+moment : mieux vaut le découvrir tout de suite que le jour où l'instance n'existe plus.
+La commande sort avec un code d'erreur si un contrôle échoue. `--no-verify` saute cette
+étape.
+
 **Sans `--file`, le mode par défaut est le mode sûr** : uniquement les canaux déjà
 accessibles, aucun canal rejoint, aucune requête d'écriture.
 
@@ -254,6 +260,7 @@ mmarchive-extract run [options]
 
   --since <ISO8601>        Extraction incrémentale
   --resume                 Reprend depuis le fichier d'état
+  --no-verify              Ne vérifie pas la cohérence de l'archive en fin de run
 
   --skip-files             N'extrait pas les pièces jointes
   --max-file-size <MB>     Ignore les fichiers au-dessus (défaut : 100)
