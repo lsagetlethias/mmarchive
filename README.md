@@ -355,9 +355,17 @@ mmarchive-redact --archive ./archive --user <user_id> --mode remove
 mmarchive-redact --archive ./archive --user <user_id> --mode pseudonymize
 ```
 
-`remove` supprime les messages et l'entrée utilisateur. `pseudonymize` remplace
-l'identité par un identifiant stable et conserve les messages. Une réindexation est
-nécessaire ensuite.
+`remove` supprime les messages et l'entrée utilisateur. `pseudonymize` remplace l'identité
+par un identifiant stable et conserve les messages. Une réindexation est nécessaire
+ensuite.
+
+Dans les deux modes, l'effacement porte sur les **données**, pas seulement sur l'index qui
+les décrit : l'avatar est retiré du disque, et en mode `remove` les pièces jointes de la
+personne le sont aussi. Les compteurs du manifeste sont recalculés, de sorte qu'une archive
+expurgée passe toujours `verify` : il ne faut pas avoir à choisir entre honorer une demande
+d'effacement et conserver une archive cohérente.
+
+L'opération modifie l'archive **en place, sans retour possible**. Sauvegardez avant.
 
 ---
 
