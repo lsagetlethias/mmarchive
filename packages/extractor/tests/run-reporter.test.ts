@@ -356,3 +356,58 @@ describe("RunReporter", () => {
     }).not.toThrow();
   });
 });
+
+describe("mise en couleur", () => {
+  it("n emet aucune couleur hors mode interactif", () => {
+    const out = new Capture();
+    const reporter = new RunReporter({
+      estimatedMessages: 1000,
+      out,
+      now: makeClock().now,
+      interactive: false,
+      intervalMs: 1000,
+      width: 200,
+    });
+    reporter.phase("Canaux", 758, { estimate: true });
+    reporter.channelFinished(120);
+    reporter.stop();
+    expect(out.text).not.toContain(ESC);
+  });
+
+  it("laisse statusLine sans couleur, pour rester comparable", () => {
+    const out = new Capture();
+    const reporter = new RunReporter({
+      estimatedMessages: 1000,
+      out,
+      now: makeClock().now,
+      interactive: true,
+      intervalMs: 1000,
+      width: 200,
+    });
+    reporter.phase("Canaux", 758, { estimate: true });
+    reporter.channelFinished(120);
+    expect(reporter.statusLine()).not.toContain(ESC);
+    expect(reporter.statusLine()).toContain("Canaux 1/758");
+  });
+
+  it("retombe sur du texte nu quand la ligne doit etre tronquee", () => {
+    // Colorer une ligne tronquee fausserait le calcul de largeur, les octets
+    // d echappement etant invisibles mais comptes.
+    const out = new Capture();
+    const reporter = new RunReporter({
+      estimatedMessages: 1000,
+      out,
+      now: makeClock().now,
+      interactive: true,
+      intervalMs: 1000,
+      width: 25,
+    });
+    reporter.phase("Utilisateurs et avatars", 3277);
+    reporter.channelStarted("un-nom-de-canal-tres-long-qui-deborde");
+    reporter.stop();
+    const rendered = out.text.split(`${ESC}[2K`).filter((part) => part.trim().length > 0);
+    for (const part of rendered) {
+      expect(displayWidth(part.replace(/\r/g, ""))).toBeLessThanOrEqual(25);
+    }
+  });
+});

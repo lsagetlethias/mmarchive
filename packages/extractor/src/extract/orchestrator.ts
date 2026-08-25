@@ -398,6 +398,25 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       return 0;
     }
   };
+  /**
+   * Plage temporelle de l archive entiere, relue dans l etat de chaque canal.
+   * Les bornes de la session ne couvrent que les canaux traites cette fois-ci.
+   */
+  const archiveRange = ((): { first_create_at: number; last_create_at: number } | undefined => {
+    let first: number | null = null;
+    let last: number | null = null;
+    for (const planned of plan.channels) {
+      const progress = state.progressFor(planned.channel.id);
+      if (progress.status !== "complete") continue;
+      const oldest = progress.oldest_create_at;
+      const newest = progress.newest_create_at;
+      if (oldest !== null && oldest > 0) first = first === null ? oldest : Math.min(first, oldest);
+      if (newest !== null && newest > 0) last = last === null ? newest : Math.max(last, newest);
+    }
+    if (first === null || last === null) return undefined;
+    return { first_create_at: first, last_create_at: last };
+  })();
+
   const userCount = await countLines(paths.users);
   // Pieces jointes reellement presentes : celles dont le binaire manque gardent
   // leur metadonnee mais ne doivent pas etre comptees comme archivees.
@@ -493,6 +512,21 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     }
   }
 
+  /**
+   * Les avertissements decrivent l archive, pas la session : les vider a chaque
+   * run effacait la trace des pieces jointes manquantes et des fils orphelins
+   * des runs precedents. On cumule en dedupliquant, les canaux retraites
+   * reproduisant naturellement les leurs.
+   */
+  const warningKey = (w: ArchiveWarning): string =>
+    `${w.code}|${w.channel_id ?? ""}|${w.team_id ?? ""}|${w.detail}`;
+  const mergedWarnings = new Map<string, ArchiveWarning>();
+  for (const w of [...state.state.warnings, ...warnings]) {
+    mergedWarnings.set(warningKey(w), w);
+  }
+  const allWarnings = [...mergedWarnings.values()];
+  state.state.warnings = allWarnings;
+
   const manifest: Manifest = {
     schema_version: SCHEMA_VERSION,
     tool_version: TOOL_VERSION,
@@ -533,13 +567,10 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       attachments: attachmentsOnDisk,
       attachments_bytes: attachmentBytes,
     },
-    ...(range.first === null || range.last === null
-      ? {}
-      : { post_range: { first_create_at: range.first, last_create_at: range.last } }),
-    warnings: [...warnings, ...state.state.warnings],
+    ...(archiveRange === undefined ? {} : { post_range: archiveRange }),
+    warnings: allWarnings,
   };
 
-  state.state.warnings = [];
   await state.close();
   process.off("SIGINT", onSignal);
   process.off("SIGTERM", onSignal);

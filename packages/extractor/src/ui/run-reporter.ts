@@ -1,3 +1,5 @@
+import pc from "picocolors";
+
 const CLEAR_LINE = "\r\u001B[2K";
 
 /** Part des messages a traiter avant d oser annoncer un temps restant. */
@@ -266,33 +268,73 @@ export class RunReporter {
     this.clearLine();
   }
 
-  /** Ligne de statut courante. Exposee pour les tests. */
+  /** Ligne de statut courante, sans couleur. Exposee pour les tests. */
   statusLine(): string {
+    return this.segments()
+      .map((segment) => segment.text)
+      .join("  ");
+  }
+
+  /**
+   * Segments de la ligne de statut.
+   *
+   * Les nombres sont separes par des espaces insecables, ce qui rend "438/3 277"
+   * ambigu a la lecture. La couleur distingue la valeur de son unite sans
+   * allonger la ligne, et retombe sur du texte nu hors terminal.
+   */
+  private segments(): { text: string; paint: (value: string) => string }[] {
+    const out: { text: string; paint: (value: string) => string }[] = [];
     const elapsed = this.now() - this.startedAt;
-    const parts = [`[${formatDuration(elapsed)}]`];
 
-    parts.push(
-      this.phaseTotal > 0
-        ? `${this.phaseLabel} ${formatCount(this.phaseDone)}/${formatCount(this.phaseTotal)}`
-        : this.phaseLabel,
-    );
+    out.push({ text: `[${formatDuration(elapsed)}]`, paint: pc.dim });
+    out.push({
+      text:
+        this.phaseTotal > 0
+          ? `${this.phaseLabel} ${formatCount(this.phaseDone)}/${formatCount(this.phaseTotal)}`
+          : this.phaseLabel,
+      paint: (value) => {
+        const cut = value.lastIndexOf(" ");
+        if (this.phaseTotal <= 0 || cut < 0) return pc.cyan(value);
+        return `${pc.cyan(value.slice(0, cut))} ${pc.bold(value.slice(cut + 1))}`;
+      },
+    });
 
-    if (this.messages > 0) parts.push(`${formatCount(this.messages)} messages`);
-    if (this.files > 0) parts.push(`${formatCount(this.files)} fichiers`);
+    const measure = (
+      value: number,
+      unit: string,
+    ): { text: string; paint: (v: string) => string } => ({
+      text: `${formatCount(value)} ${unit}`,
+      paint: () => `${pc.bold(formatCount(value))} ${pc.dim(unit)}`,
+    });
+
+    if (this.messages > 0) out.push(measure(this.messages, "messages"));
+    if (this.files > 0) out.push(measure(this.files, "fichiers"));
 
     const rate = this.currentRate();
-    if (rate !== undefined) parts.push(`${rate.toFixed(1)} req/s`);
+    if (rate !== undefined) {
+      const value = rate.toFixed(1);
+      out.push({ text: `${value} req/s`, paint: () => `${pc.bold(value)} ${pc.dim("req/s")}` });
+    }
 
     if (this.phaseEstimates) {
       const remaining = this.estimateRemainingMs();
-      if (remaining !== undefined) parts.push(`reste ~${formatDuration(remaining)}`);
+      if (remaining !== undefined) {
+        const value = formatDuration(remaining);
+        out.push({
+          text: `reste ~${value}`,
+          paint: () => `${pc.dim("reste ~")}${pc.bold(value)}`,
+        });
+      }
     }
+
     const active = [...this.active];
     const first = active[0];
     if (first !== undefined) {
-      parts.push(active.length === 1 ? first : `${first} (+${String(active.length - 1)})`);
+      const text = active.length === 1 ? first : `${first} (+${String(active.length - 1)})`;
+      out.push({ text, paint: pc.dim });
     }
-    return parts.join("  ");
+
+    return out;
   }
 
   /**
@@ -331,8 +373,16 @@ export class RunReporter {
     this.lastRenderAt = now;
 
     if (this.interactive) {
-      // Une seule ligne physique, sinon l effacement laisse des restes a l ecran.
-      this.out.write(`${CLEAR_LINE}${truncateToWidth(this.statusLine(), this.width - 1)}`);
+      const plain = this.statusLine();
+      // La couleur ajoute des octets invisibles : on ne l applique que si la
+      // ligne tient telle quelle, sinon la troncature compterait faux.
+      const line =
+        displayWidth(plain) <= this.width - 1
+          ? this.segments()
+              .map((segment) => segment.paint(segment.text))
+              .join("  ")
+          : truncateToWidth(plain, this.width - 1);
+      this.out.write(`${CLEAR_LINE}${line}`);
       this.lineShown = true;
       return;
     }
