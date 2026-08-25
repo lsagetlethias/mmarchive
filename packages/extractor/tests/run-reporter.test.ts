@@ -275,6 +275,48 @@ describe("RunReporter", () => {
     expect(reporter.statusLine()).toContain("reste");
   });
 
+  it("ne fonde pas l estimation sur les canaux repris", () => {
+    // Releve sur un run reel : apres reprise, 285 canaux et 629 777 messages
+    // etaient comptes en quelques secondes, et l affichage annoncait "reste 28s"
+    // alors qu il restait les deux tiers du travail.
+    const out = new Capture();
+    const clock = makeClock();
+    const reporter = new RunReporter({
+      estimatedMessages: 1_000_000,
+      out,
+      now: clock.now,
+      interactive: false,
+      intervalMs: 1000,
+      width: 200,
+    });
+    reporter.phase("Canaux", 758, { estimate: true });
+
+    // Reprise : 600 000 messages comptes instantanement.
+    clock.advance(200);
+    reporter.channelSkipped(600_000);
+    expect(reporter.statusLine()).not.toContain("reste");
+
+    // Puis du travail reel : 50 000 messages en 100 secondes.
+    clock.advance(100_000);
+    reporter.channelFinished(50_000);
+    const line = reporter.statusLine();
+    expect(line).toContain("reste");
+
+    // Il reste 350 000 messages a 500 par seconde, soit environ 700 s.
+    const match = /reste ~(\S+)/.exec(line);
+    // 350 000 messages restants a 0,499 par milliseconde.
+    expect(match?.[1]).toBe("11:41");
+  });
+
+  it("compte les canaux repris dans la progression affichee", () => {
+    const out = new Capture();
+    const reporter = make(out, makeClock());
+    reporter.phase("Canaux", 10, { estimate: true });
+    reporter.channelSkipped(500);
+    expect(reporter.statusLine()).toContain("Canaux 1/10");
+    expect(plain(reporter.statusLine())).toContain("500 messages");
+  });
+
   it("stop() est idempotent", () => {
     const out = new Capture();
     const reporter = make(out, makeClock(), true);

@@ -247,7 +247,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     const progress = state.progressFor(channelId);
     if (progress.status === "complete") {
       logger.debug(`Canal deja extrait, ignore : ${planned.channel.name}`);
-      reporter.channelFinished(progress.posts_written);
+      reporter.channelSkipped(progress.posts_written);
       return;
     }
 

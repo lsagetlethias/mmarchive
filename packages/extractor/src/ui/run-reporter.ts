@@ -110,6 +110,13 @@ export class RunReporter {
 
   private channelsDone = 0;
   private messages = 0;
+  /**
+   * Messages reellement extraits pendant cette session, hors canaux repris.
+   * L estimation se fonde sur eux : compter les canaux deja termines d un run
+   * precedent donnerait un debit apparent enorme et un temps restant absurde.
+   */
+  private messagesThisSession = 0;
+  private sessionStartedAt = 0;
   private files = 0;
   private requests = 0;
   private phaseLabel = "Preparation";
@@ -162,6 +169,10 @@ export class RunReporter {
     // Le temps restant se deduit des messages : l afficher pendant une etape qui
     // n en produit plus donnerait un chiffre fige et trompeur.
     this.phaseEstimates = options.estimate ?? false;
+    // Le debit se mesure a partir de l entree dans l etape qui produit des
+    // messages, pas du lancement : la reprise comptabilise les canaux deja faits
+    // en quelques millisecondes et ecraserait la moyenne.
+    if (this.phaseEstimates) this.sessionStartedAt = this.now();
     this.render(true);
   }
 
@@ -181,6 +192,19 @@ export class RunReporter {
   }
 
   channelFinished(messages: number): void {
+    this.channelsDone += 1;
+    this.phaseDone = this.channelsDone;
+    this.messages += messages;
+    this.messagesThisSession += messages;
+    this.render(true);
+  }
+
+  /**
+   * Canal deja extrait lors d un run precedent, retrouve par --resume.
+   * Il compte dans la progression affichee mais pas dans le debit : il n a
+   * demande aucun travail cette fois-ci.
+   */
+  channelSkipped(messages: number): void {
     this.channelsDone += 1;
     this.phaseDone = this.channelsDone;
     this.messages += messages;
@@ -232,7 +256,7 @@ export class RunReporter {
     }
 
     if (this.phaseEstimates) {
-      const remaining = this.estimateRemainingMs(elapsed);
+      const remaining = this.estimateRemainingMs();
       if (remaining !== undefined) parts.push(`reste ~${formatDuration(remaining)}`);
     }
     if (this.current.length > 0) parts.push(this.current);
@@ -244,16 +268,22 @@ export class RunReporter {
    * tres inegales, et compter les canaux donnerait un temps restant absurde tant
    * qu un gros canal n est pas termine.
    */
-  private estimateRemainingMs(elapsed: number): number | undefined {
-    if (this.messages <= 0 || this.estimatedMessages <= 0) return undefined;
+  private estimateRemainingMs(): number | undefined {
+    if (this.estimatedMessages <= 0) return undefined;
     if (this.messages >= this.estimatedMessages) return 0;
+    if (this.messagesThisSession <= 0 || this.sessionStartedAt === 0) return undefined;
+
+    const remainingMessages = this.estimatedMessages - this.messages;
     // Les canaux sont tries par nom, pas par taille : les premiers traites ne
     // disent rien du rythme moyen. Sur un echantillon trop faible l estimation
     // annonce des centaines d heures et ne sert qu a inquieter.
-    if (this.messages / this.estimatedMessages < MIN_SAMPLE_RATIO) return undefined;
-    const rate = this.messages / elapsed;
+    if (this.messagesThisSession / this.estimatedMessages < MIN_SAMPLE_RATIO) return undefined;
+
+    const workingTime = this.now() - this.sessionStartedAt;
+    if (workingTime <= 0) return undefined;
+    const rate = this.messagesThisSession / workingTime;
     if (!Number.isFinite(rate) || rate <= 0) return undefined;
-    return (this.estimatedMessages - this.messages) / rate;
+    return remainingMessages / rate;
   }
 
   private clearLine(): void {
