@@ -20,7 +20,7 @@ import { MutationGate, grantConsent, noConsent } from "../mattermost/mutation-ga
 import type { MmFileInfo, MmUser } from "../mattermost/types.js";
 import type { Logger } from "../ui/logger.js";
 import { RunReporter } from "../ui/run-reporter.js";
-import { extractEmojis, extractFiles, extractUsers } from "./assets.js";
+import { extractEmojis, extractFiles, extractUsers, repairMissingFiles } from "./assets.js";
 import { extractChannelPosts } from "./channel-posts.js";
 import { buildPlan, type ExtractionPlan } from "./plan.js";
 import { TOOL_VERSION } from "../version.js";
@@ -259,6 +259,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     pinnedPromise.catch(() => undefined);
 
     let files: readonly MmFileInfo[];
+    let postsWritten: number;
     try {
       const result = await extractChannelPosts({
         api,
@@ -287,15 +288,17 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
           range.last === null ? result.lastCreateAt : Math.max(range.last, result.lastCreateAt);
       }
 
+      // Le canal n est PAS encore marque complete : ses pieces jointes ne sont
+      // pas ecrites. Le marquer ici et mourir juste apres les perdrait
+      // definitivement, la reprise ignorant les canaux complets. Constate sur
+      // une archive reelle, 3 736 pieces jointes referencees sans metadonnee.
+      postsWritten = result.postsWritten;
       state.updateProgress(channelId, {
-        status: "complete",
         finalized: true,
         posts_written: result.postsWritten,
       });
       await state.saveNow();
       extractedThisSession.add(channelId);
-      reporter.channelEnded(planned.channel.display_name || planned.channel.name);
-      reporter.channelFinished(result.postsWritten);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "erreur inconnue";
       warnings.push({ code: "CHANNEL_INCOMPLETE", channel_id: channelId, detail });
@@ -323,6 +326,12 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     attachmentBytes += fileResult.bytes;
     reporter.filesAdded(fileResult.downloaded);
     reporter.setRequestCount(options.client.requestCount);
+
+    // Le canal n est complet qu une fois ses pieces jointes decrites.
+    state.updateProgress(channelId, { status: "complete" });
+    await state.saveNow();
+    reporter.channelEnded(planned.channel.display_name || planned.channel.name);
+    reporter.channelFinished(postsWritten);
     for (const file of files) {
       if (downloadedFileIds.has(file.id)) continue;
       downloadedFileIds.add(file.id);
@@ -342,6 +351,8 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
    * referencerait des user_id introuvables. Constate sur une archive reelle,
    * 2 084 auteurs sans fiche.
    */
+  /** Pieces jointes citees par un message, avec le canal qui les cite. */
+  const referencedFileIds = new Map<string, string>();
   const resumedChannels = plan.channels.filter(
     (planned) => !extractedThisSession.has(planned.channel.id),
   );
@@ -354,15 +365,50 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       reporter.phaseProgress(scanned);
       if (progress.status !== "complete") continue;
       try {
-        for await (const post of readNdjson<{ user_id: string; reactions?: { user_id: string }[] }>(
-          paths.postsFile(planned.channel.id),
-        )) {
+        for await (const post of readNdjson<{
+          user_id: string;
+          file_ids?: string[];
+          reactions?: { user_id: string }[];
+        }>(paths.postsFile(planned.channel.id))) {
           if (post.user_id.length > 0) allUserIds.add(post.user_id);
           for (const reaction of post.reactions ?? []) allUserIds.add(reaction.user_id);
+          for (const fileId of post.file_ids ?? []) {
+            referencedFileIds.set(fileId, planned.channel.id);
+          }
         }
       } catch {
         // Fichier absent ou illisible : deja signale par ailleurs.
       }
+    }
+  }
+
+  if (referencedFileIds.size > 0) {
+    const described = new Set<string>();
+    try {
+      for await (const entry of readNdjson<{ id: string }>(paths.files)) described.add(entry.id);
+    } catch {
+      // Fichier absent : tout est a decrire.
+    }
+    const orphans = [...referencedFileIds].filter(([id]) => !described.has(id));
+    if (orphans.length > 0) {
+      reporter.phase("Pieces jointes manquantes", orphans.length);
+      const repaired = await repairMissingFiles({
+        api,
+        paths,
+        includeEmails: runOptions.includeEmails,
+        skipFiles: runOptions.skipFiles,
+        maxFileSizeBytes: runOptions.maxFileSizeBytes,
+        downloadConcurrency: runOptions.concurrency,
+        missing: orphans.map(([id, channelId]) => ({ id, channelId })),
+        onProgress: (done) => {
+          reporter.phaseProgress(done);
+          reporter.setRequestCount(options.client.requestCount);
+        },
+      });
+      warnings.push(...repaired.warnings);
+      attachments += repaired.downloaded;
+      attachmentBytes += repaired.bytes;
+      reporter.filesAdded(repaired.downloaded);
     }
   }
 

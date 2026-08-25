@@ -336,3 +336,108 @@ export async function extractFiles(
 
   return { downloaded, bytes, skipped, warnings };
 }
+
+export interface RepairFilesResult {
+  readonly downloaded: number;
+  readonly bytes: number;
+  readonly described: number;
+  readonly warnings: readonly ArchiveWarning[];
+}
+
+/**
+ * Rattrape les pieces jointes citees par un message mais absentes de
+ * files.ndjson.
+ *
+ * Ce trou apparaissait quand un canal etait marque termine avant l ecriture de
+ * ses pieces jointes : la reprise l ignorait ensuite, et l archive gardait des
+ * references vers le vide. La metadonnee est reconstruite depuis
+ * GET /files/{id}/info, seule source disponible une fois les messages ecrits.
+ */
+export async function repairMissingFiles(
+  options: AssetOptions & {
+    missing: readonly { id: string; channelId: string }[];
+    onProgress?: ((done: number, total: number) => void) | undefined;
+  },
+): Promise<RepairFilesResult> {
+  const warnings: ArchiveWarning[] = [];
+  let downloaded = 0;
+  let bytes = 0;
+  let done = 0;
+
+  const records = await mapWithConcurrency(
+    options.missing,
+    options.downloadConcurrency ?? 1,
+    async (entry): Promise<ArchiveFile | null> => {
+      try {
+        const info = await options.api.getFileInfo(entry.id);
+        if (info === null) {
+          warnings.push({
+            code: "FILE_DOWNLOAD_FAILED",
+            channel_id: entry.channelId,
+            detail: `Metadonnee introuvable pour la piece jointe ${entry.id}.`,
+          });
+          return null;
+        }
+
+        let path: string | null = null;
+        let skipReason: FileSkipReason | undefined;
+        if (options.skipFiles) {
+          skipReason = "skipped_by_option";
+        } else if (info.size > options.maxFileSizeBytes) {
+          skipReason = "too_large";
+        } else {
+          try {
+            const binary = await options.api.downloadFile(entry.id);
+            const target = options.paths.attachmentFile(entry.id, info.name);
+            await writeBinary(target, binary.bytes);
+            path = options.paths.relative(target);
+            downloaded += 1;
+            bytes += binary.size;
+          } catch {
+            skipReason = "download_failed";
+          }
+        }
+
+        return {
+          id: info.id,
+          post_id: info.post_id,
+          channel_id: entry.channelId,
+          user_id: info.user_id,
+          name: info.name,
+          extension: info.extension,
+          size: info.size,
+          mime_type: info.mime_type,
+          width: info.width,
+          height: info.height,
+          has_preview_image: info.has_preview_image,
+          create_at: info.create_at,
+          delete_at: info.delete_at,
+          path,
+          ...(skipReason === undefined ? {} : { skip_reason: skipReason }),
+        };
+      } catch (error) {
+        warnings.push({
+          code: "FILE_DOWNLOAD_FAILED",
+          channel_id: entry.channelId,
+          detail: `${entry.id} : ${error instanceof Error ? error.message : "erreur inconnue"}`,
+        });
+        return null;
+      } finally {
+        done += 1;
+        options.onProgress?.(done, options.missing.length);
+      }
+    },
+  );
+
+  const found = records.filter((record): record is ArchiveFile => record !== null);
+  if (found.length > 0) {
+    const writer = await NdjsonWriter.open(options.paths.files, { append: true });
+    try {
+      await writer.writeMany(found);
+    } finally {
+      await writer.close();
+    }
+  }
+
+  return { downloaded, bytes, described: found.length, warnings };
+}

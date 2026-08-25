@@ -5,6 +5,7 @@ import { MattermostForbiddenError, MattermostNotFoundError } from "./errors.js";
 import type { BinaryResponse, MattermostClient } from "./http-client.js";
 import {
   mmChannelListSchema,
+  mmFileInfoSchema,
   mmEmojiListSchema,
   mmPostListSchema,
   mmTeamListSchema,
@@ -12,6 +13,7 @@ import {
   mmUserSchema,
   type MmChannel,
   type MmEmoji,
+  type MmFileInfo,
   type MmPostList,
   type MmTeam,
   type MmUser,
@@ -208,6 +210,22 @@ export class MattermostApi {
     return this.paginate((page) =>
       this.client.json(MM.getCustomEmojis(page, LIST_PAGE_SIZE), mmEmojiListSchema),
     );
+  }
+
+  /**
+   * Metadonnee d une piece jointe isolee. Sert a rattraper les fichiers
+   * referencees par un message dont la metadonnee n a jamais ete ecrite, faute
+   * de quoi le viewer afficherait une reference vers le vide.
+   */
+  async getFileInfo(fileId: string): Promise<MmFileInfo | null> {
+    try {
+      return await this.client.json(MM.getFileInfo(fileId), mmFileInfoSchema);
+    } catch (error) {
+      if (error instanceof MattermostForbiddenError || error instanceof MattermostNotFoundError) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async downloadFile(fileId: string): Promise<BinaryResponse> {

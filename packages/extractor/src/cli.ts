@@ -3,6 +3,7 @@ import { inventoryCommand } from "./commands/inventory.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { runCommand } from "./commands/run.js";
 import { selectCommand } from "./commands/select.js";
+import { verifyCommand } from "./commands/verify.js";
 import { OptionsError } from "./config/options.js";
 import { Logger } from "./ui/logger.js";
 import { TOOL_VERSION } from "./version.js";
@@ -79,6 +80,17 @@ program
   )
   .action(async (opts: Record<string, unknown>) => {
     await runCommand(opts, process.env, logger);
+  });
+
+program
+  .command("verify")
+  .description("Verifie une archive deja produite. Lecture seule, aucune connexion reseau.")
+  .option("--archive <dir>", "Repertoire de l archive", "./archive")
+  .option("--no-blobs", "Ne verifie pas la presence sur disque de chaque piece jointe")
+  .action(async (opts: Record<string, unknown>) => {
+    const errors = await verifyCommand(opts, logger);
+    // Code de sortie exploitable depuis un script de sauvegarde.
+    if (errors > 0) process.exitCode = 1;
   });
 
 async function main(): Promise<void> {

@@ -239,6 +239,7 @@ mmarchive-extract run --out ./archive
 ```
 mmarchive-extract inventory [options]   (voir aussi --select-archived, --no-probe)
 mmarchive-extract doctor [options]
+mmarchive-extract verify --archive <dir>
 mmarchive-extract select --file <yaml>
 mmarchive-extract run [options]
 
@@ -309,6 +310,24 @@ Le manifeste recense le nombre total de canaux publics de l'instance, pas seulem
 que vous avez sélectionnés : la complétude de l'archive reste auditable par un tiers.
 
 ---
+
+## Vérifier une archive
+
+```bash
+mmarchive-extract verify --archive ./archive
+```
+
+Lecture seule, aucune connexion réseau. Contrôle la conformité aux schémas, l'absence de
+canal non public, le tri chronologique des messages, l'absence de doublons, l'intégrité
+référentielle entre messages, utilisateurs et pièces jointes, la présence sur disque des
+chemins déclarés, et la cohérence des compteurs du manifeste avec le contenu réel.
+
+Sort avec un code d'erreur non nul si un contrôle échoue, ce qui permet de l'enchaîner dans
+un script de sauvegarde. `--no-blobs` saute la vérification d'existence de chaque pièce
+jointe, qui coûte un appel système par fichier.
+
+À lancer après toute extraction, et surtout après une reprise : c'est ce contrôle qui
+révèle qu'une archive assemblée en plusieurs runs est incohérente avec elle-même.
 
 ## Conformité
 
