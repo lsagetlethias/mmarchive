@@ -19,6 +19,7 @@ export interface RunOptions {
   readonly includeEmails: boolean;
   readonly concurrency: number;
   readonly rateLimit: number;
+  readonly postsPageSize: number;
 }
 
 export class OptionsError extends Error {
@@ -44,6 +45,7 @@ export interface RawOptions {
   readonly includeEmails?: boolean | undefined;
   readonly concurrency?: string | undefined;
   readonly rateLimit?: string | undefined;
+  readonly postsPageSize?: string | undefined;
 }
 
 const DEFAULT_OUT = "./archive";
@@ -163,7 +165,30 @@ export function parseRunOptions(
     includeEmails: raw.includeEmails ?? false,
     concurrency: parseConcurrency(raw.concurrency),
     rateLimit: parseRateLimit(raw.rateLimit),
+    postsPageSize: parsePostsPageSize(raw.postsPageSize),
   };
+}
+
+/** Valeur par defaut de la taille de page des posts. */
+export const DEFAULT_POSTS_PAGE_SIZE = 200;
+
+/**
+ * Taille de page de GET /channels/{id}/posts.
+ *
+ * La spec ne documente AUCUN maximum pour ce parametre, pourtant l endpoint le
+ * plus sollicite de l extraction. 200 est la valeur historique et sure ; un
+ * serveur qui en accepte davantage divise d autant le nombre de requetes, ce que
+ * la sous-commande doctor permet de mesurer avant de lancer un long run.
+ */
+function parsePostsPageSize(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === "") return DEFAULT_POSTS_PAGE_SIZE;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > 1000) {
+    throw new OptionsError(
+      `--posts-page-size "${raw}" invalide : attendu un entier entre 1 et 1000.`,
+    );
+  }
+  return value;
 }
 
 /**

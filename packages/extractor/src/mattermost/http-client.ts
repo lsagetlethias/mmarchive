@@ -32,6 +32,19 @@ export interface RetryInfo {
   readonly reason: "rate_limit" | "server_error" | "network";
 }
 
+/** Ce que le serveur declare de son limiteur de debit, s il en a un. */
+export interface RateLimitSnapshot {
+  readonly limit: number | undefined;
+  readonly remaining: number | undefined;
+  readonly reset: number | undefined;
+  /**
+   * false quand aucune reponse n a jamais porte d en-tete X-Ratelimit-*.
+   * Mattermost ne les emet que si RateLimitSettings.Enable est actif : leur
+   * absence suggere que l instance n applique aucune limite par utilisateur.
+   */
+  readonly observed: boolean;
+}
+
 export interface BinaryResponse {
   readonly bytes: Uint8Array;
   readonly contentType: string;
@@ -156,6 +169,13 @@ export class MattermostClient {
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly onRetry: ((info: RetryInfo) => void) | undefined;
   private detectedServerVersion: string | undefined;
+  private requests = 0;
+  private rateLimit: RateLimitSnapshot = {
+    limit: undefined,
+    remaining: undefined,
+    reset: undefined,
+    observed: false,
+  };
 
   constructor(options: MattermostClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
@@ -171,6 +191,16 @@ export class MattermostClient {
   /** Version du serveur, lue dans le header X-Version-Id. */
   get serverVersion(): string | undefined {
     return this.detectedServerVersion;
+  }
+
+  /** Dernier etat connu du limiteur de debit declare par le serveur. */
+  get rateLimitSnapshot(): RateLimitSnapshot {
+    return this.rateLimit;
+  }
+
+  /** Requetes HTTP reellement emises, retries compris. Sert au debit observe. */
+  get requestCount(): number {
+    return this.requests;
   }
 
   /**
@@ -250,6 +280,7 @@ export class MattermostClient {
       await this.limiter.acquire();
 
       let response: Response;
+      this.requests += 1;
       try {
         response = await this.fetchOnce(url, call);
       } catch (error) {
@@ -270,6 +301,7 @@ export class MattermostClient {
       if (version !== null && version.length > 0) {
         this.detectedServerVersion = parseServerVersion(version);
       }
+      this.captureRateLimit(response.headers);
 
       if (response.ok) return response;
 
@@ -318,6 +350,20 @@ export class MattermostClient {
       if (response.status === 404) throw new MattermostNotFoundError(failure);
       throw new MattermostHttpError(failure);
     }
+  }
+
+  private captureRateLimit(headers: Headers): void {
+    const read = (name: string): number | undefined => {
+      const raw = headers.get(name);
+      if (raw === null) return undefined;
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : undefined;
+    };
+    const limit = read("x-ratelimit-limit");
+    const remaining = read("x-ratelimit-remaining");
+    const reset = read("x-ratelimit-reset");
+    if (limit === undefined && remaining === undefined && reset === undefined) return;
+    this.rateLimit = { limit, remaining, reset, observed: true };
   }
 
   private buildUrl(call: EndpointCall): string {

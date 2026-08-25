@@ -178,6 +178,26 @@ l'historique d'un canal mort est une décision, pas un automatisme. Sur une inst
 destinée à être décommissionnée, ils disparaîtront pourtant définitivement.
 `--select-archived` les pré-coche.
 
+### 1 bis. Calibrer (optionnel, mais utile avant un gros run)
+
+```bash
+mmarchive-extract doctor --file channels.yaml
+```
+
+Aucune écriture. Mesure trois choses que l'API ne documente pas et qui décident de la
+durée d'une extraction :
+
+- **le débit réellement autorisé**, lu dans les en-têtes `X-Ratelimit-*`. Mattermost ne
+  les émet que si le limiteur est activé : leur absence signifie qu'aucune limite par
+  utilisateur ne s'applique, et qu'un `--rate-limit` plus élevé est envisageable ;
+- **la taille de page acceptée** pour les messages. La spécification ne documente aucun
+  maximum ; si le serveur accepte 1000 au lieu de 200, le nombre de requêtes de pages est
+  divisé par cinq (`--posts-page-size`) ;
+- **une estimation du run** avant et après calibrage.
+
+Augmenter la parallélisation, elle, ne sert à rien : toutes les requêtes passent par un
+même limiteur de débit, et la concurrence sert à le saturer, pas à le dépasser.
+
 ### 2. Sélection
 
 À la main dans le fichier, ou en interactif :
@@ -211,6 +231,7 @@ mmarchive-extract run --out ./archive
 
 ```
 mmarchive-extract inventory [options]   (voir aussi --select-archived, --no-probe)
+mmarchive-extract doctor [options]
 mmarchive-extract select --file <yaml>
 mmarchive-extract run [options]
 
@@ -232,6 +253,7 @@ mmarchive-extract run [options]
 
   --concurrency <n>        Canaux traités en parallèle (défaut : 4)
   --rate-limit <n>         Requêtes par seconde (défaut : 8)
+  --posts-page-size <n>    Messages par requête (défaut : 200, voir `doctor`)
 ```
 
 `--yes` court-circuite la confirmation, jamais la sélection : un canal non coché n'est

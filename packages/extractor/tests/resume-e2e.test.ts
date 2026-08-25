@@ -1,12 +1,14 @@
 import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Writable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SelectionFile } from "@mmarchive/shared";
 import { MattermostApi } from "../src/mattermost/api.js";
 import { MattermostClient } from "../src/mattermost/http-client.js";
 import { runExtraction } from "../src/extract/orchestrator.js";
 import { Logger } from "../src/ui/logger.js";
+import { RunReporter } from "../src/ui/run-reporter.js";
 import type { RunOptions } from "../src/config/options.js";
 
 function requestUrl(input: string | URL | Request): string {
@@ -153,6 +155,7 @@ async function extractOnce(failAfterPages: number, resume: boolean) {
     includeEmails: false,
     concurrency: 1,
     rateLimit: 8,
+    postsPageSize: PAGE_SIZE,
   };
   return runExtraction({
     api,
@@ -164,6 +167,7 @@ async function extractOnce(failAfterPages: number, resume: boolean) {
     totalPublicChannels: 1,
     logger: new Logger({ level: "error" }),
     confirmJoins: () => Promise.resolve(false),
+    reporter: silentReporter(),
     clock: () => "2026-08-24T10:00:00.000Z",
   });
 }
@@ -183,6 +187,20 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Reporter muet : les tests ne doivent rien ecrire sur la sortie standard. */
+function silentReporter(): RunReporter {
+  return new RunReporter({
+    totalChannels: 0,
+    estimatedMessages: 0,
+    out: new Writable({
+      write(_chunk, _enc, cb: () => void) {
+        cb();
+      },
+    }),
+    interactive: false,
+  });
 }
 
 describe("reprise apres interruption", () => {

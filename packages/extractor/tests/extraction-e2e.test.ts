@@ -1,12 +1,14 @@
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Writable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Manifest, SelectionFile } from "@mmarchive/shared";
 import { MattermostApi } from "../src/mattermost/api.js";
 import { MattermostClient } from "../src/mattermost/http-client.js";
 import { runExtraction } from "../src/extract/orchestrator.js";
 import { Logger } from "../src/ui/logger.js";
+import { RunReporter } from "../src/ui/run-reporter.js";
 import type { RunOptions } from "../src/config/options.js";
 
 /** L URL d une requete fetch, quelle que soit la forme de son premier argument. */
@@ -219,6 +221,7 @@ async function extract(over: Partial<RunOptions> = {}) {
     includeEmails: false,
     concurrency: 1,
     rateLimit: 8,
+    postsPageSize: PAGE_SIZE,
     ...over,
   };
 
@@ -232,6 +235,7 @@ async function extract(over: Partial<RunOptions> = {}) {
     totalPublicChannels: 1,
     logger: new Logger({ level: "error" }),
     confirmJoins: () => Promise.resolve(false),
+    reporter: silentReporter(),
     clock: () => "2026-08-24T10:00:00.000Z",
   });
 
@@ -244,6 +248,20 @@ async function readPosts(): Promise<Record<string, unknown>[]> {
     .split("\n")
     .filter((line) => line.length > 0)
     .map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+/** Reporter muet : les tests ne doivent rien ecrire sur la sortie standard. */
+function silentReporter(): RunReporter {
+  return new RunReporter({
+    totalChannels: 0,
+    estimatedMessages: 0,
+    out: new Writable({
+      write(_chunk, _enc, cb: () => void) {
+        cb();
+      },
+    }),
+    interactive: false,
+  });
 }
 
 describe("extraction de bout en bout", () => {

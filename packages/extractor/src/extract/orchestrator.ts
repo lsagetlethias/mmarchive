@@ -19,6 +19,7 @@ import type { MattermostClient } from "../mattermost/http-client.js";
 import { MutationGate, grantConsent, noConsent } from "../mattermost/mutation-gate.js";
 import type { MmFileInfo, MmUser } from "../mattermost/types.js";
 import type { Logger } from "../ui/logger.js";
+import { RunReporter } from "../ui/run-reporter.js";
 import { extractEmojis, extractFiles, extractUsers } from "./assets.js";
 import { extractChannelPosts } from "./channel-posts.js";
 import { buildPlan, type ExtractionPlan } from "./plan.js";
@@ -39,6 +40,8 @@ export interface RunExtractionOptions {
    * autorise.
    */
   readonly confirmJoins: (plan: ExtractionPlan) => Promise<boolean>;
+  /** Affichage de l avancement. Desactive dans les tests. */
+  readonly reporter?: RunReporter | undefined;
   readonly clock?: (() => string) | undefined;
 }
 
@@ -172,6 +175,14 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     logger.warn(`Canal rejoint : ${join.channel.name} (un message systeme y a ete publie)`);
   }
 
+  const reporter =
+    options.reporter ??
+    new RunReporter({
+      totalChannels: plan.channels.length,
+      estimatedMessages: plan.channels.reduce((sum, c) => sum + c.channel.message_count, 0),
+    });
+  reporter.start();
+
   // Emojis : une seule fois pour toute l archive.
   if (!state.state.emojis_done) {
     const result = await extractEmojis({
@@ -184,7 +195,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     warnings.push(...result.warnings);
     state.state.emojis_done = true;
     await state.saveNow();
-    logger.info(`Emojis personnalises : ${String(result.count)}`);
+    reporter.note(`Emojis personnalises : ${String(result.count)}`);
   }
 
   const allUserIds = new Set<string>();
@@ -201,10 +212,11 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     const progress = state.progressFor(channelId);
     if (progress.status === "complete") {
       logger.debug(`Canal deja extrait, ignore : ${planned.channel.name}`);
+      reporter.channelFinished(progress.posts_written);
       return;
     }
 
-    logger.info(`Extraction : ${planned.teamName} / ${planned.channel.display_name}`);
+    reporter.channelStarted(planned.channel.display_name || planned.channel.name);
     const pinnedIds = await api.getPinnedPostIds(channelId);
 
     let files: readonly MmFileInfo[];
@@ -215,9 +227,11 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
         paths,
         progress,
         sinceMillis: runOptions.since,
+        perPage: runOptions.postsPageSize,
         pinnedIds,
         onCursor: async (patch) => {
           state.updateProgress(channelId, patch);
+          reporter.setRequestCount(options.client.requestCount);
           await state.saveThrottled();
         },
       });
@@ -241,6 +255,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
         posts_written: result.postsWritten,
       });
       await state.saveNow();
+      reporter.channelFinished(result.postsWritten);
 
       archivedChannels.push({
         id: channelId,
@@ -262,7 +277,8 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       warnings.push({ code: "CHANNEL_INCOMPLETE", channel_id: channelId, detail });
       state.updateProgress(channelId, { status: "failed", error: detail });
       await state.saveNow();
-      logger.error(`Echec sur ${planned.channel.name} : ${detail}`);
+      reporter.note(`[erreur] ${planned.channel.name} : ${detail}`);
+      reporter.channelFinished(0);
       return;
     }
 
@@ -279,11 +295,14 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     warnings.push(...fileResult.warnings);
     attachments += fileResult.downloaded;
     attachmentBytes += fileResult.bytes;
+    reporter.filesAdded(fileResult.downloaded);
+    reporter.setRequestCount(options.client.requestCount);
     for (const file of files) state.state.downloaded_file_ids.push(file.id);
     state.state.attachments_bytes = attachmentBytes;
     await state.saveThrottled();
   });
 
+  reporter.note("Resolution des utilisateurs et des avatars...");
   const usersResult = await extractUsers({
     api,
     paths,
@@ -398,5 +417,6 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
 
   state.state.warnings = [];
   await state.close();
+  reporter.stop();
   return manifest;
 }

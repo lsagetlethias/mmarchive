@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { inventoryCommand } from "./commands/inventory.js";
+import { doctorCommand } from "./commands/doctor.js";
 import { runCommand } from "./commands/run.js";
 import { selectCommand } from "./commands/select.js";
 import { OptionsError } from "./config/options.js";
@@ -35,6 +36,18 @@ program
   });
 
 program
+  .command("doctor")
+  .description(
+    "Mesure le debit autorise et la taille de page acceptee, pour calibrer un long run. N ecrit rien.",
+  )
+  .option("--url <url>", "URL de l instance (ou MM_URL)")
+  .option("--token <token>", "Token porteur (ou MM_TOKEN)")
+  .option("--file <yaml>", "Fichier de selection, pour estimer le run et choisir un canal temoin")
+  .action(async (opts: Record<string, unknown>) => {
+    await doctorCommand(opts, process.env, logger);
+  });
+
+program
   .command("select")
   .description("Selection interactive des canaux a extraire. Reecrit le fichier.")
   .requiredOption("--file <yaml>", "Fichier de selection")
@@ -59,6 +72,11 @@ program
   .option("--include-emails", "Inclut les adresses e-mail des utilisateurs")
   .option("--concurrency <n>", "Canaux traites en parallele", "4")
   .option("--rate-limit <n>", "Requetes par seconde", "8")
+  .option(
+    "--posts-page-size <n>",
+    "Messages demandes par requete. 200 par defaut ; mesurer la valeur acceptee avec la sous-commande doctor.",
+    "200",
+  )
   .action(async (opts: Record<string, unknown>) => {
     await runCommand(opts, process.env, logger);
   });

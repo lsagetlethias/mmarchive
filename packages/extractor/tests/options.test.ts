@@ -520,10 +520,12 @@ describe("optionsFingerprint", () => {
       includeEmails: true,
       concurrency: 4,
       rateLimit: 8,
+      postsPageSize: 200,
     };
     const second: RunOptions = {
       rateLimit: 2,
       concurrency: 31,
+      postsPageSize: 60,
       includeEmails: true,
       maxFileSizeBytes: 100 * MB,
       skipFiles: true,
