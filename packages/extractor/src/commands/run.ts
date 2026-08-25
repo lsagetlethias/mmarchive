@@ -12,6 +12,7 @@ import {
 } from "../extract/plan.js";
 import { buildInventory } from "../inventory/build-inventory.js";
 import { readSelectionFile } from "../inventory/yaml-file.js";
+import { isInteractive } from "../ui/environment.js";
 import { Logger } from "../ui/logger.js";
 import { TOOL_VERSION } from "../version.js";
 
@@ -36,6 +37,17 @@ async function confirmJoinsInteractively(
   if (autoYes) {
     logger.warn("--yes : confirmation court-circuitee.");
     return true;
+  }
+
+  // Hors terminal, personne ne repondra jamais : mieux vaut refuser avec un
+  // message exploitable que suspendre un run d integration continue.
+  if (!isInteractive()) {
+    logger.error(
+      "Des joins sont necessaires mais aucun terminal interactif n est disponible pour les confirmer. " +
+        "Relancez avec --yes si vous assumez la publication de ces messages systeme, " +
+        "ou retirez ces canaux de la selection.",
+    );
+    return false;
   }
 
   const answer = await prompts.confirm({

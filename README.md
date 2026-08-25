@@ -259,6 +259,9 @@ mmarchive-extract run [options]
   --max-file-size <MB>     Ignore les fichiers au-dessus (défaut : 100)
   --include-emails         Inclut les adresses e-mail des utilisateurs (défaut : false)
 
+  -v, --verbose            Sortie détaillée, sur la sortie d'erreur
+  --no-input               N'essaie jamais de poser une question
+  --no-color               Désactive la couleur (équivalent à NO_COLOR)
   --concurrency <n>        Canaux traités en parallèle (défaut : 4)
   --rate-limit <n>         Requêtes par seconde (défaut : 8)
   --posts-page-size <n>    Messages par requête (défaut : 200, voir `doctor`)
@@ -326,6 +329,13 @@ Sort avec un code d'erreur non nul si un contrôle échoue, ce qui permet de l'e
 un script de sauvegarde. `--no-blobs` saute la vérification d'existence de chaque pièce
 jointe, qui coûte un appel système par fichier.
 
+`--json` produit un rapport structuré sur la sortie standard, la progression et les
+diagnostics restant sur la sortie d'erreur :
+
+```bash
+mmarchive-extract verify --archive ./archive --json | jq '.conformant'
+```
+
 À lancer après toute extraction, et surtout après une reprise : c'est ce contrôle qui
 révèle qu'une archive assemblée en plusieurs runs est incohérente avec elle-même.
 
@@ -359,6 +369,20 @@ nécessaire ensuite.
   Servez-les avec `Content-Disposition: attachment` et `X-Content-Type-Options: nosniff`.
 
 ---
+
+## Utilisation en script
+
+Toutes les commandes se comportent correctement hors terminal :
+
+- **aucune question n'est jamais posée** sans terminal interactif, ni en intégration
+  continue. Une confirmation impossible échoue avec un message actionnable plutôt que de
+  suspendre le processus indéfiniment ;
+- la **progression et les diagnostics vont sur la sortie d'erreur**, la sortie standard ne
+  porte que le résultat ;
+- les **codes de sortie** sont exploitables : `0` succès, `1` échec, `2` argument invalide,
+  `130` interruption par l'utilisateur ;
+- `NO_COLOR` et `--no-color` sont respectés, la couleur est désactivée automatiquement
+  quand la sortie est redirigée.
 
 ## Développement
 

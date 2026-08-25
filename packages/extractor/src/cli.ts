@@ -16,7 +16,22 @@ program
   .description(
     "Archive les canaux publics d une instance Mattermost vers un format ouvert et durable.",
   )
-  .version(TOOL_VERSION);
+  .version(TOOL_VERSION, "-V, --version", "Affiche la version et quitte")
+  .helpOption("-h, --help", "Affiche cette aide")
+  .option("-v, --verbose", "Sortie detaillee, sur la sortie d erreur")
+  .option("--no-input", "N essaie jamais de poser une question, meme dans un terminal")
+  .option("--no-color", "Desactive la couleur (equivalent a NO_COLOR)");
+
+program.on("option:verbose", () => {
+  logger.setLevel("debug");
+});
+program.on("option:no-color", () => {
+  process.env.NO_COLOR = "1";
+});
+program.on("option:no-input", () => {
+  // Lu par isInteractive : refuse toute invite, y compris dans un terminal.
+  process.env.MMARCHIVE_NO_INPUT = "1";
+});
 
 program
   .command("inventory")
@@ -87,6 +102,7 @@ program
   .description("Verifie une archive deja produite. Lecture seule, aucune connexion reseau.")
   .option("--archive <dir>", "Repertoire de l archive", "./archive")
   .option("--no-blobs", "Ne verifie pas la presence sur disque de chaque piece jointe")
+  .option("--json", "Sortie structuree sur la sortie standard, exploitable par un script")
   .action(async (opts: Record<string, unknown>) => {
     const errors = await verifyCommand(opts, logger);
     // Code de sortie exploitable depuis un script de sauvegarde.

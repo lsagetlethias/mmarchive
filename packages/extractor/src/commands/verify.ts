@@ -6,6 +6,8 @@ import { verifyArchive } from "../verify/checks.js";
 export interface VerifyCommandOptions {
   readonly archive?: string | undefined;
   readonly blobs?: boolean | undefined;
+  /** Sortie exploitable par un script, sur la sortie standard. */
+  readonly json?: boolean | undefined;
 }
 
 /**
@@ -18,19 +20,27 @@ export async function verifyCommand(
 ): Promise<number> {
   const archiveDir = resolve(raw.archive ?? "./archive");
 
-  logger.section("Verification de l archive");
-  logger.info(archiveDir);
+  // En mode structure, la sortie standard ne porte QUE le JSON : tout le reste
+  // part sur la sortie d erreur, sinon "verify --json | jq" echoue.
+  const asJson = raw.json ?? false;
+  if (!asJson) {
+    logger.section("Verification de l archive");
+    logger.info(archiveDir);
+  }
 
   // Une verification complete lit toute l archive : plusieurs minutes sans le
   // moindre signe si l on n affiche rien.
-  const progress = new RunReporter({ estimatedMessages: 0 });
-  progress.start();
-  progress.phase("Lecture de l archive");
+  const progress = new RunReporter({ estimatedMessages: 0, interactive: !asJson && undefined });
+  if (!asJson) {
+    progress.start();
+    progress.phase("Lecture de l archive");
+  }
 
   const report = await verifyArchive({
     archiveDir,
     checkBlobs: raw.blobs ?? true,
     onProgress: (step, done, total) => {
+      if (asJson) return;
       if (total !== undefined && total > 0) {
         progress.phase(step, total);
         if (done !== undefined) progress.phaseProgress(done);
@@ -42,6 +52,22 @@ export async function verifyCommand(
     },
   });
   progress.stop();
+
+  if (asJson) {
+    const payload = {
+      archive: archiveDir,
+      conformant: report.errors === 0,
+      errors: report.errors,
+      warnings: report.warnings,
+      checks: report.results.map((result) => ({
+        severity: result.severity,
+        label: result.label,
+        ...(result.detail === undefined ? {} : { detail: result.detail }),
+      })),
+    };
+    process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+    return report.errors;
+  }
 
   for (const result of report.results) {
     if (result.severity === "error") {

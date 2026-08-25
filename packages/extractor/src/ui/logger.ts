@@ -141,7 +141,7 @@ export function redactSecrets(text: string, secrets?: readonly string[]): string
 }
 
 export class Logger {
-  readonly #level: LogLevel;
+  #level: LogLevel;
   readonly #plain: boolean;
   readonly #out: NodeJS.WritableStream;
   readonly #err: NodeJS.WritableStream;
@@ -155,6 +155,11 @@ export class Logger {
     // createColors(false) renvoie des fonctions identite: aucun octet ANSI ne peut
     // sortir en mode plain, meme si une methode oublie de tester le drapeau.
     this.#colors = pc.createColors(!this.#plain);
+  }
+
+  /** Ajuste la verbosite apres coup, quand --verbose est lu par le parseur. */
+  setLevel(level: LogLevel): void {
+    this.#level = level;
   }
 
   debug(message: string): void {

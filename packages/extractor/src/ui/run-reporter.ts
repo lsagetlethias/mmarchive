@@ -93,7 +93,7 @@ export interface RunReporterOptions {
    * codes d echappement illisibles.
    */
   readonly interactive?: boolean | undefined;
-  /** Largeur du terminal. Defaut : process.stdout.columns, sinon 100. */
+  /** Largeur du terminal. Defaut : celle de la sortie d erreur, sinon 100. */
   readonly width?: number | undefined;
 }
 
@@ -140,14 +140,14 @@ export class RunReporter {
   private readonly rateSamples: { at: number; requests: number }[] = [];
 
   constructor(options: RunReporterOptions) {
-    this.out = options.out ?? process.stdout;
+    this.out = options.out ?? process.stderr;
     this.estimatedMessages = Math.max(options.estimatedMessages, 0);
     this.intervalMs = options.intervalMs ?? 1000;
     this.now = options.now ?? (() => Date.now());
-    this.interactive = options.interactive ?? process.stdout.isTTY;
+    this.interactive = options.interactive ?? process.stderr.isTTY === true;
     // process.stdout.columns est type number, mais vaut undefined des que la
     // sortie n est pas un terminal. On verifie la valeur plutot que le type.
-    const columns: unknown = process.stdout.columns;
+    const columns: unknown = process.stderr.columns;
     const detected = typeof columns === "number" && columns > 0 ? columns : DEFAULT_WIDTH;
     this.width = options.width ?? detected;
     this.startedAt = this.now();

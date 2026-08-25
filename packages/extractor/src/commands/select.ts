@@ -3,11 +3,12 @@ import * as prompts from "@clack/prompts";
 import { categorizeChannel, type SelectionChannel, type SelectionFile } from "@mmarchive/shared";
 import { applySelection, currentlySelectedIds, summaryOf } from "../inventory/apply-selection.js";
 import { readSelectionFile, writeSelectionFile } from "../inventory/yaml-file.js";
+import { isInteractive } from "../ui/environment.js";
 import { Logger } from "../ui/logger.js";
 
 export class SelectionCancelled extends Error {
-  constructor() {
-    super("Selection annulee, le fichier n a pas ete modifie.");
+  constructor(detail = "Selection annulee, le fichier n a pas ete modifie.") {
+    super(detail);
     this.name = "SelectionCancelled";
   }
 }
@@ -28,6 +29,15 @@ export async function selectCommand(
   filePath: string,
   logger = new Logger(),
 ): Promise<SelectionFile> {
+  // Cette commande est interactive par nature : la lancer sans terminal
+  // suspendrait le processus a la premiere question.
+  if (!isInteractive()) {
+    throw new SelectionCancelled(
+      "Aucun terminal interactif. Editez directement le fichier de selection, " +
+        "le champ selected de chaque canal, puis lancez run.",
+    );
+  }
+
   const path = resolve(filePath);
   const file = await readSelectionFile(path);
   const alreadySelected = currentlySelectedIds(file);
