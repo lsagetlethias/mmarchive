@@ -3,6 +3,9 @@ const CLEAR_LINE = "\r\u001B[2K";
 /** Part des messages a traiter avant d oser annoncer un temps restant. */
 const MIN_SAMPLE_RATIO = 0.02;
 
+/** Fenetre de mesure du debit instantane. */
+const RATE_WINDOW_MS = 30_000;
+
 /** Largeur retenue quand le terminal n en declare aucune. */
 const DEFAULT_WIDTH = 100;
 
@@ -118,7 +121,6 @@ export class RunReporter {
   private messagesThisSession = 0;
   private sessionStartedAt = 0;
   private files = 0;
-  private requests = 0;
   private phaseLabel = "Preparation";
   private phaseDone = 0;
   private phaseTotal = 0;
@@ -126,7 +128,14 @@ export class RunReporter {
   private lastRenderAt = 0;
   private lineShown = false;
   private timer: NodeJS.Timeout | undefined;
-  private current = "";
+  /**
+   * Canaux en cours. Plusieurs avancent de front : n en retenir qu un donnerait
+   * le nom du dernier demarre, pas celui qui travaille encore, ce qui laisse
+   * croire a un blocage quand un gros canal termine seul.
+   */
+  private readonly active = new Set<string>();
+  /** Echantillons (instant, requetes cumulees) pour un debit instantane. */
+  private readonly rateSamples: { at: number; requests: number }[] = [];
 
   constructor(options: RunReporterOptions) {
     this.out = options.out ?? process.stdout;
@@ -165,7 +174,7 @@ export class RunReporter {
     this.phaseLabel = label;
     this.phaseTotal = total;
     this.phaseDone = 0;
-    this.current = "";
+    this.active.clear();
     // Le temps restant se deduit des messages : l afficher pendant une etape qui
     // n en produit plus donnerait un chiffre fige et trompeur.
     this.phaseEstimates = options.estimate ?? false;
@@ -187,8 +196,12 @@ export class RunReporter {
   }
 
   channelStarted(label: string): void {
-    this.current = label;
+    this.active.add(label);
     this.render();
+  }
+
+  channelEnded(label: string): void {
+    this.active.delete(label);
   }
 
   channelFinished(messages: number): void {
@@ -218,7 +231,24 @@ export class RunReporter {
 
   /** Requetes HTTP emises, pour afficher le debit reel. */
   setRequestCount(count: number): void {
-    this.requests = count;
+    const at = this.now();
+    this.rateSamples.push({ at, requests: count });
+    // On ne garde que la fenetre recente : un debit moyen depuis le lancement
+    // reste eleve alors que le run rame, et masque exactement le moment ou il
+    // faudrait s inquieter.
+    while (this.rateSamples.length > 1 && at - (this.rateSamples[0]?.at ?? at) > RATE_WINDOW_MS) {
+      this.rateSamples.shift();
+    }
+  }
+
+  /** Debit instantane sur la fenetre recente, requetes par seconde. */
+  private currentRate(): number | undefined {
+    const first = this.rateSamples[0];
+    const last = this.rateSamples[this.rateSamples.length - 1];
+    if (first === undefined || last === undefined) return undefined;
+    const seconds = (last.at - first.at) / 1000;
+    if (seconds < 1) return undefined;
+    return (last.requests - first.requests) / seconds;
   }
 
   /** Ecrit un message sans laisser la ligne de statut a moitie effacee. */
@@ -250,16 +280,18 @@ export class RunReporter {
     if (this.messages > 0) parts.push(`${formatCount(this.messages)} messages`);
     if (this.files > 0) parts.push(`${formatCount(this.files)} fichiers`);
 
-    const seconds = elapsed / 1000;
-    if (seconds >= 1 && this.requests > 0) {
-      parts.push(`${(this.requests / seconds).toFixed(1)} req/s`);
-    }
+    const rate = this.currentRate();
+    if (rate !== undefined) parts.push(`${rate.toFixed(1)} req/s`);
 
     if (this.phaseEstimates) {
       const remaining = this.estimateRemainingMs();
       if (remaining !== undefined) parts.push(`reste ~${formatDuration(remaining)}`);
     }
-    if (this.current.length > 0) parts.push(this.current);
+    const active = [...this.active];
+    const first = active[0];
+    if (first !== undefined) {
+      parts.push(active.length === 1 ? first : `${first} (+${String(active.length - 1)})`);
+    }
     return parts.join("  ");
   }
 

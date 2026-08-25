@@ -252,7 +252,11 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     }
 
     reporter.channelStarted(planned.channel.display_name || planned.channel.name);
-    const pinnedIds = await api.getPinnedPostIds(channelId);
+    // Les messages epingles ne conditionnent pas la premiere page : les attendre
+    // laisserait le slot avec une seule requete en vol la ou il peut en avoir
+    // deux. Sur un canal median de deux pages, c est un tiers des aller-retours.
+    const pinnedPromise = api.getPinnedPostIds(channelId);
+    pinnedPromise.catch(() => undefined);
 
     let files: readonly MmFileInfo[];
     try {
@@ -263,7 +267,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
         progress,
         sinceMillis: runOptions.since,
         perPage: runOptions.postsPageSize,
-        pinnedIds,
+        pinnedIds: pinnedPromise,
         onCursor: async (patch) => {
           state.updateProgress(channelId, patch);
           reporter.setRequestCount(options.client.requestCount);
@@ -290,6 +294,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
         posts_written: result.postsWritten,
       });
       await state.saveNow();
+      reporter.channelEnded(planned.channel.display_name || planned.channel.name);
       reporter.channelFinished(result.postsWritten);
 
       archivedChannels.push({
@@ -313,6 +318,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       state.updateProgress(channelId, { status: "failed", error: detail });
       await state.saveNow();
       reporter.note(`[erreur] ${planned.channel.name} : ${detail}`);
+      reporter.channelEnded(planned.channel.display_name || planned.channel.name);
       reporter.channelFinished(0);
       return;
     }

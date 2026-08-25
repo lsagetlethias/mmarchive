@@ -216,3 +216,73 @@ describe("concurrence des emojis et des avatars", () => {
     }
   });
 });
+
+describe("fenetre glissante contre tranches verrouillees", () => {
+  it("garde la concurrence pleine malgre un element tres lent", async () => {
+    // Constat mesure sur l archive reelle : avec des tranches successives, un
+    // seul fichier de 74 Mo immobilisait les autres connexions du lot, ramenant
+    // la concurrence effective de 5 a 1,35.
+    let inFlight = 0;
+    const samples: number[] = [];
+    const api = {
+      downloadFile: async (fileId: string) => {
+        inFlight += 1;
+        samples.push(inFlight);
+        // Le premier fichier est cent fois plus lent que les autres.
+        const slow = fileId.endsWith("0".repeat(25));
+        await new Promise((resolve) => setTimeout(resolve, slow ? 120 : 2));
+        inFlight -= 1;
+        return { bytes: new Uint8Array([1]), contentType: "image/png", size: 1 };
+      },
+    } as unknown as MattermostApi;
+
+    const files = Array.from({ length: 40 }, (_, i) => fileInfo(i));
+    await extractFiles({
+      api,
+      paths: createArchivePaths(workDir),
+      includeEmails: false,
+      skipFiles: false,
+      maxFileSizeBytes: 1024,
+      downloadConcurrency: 5,
+      files,
+      channelId: CHANNEL,
+      alreadyDone: new Set<string>(),
+    });
+
+    // Avec des tranches, la moyenne s effondre pendant l attente du lent.
+    const average = samples.reduce((sum, n) => sum + n, 0) / samples.length;
+    expect(average).toBeGreaterThan(3);
+  });
+
+  it("conserve l ordre des enregistrements malgre les fins desordonnees", async () => {
+    const api = {
+      downloadFile: async (fileId: string) => {
+        const rank = Number(fileId.slice(-2).replace(/\D/g, ""));
+        await new Promise((resolve) => setTimeout(resolve, Math.max(1, 20 - rank * 2)));
+        return { bytes: new Uint8Array([1]), contentType: "image/png", size: 1 };
+      },
+    } as unknown as MattermostApi;
+
+    const files = Array.from({ length: 8 }, (_, i) => fileInfo(i));
+    await extractFiles({
+      api,
+      paths: createArchivePaths(workDir),
+      includeEmails: false,
+      skipFiles: false,
+      maxFileSizeBytes: 1024,
+      downloadConcurrency: 4,
+      files,
+      channelId: CHANNEL,
+      alreadyDone: new Set<string>(),
+    });
+
+    const lines = (await readFile(join(workDir, "files.ndjson"), "utf8"))
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(lines.map((l) => l.id)).toEqual(files.map((f) => f.id));
+    for (const line of lines) {
+      expect(String(line.path)).toContain(String(line.id));
+    }
+  });
+});

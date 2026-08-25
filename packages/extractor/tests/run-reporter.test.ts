@@ -170,13 +170,42 @@ describe("RunReporter", () => {
     expect(reporter.statusLine()).not.toContain("reste");
   });
 
-  it("affiche le debit reel des que des requetes sont connues", () => {
+  it("affiche un debit instantane, pas la moyenne depuis le lancement", () => {
+    // Releve sur un run reel : 23 req/s affiches alors que le dernier canal
+    // n avancait plus que d une page toutes les six secondes. La moyenne depuis
+    // le lancement masque exactement le moment ou il faudrait s inquieter.
     const out = new Capture();
     const clock = makeClock();
     const reporter = make(out, clock);
+
+    reporter.setRequestCount(0);
     clock.advance(10_000);
-    reporter.setRequestCount(80);
-    expect(reporter.statusLine()).toContain("8.0 req/s");
+    reporter.setRequestCount(400);
+    expect(reporter.statusLine()).toContain("40.0 req/s");
+
+    // Le run ralentit fortement : le debit affiche doit suivre.
+    clock.advance(30_000);
+    reporter.setRequestCount(430);
+    const rate = /([\d.]+) req\/s/.exec(reporter.statusLine())?.[1] ?? "";
+    expect(Number(rate)).toBeLessThan(5);
+  });
+
+  it("nomme les canaux encore actifs, pas le dernier demarre", () => {
+    // Avec la concurrence, afficher le dernier canal demarre laisse croire que
+    // le run est bloque dessus alors qu un autre travaille encore.
+    const out = new Capture();
+    const reporter = make(out, makeClock());
+    reporter.phase("Canaux", 10, { estimate: true });
+    reporter.channelStarted("gros-canal");
+    reporter.channelStarted("petit-canal");
+    expect(reporter.statusLine()).toContain("gros-canal (+1)");
+
+    reporter.channelEnded("petit-canal");
+    reporter.channelFinished(10);
+    const line = reporter.statusLine();
+    expect(line).toContain("gros-canal");
+    expect(line).not.toContain("+1");
+    expect(line).not.toContain("petit-canal");
   });
 
   it("n emet aucun code d echappement hors TTY", () => {

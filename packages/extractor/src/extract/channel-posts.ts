@@ -22,8 +22,12 @@ export interface ChannelExtractionOptions {
   /** Borne basse d une extraction incrementale, en millisecondes epoch. */
   readonly sinceMillis?: number | undefined;
   readonly perPage?: number | undefined;
-  /** Ids des messages epingles, is_pinned n etant pas fiable sur les posts. */
-  readonly pinnedIds?: ReadonlySet<string> | undefined;
+  /**
+   * Ids des messages epingles, is_pinned n etant pas fiable sur les posts.
+   * Accepte une promesse : l appel peut etre lance en parallele de la premiere
+   * page, il n est attendu qu au moment de convertir les posts.
+   */
+  readonly pinnedIds?: ReadonlySet<string> | Promise<ReadonlySet<string>> | undefined;
   /** Appele apres chaque page ecrite, pour la barre de progression. */
   readonly onPage?: ((written: number, total: number) => void) | undefined;
   /** Persiste le curseur apres chaque page, pour que --resume soit fiable. */
@@ -115,7 +119,7 @@ export async function extractChannelPosts(
   const { api, channelId, paths, progress } = options;
   const partPath = paths.postsPartFile(channelId);
   const finalPath = paths.postsFile(channelId);
-  const pinnedIds = options.pinnedIds ?? new Set<string>();
+  const pinnedIdsPromise = Promise.resolve(options.pinnedIds ?? new Set<string>());
 
   const userIds = new Set<string>();
   const files: MmFileInfo[] = [];
@@ -168,6 +172,7 @@ export async function extractChannelPosts(
       // peut revenir dans la page suivante. On deduplique donc toujours.
       const fresh = page.filter((post) => post.id !== cursor && !seenIds.has(post.id));
 
+      const pinnedIds = await pinnedIdsPromise;
       const batch: ArchivePost[] = [];
       for (const post of fresh) {
         if (options.sinceMillis !== undefined && post.create_at < options.sinceMillis) {

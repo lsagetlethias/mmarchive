@@ -8,6 +8,7 @@ import type {
   FileSkipReason,
 } from "@mmarchive/shared";
 import { NdjsonWriter } from "../archive/ndjson.js";
+import { mapWithConcurrency } from "./concurrency.js";
 import type { ArchivePaths } from "../archive/paths.js";
 import type { MattermostApi } from "../mattermost/api.js";
 import { isBotUser, type MmFileInfo, type MmUser } from "../mattermost/types.js";
@@ -26,28 +27,6 @@ export interface AssetOptions {
 async function writeBinary(path: string, bytes: Uint8Array): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, bytes);
-}
-
-/**
- * Applique un traitement par lots concurrents, en conservant l ordre des
- * resultats.
- *
- * Les telechargements sont domines par la latence : les enchainer un par un
- * laisse une seule requete en vol, quel que soit le debit autorise. Sur 762
- * emojis a 80 ms, la difference est d une minute.
- */
-async function mapInBatches<T, R>(
-  items: readonly T[],
-  batchSize: number,
-  worker: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const size = Math.max(1, batchSize);
-  const results: R[] = [];
-  for (let index = 0; index < items.length; index += size) {
-    const batch = items.slice(index, index + size);
-    results.push(...(await Promise.all(batch.map(worker))));
-  }
-  return results;
 }
 
 export interface UsersResult {
@@ -83,25 +62,29 @@ export async function extractUsers(
   }
 
   let done = 0;
-  const avatars = await mapInBatches(users, options.downloadConcurrency ?? 1, async (user) => {
-    try {
-      const image = await options.api.downloadAvatar(user.id);
-      const path = options.paths.avatarFile(user.id);
-      await writeBinary(path, image.bytes);
-      return options.paths.relative(path);
-    } catch (error) {
-      warnings.push({
-        code: "AVATAR_DOWNLOAD_FAILED",
-        detail: `Avatar de ${user.username} indisponible : ${
-          error instanceof Error ? error.message : "erreur inconnue"
-        }`,
-      });
-      return null;
-    } finally {
-      done += 1;
-      options.onProgress?.(done, users.length, user.username);
-    }
-  });
+  const avatars = await mapWithConcurrency(
+    users,
+    options.downloadConcurrency ?? 1,
+    async (user) => {
+      try {
+        const image = await options.api.downloadAvatar(user.id);
+        const path = options.paths.avatarFile(user.id);
+        await writeBinary(path, image.bytes);
+        return options.paths.relative(path);
+      } catch (error) {
+        warnings.push({
+          code: "AVATAR_DOWNLOAD_FAILED",
+          detail: `Avatar de ${user.username} indisponible : ${
+            error instanceof Error ? error.message : "erreur inconnue"
+          }`,
+        });
+        return null;
+      } finally {
+        done += 1;
+        options.onProgress?.(done, users.length, user.username);
+      }
+    },
+  );
 
   const writer = await NdjsonWriter.open(options.paths.users, { append: true });
   try {
@@ -157,25 +140,29 @@ export async function extractEmojis(options: AssetOptions): Promise<EmojisResult
   }
 
   let done = 0;
-  const images = await mapInBatches(emojis, options.downloadConcurrency ?? 1, async (emoji) => {
-    try {
-      const binary = await options.api.downloadEmojiImage(emoji.id);
-      const path = options.paths.emojiFile(emoji.id);
-      await writeBinary(path, binary.bytes);
-      return options.paths.relative(path);
-    } catch (error) {
-      warnings.push({
-        code: "EMOJI_DOWNLOAD_FAILED",
-        detail: `Image de l emoji ${emoji.name} indisponible : ${
-          error instanceof Error ? error.message : "erreur inconnue"
-        }`,
-      });
-      return null;
-    } finally {
-      done += 1;
-      options.onProgress?.(done, emojis.length, emoji.name);
-    }
-  });
+  const images = await mapWithConcurrency(
+    emojis,
+    options.downloadConcurrency ?? 1,
+    async (emoji) => {
+      try {
+        const binary = await options.api.downloadEmojiImage(emoji.id);
+        const path = options.paths.emojiFile(emoji.id);
+        await writeBinary(path, binary.bytes);
+        return options.paths.relative(path);
+      } catch (error) {
+        warnings.push({
+          code: "EMOJI_DOWNLOAD_FAILED",
+          detail: `Image de l emoji ${emoji.name} indisponible : ${
+            error instanceof Error ? error.message : "erreur inconnue"
+          }`,
+        });
+        return null;
+      } finally {
+        done += 1;
+        options.onProgress?.(done, emojis.length, emoji.name);
+      }
+    },
+  );
 
   const writer = await NdjsonWriter.open(options.paths.emojis);
   try {
@@ -260,24 +247,29 @@ export async function extractFiles(
     }
   }
 
-  const writer = await NdjsonWriter.open(options.paths.files, { append: true });
   const pending = [...unique.values()];
-  // Les pieces jointes representent l essentiel des requetes d une extraction,
-  // et chacune est dominee par la latence reseau plutot que par le debit. Les
-  // traiter par lots concurrents laisse plusieurs requetes en vol ; le limiteur
-  // de debit reste le seul garde-fou du rythme reel.
-  const batchSize = Math.max(1, options.downloadConcurrency ?? 1);
+  // Les pieces jointes dominent le nombre de requetes d une extraction et leur
+  // taille est tres inegale. Une fenetre glissante garde la concurrence pleine,
+  // la ou des tranches successives attendraient le plus gros fichier de chaque
+  // tranche avec les autres connexions inutilisees.
   let done = 0;
-  try {
-    for (let index = 0; index < pending.length; index += batchSize) {
-      const batch = pending.slice(index, index + batchSize);
-      const results = await Promise.all(batch.map(fetchOne));
+  const results = await mapWithConcurrency(
+    pending,
+    options.downloadConcurrency ?? 1,
+    async (file) => {
+      const result = await fetchOne(file);
+      done += 1;
+      options.onProgress?.(done, pending.length, file.name);
+      return result;
+    },
+  );
 
-      for (const [position, file] of batch.entries()) {
+  const writer = await NdjsonWriter.open(options.paths.files, { append: true });
+  try {
+    {
+      for (const [position, file] of pending.entries()) {
         const result = results[position];
         if (result === undefined) continue;
-        done += 1;
-        options.onProgress?.(done, pending.length, file.name);
 
         if (result.path === null) {
           skipped += 1;
