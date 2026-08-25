@@ -200,7 +200,6 @@ export async function doctorCommand(
 
   if (file === undefined) return;
 
-  logger.section("Estimation du run");
   let channels = 0;
   let messages = 0;
   for (const team of file.teams) {
@@ -254,6 +253,7 @@ export async function doctorCommand(
     );
   }
 
+  logger.section("Estimation du run");
   logger.table(
     ["", "Par defaut", "Calibre"],
     [
