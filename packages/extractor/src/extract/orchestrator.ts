@@ -122,6 +122,13 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     String(runOptions.since ?? ""),
   ].join("|");
 
+  const reporter =
+    options.reporter ??
+    new RunReporter({
+      estimatedMessages: plan.channels.reduce((sum, c) => sum + c.channel.message_count, 0),
+    });
+  reporter.start();
+
   const existing = runOptions.resume
     ? await StateStore.load(paths.state, {
         sourceUrl: runOptions.connection.url,
@@ -138,6 +145,28 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       accountId: options.account.id,
       optionsFingerprint: fingerprint,
     });
+
+  /**
+   * Un Ctrl+C tue le processus sans laisser la sauvegarde periodique aboutir.
+   * On force donc l ecriture de l etat avant de sortir : sans cela la reprise
+   * rejouerait tout le travail depuis la derniere sauvegarde, et surtout la
+   * liste des canaux rejoints pourrait etre perdue.
+   */
+  let interrupted = false;
+  const onSignal = (signal: NodeJS.Signals): void => {
+    if (interrupted) return;
+    interrupted = true;
+    reporter.note(`Interruption (${signal}) : sauvegarde de l etat en cours...`);
+    void state
+      .close()
+      .catch(() => undefined)
+      .finally(() => {
+        reporter.stop();
+        process.exit(130);
+      });
+  };
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
 
   const gate = new MutationGate({
     executor: options.client.createRawExecutor(),
@@ -175,13 +204,6 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     logger.warn(`Canal rejoint : ${join.channel.name} (un message systeme y a ete publie)`);
   }
 
-  const reporter =
-    options.reporter ??
-    new RunReporter({
-      estimatedMessages: plan.channels.reduce((sum, c) => sum + c.channel.message_count, 0),
-    });
-  reporter.start();
-
   // Emojis : une seule fois pour toute l archive. C est la premiere etape du
   // run et elle peut durer une minute, d ou son affichage explicite.
   if (!state.state.emojis_done) {
@@ -205,6 +227,10 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
   }
 
   reporter.phase("Canaux", plan.channels.length, { estimate: true });
+
+  // Construit une seule fois : le reconstruire a chaque canal devenait
+  // quadratique a mesure que la liste des pieces jointes grossissait.
+  const downloadedFileIds = new Set<string>(state.state.downloaded_file_ids);
 
   const allUserIds = new Set<string>();
   const archivedChannels: ArchiveChannel[] = [];
@@ -299,14 +325,18 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       skipFiles: runOptions.skipFiles,
       maxFileSizeBytes: runOptions.maxFileSizeBytes,
       downloadConcurrency: runOptions.concurrency,
-      alreadyDone: new Set(state.state.downloaded_file_ids),
+      alreadyDone: downloadedFileIds,
     });
     warnings.push(...fileResult.warnings);
     attachments += fileResult.downloaded;
     attachmentBytes += fileResult.bytes;
     reporter.filesAdded(fileResult.downloaded);
     reporter.setRequestCount(options.client.requestCount);
-    for (const file of files) state.state.downloaded_file_ids.push(file.id);
+    for (const file of files) {
+      if (downloadedFileIds.has(file.id)) continue;
+      downloadedFileIds.add(file.id);
+      state.state.downloaded_file_ids.push(file.id);
+    }
     state.state.attachments_bytes = attachmentBytes;
     await state.saveThrottled();
   });
@@ -432,6 +462,8 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
 
   state.state.warnings = [];
   await state.close();
+  process.off("SIGINT", onSignal);
+  process.off("SIGTERM", onSignal);
   reporter.stop();
   return manifest;
 }

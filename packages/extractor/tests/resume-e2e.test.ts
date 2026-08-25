@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -254,6 +254,45 @@ describe("reprise apres interruption", () => {
     await extractOnce(99, true);
     const files = await readdir(join(workDir, "posts"));
     expect(files.filter((name) => name.endsWith(".part"))).toEqual([]);
+  });
+
+  it("ne duplique rien quand l etat est en retard sur le fichier de travail", async () => {
+    // Scenario d un Ctrl+C : l etat n est sauvegarde qu au plus toutes les cinq
+    // secondes, donc le .part peut contenir des pages dont le curseur n a jamais
+    // ete enregistre. Repartir du curseur de l etat rejouerait ces pages.
+    await extractOnce(1, false);
+
+    const statePath = join(workDir, ".extract-state.json");
+    const state = JSON.parse(await readFile(statePath, "utf8")) as {
+      channels: Record<string, { posts_written: number; oldest_post_id: string | null }>;
+    };
+    const progress = state.channels[CHANNEL_ID];
+    expect(progress).toBeDefined();
+
+    // On rembobine l etat comme si la derniere sauvegarde n avait pas eu lieu.
+    const partLines = (await readFile(join(workDir, "posts", `${CHANNEL_ID}.ndjson.part`), "utf8"))
+      .split("\n")
+      .filter((line) => line.length > 0);
+    expect(partLines.length).toBeGreaterThan(50);
+    const rewound = JSON.parse(partLines[49] ?? "{}") as { id: string };
+    if (progress) {
+      progress.posts_written = 50;
+      progress.oldest_post_id = rewound.id;
+    }
+    await writeFile(statePath, JSON.stringify(state), "utf8");
+
+    await extractOnce(99, true);
+
+    const posts = await readPosts();
+    const counts = new Map<string, number>();
+    for (const post of posts) {
+      const id = String(post.id);
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    expect([...counts.values()].filter((n) => n > 1)).toEqual([]);
+    expect(posts).toHaveLength(TOTAL_POSTS);
+    const dates = posts.map((p) => p.create_at as number);
+    expect(dates).toEqual([...dates].sort((a, b) => a - b));
   });
 
   it("survit a deux interruptions successives", async () => {

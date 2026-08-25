@@ -1,7 +1,7 @@
 import { rm } from "node:fs/promises";
 import type { ArchivePost, ArchiveWarning, ChannelProgress } from "@mmarchive/shared";
 import type { ArchivePaths } from "../archive/paths.js";
-import { NdjsonWriter } from "../archive/ndjson.js";
+import { NdjsonWriter, readNdjson } from "../archive/ndjson.js";
 import { reverseLines } from "../archive/reverse-file.js";
 import type { MattermostApi } from "../mattermost/api.js";
 import {
@@ -10,6 +10,9 @@ import {
   type MmFileInfo,
   type MmPost,
 } from "../mattermost/types.js";
+
+/** Pages ecrites entre deux forcages sur disque. */
+const FLUSH_EVERY_PAGES = 10;
 
 export interface ChannelExtractionOptions {
   readonly api: MattermostApi;
@@ -36,6 +39,40 @@ export interface ChannelExtractionResult {
   readonly emojiNames: ReadonlySet<string>;
   readonly orphanRootIds: readonly string[];
   readonly warnings: readonly ArchiveWarning[];
+}
+
+interface PartTail {
+  readonly count: number;
+  readonly lastId: string;
+  readonly lastCreateAt: number;
+  readonly firstCreateAt: number;
+}
+
+/**
+ * Etat reel du fichier de travail d un canal : nombre de lignes et derniere
+ * ligne ecrite. Renvoie null si le fichier n existe pas encore.
+ *
+ * Le .part est ecrit du plus recent au plus ancien : sa derniere ligne porte
+ * donc le curseur de pagination a reprendre.
+ */
+async function readPartTail(partPath: string): Promise<PartTail | null> {
+  let count = 0;
+  let lastId = "";
+  let lastCreateAt = 0;
+  let firstCreateAt = 0;
+  try {
+    for await (const post of readNdjson<ArchivePost>(partPath)) {
+      if (count === 0) firstCreateAt = post.create_at;
+      count += 1;
+      lastId = post.id;
+      lastCreateAt = post.create_at;
+    }
+  } catch {
+    // Absent ou illisible : on repart de l etat, qui est alors la seule source.
+    return null;
+  }
+  if (count === 0) return null;
+  return { count, lastId, lastCreateAt, firstCreateAt };
 }
 
 function toArchivePost(post: MmPost, isPinned: boolean): ArchivePost {
@@ -93,6 +130,23 @@ export async function extractChannelPosts(
   let newestCreateAt = progress.newest_create_at;
   let reachedSinceBound = false;
 
+  /**
+   * Le fichier de travail fait foi, pas l etat.
+   *
+   * L etat n est sauvegarde que periodiquement : apres un arret brutal, le .part
+   * peut contenir des pages dont le curseur n a jamais ete enregistre. Repartir
+   * du curseur de l etat rejouerait ces pages et ecrirait des doublons. On
+   * recale donc le curseur sur la derniere ligne reellement presente.
+   */
+  const tail = await readPartTail(partPath);
+  if (tail !== null && tail.count > 0) {
+    cursor = tail.lastId;
+    written = tail.count;
+    oldestCreateAt = tail.lastCreateAt;
+    newestCreateAt ??= tail.firstCreateAt;
+  }
+
+  let pagesSinceFlush = 0;
   const writer = await NdjsonWriter.open(partPath, { append: true });
 
   try {
@@ -137,7 +191,14 @@ export async function extractChannelPosts(
 
       if (batch.length > 0) {
         await writer.writeMany(batch);
-        await writer.flush();
+        pagesSinceFlush += 1;
+        // Un fsync coute plus de dix fois le prix de l ecriture. Comme le .part
+        // fait foi a la reprise, le forcer a chaque page n apporte rien : au
+        // pire un arret brutal fait rejouer les dernieres pages non synchronisees.
+        if (pagesSinceFlush >= FLUSH_EVERY_PAGES) {
+          await writer.flush();
+          pagesSinceFlush = 0;
+        }
         written += batch.length;
 
         const last = batch[batch.length - 1];
