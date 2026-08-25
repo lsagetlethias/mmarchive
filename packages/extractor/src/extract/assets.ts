@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type {
   ArchiveEmoji,
@@ -7,7 +7,7 @@ import type {
   ArchiveWarning,
   FileSkipReason,
 } from "@mmarchive/shared";
-import { NdjsonWriter } from "../archive/ndjson.js";
+import { NdjsonWriter, readNdjson } from "../archive/ndjson.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import type { ArchivePaths } from "../archive/paths.js";
 import type { MattermostApi } from "../mattermost/api.js";
@@ -42,11 +42,34 @@ export interface UsersResult {
  * illisible.
  */
 export async function extractUsers(
-  options: AssetOptions & { userIds: ReadonlySet<string>; alreadyDone: ReadonlySet<string> },
+  options: AssetOptions & { userIds: ReadonlySet<string>; alreadyDone?: ReadonlySet<string> },
 ): Promise<UsersResult> {
   const warnings: ArchiveWarning[] = [];
-  const pending = [...options.userIds].filter((id) => !options.alreadyDone.has(id));
-  if (pending.length === 0) return { count: 0, warnings };
+
+  /**
+   * Le fichier fait foi, pas l etat.
+   *
+   * users.ndjson etait ouvert en ajout et la liste des utilisateurs deja resolus
+   * venait de l etat, qui n etait pas toujours persiste : chaque run reecrivait
+   * alors tout le monde. Constate sur une archive reelle, 7 727 lignes pour
+   * 3 277 utilisateurs distincts, certains presents trois fois. On relit donc
+   * l existant, et le fichier est reecrit complet et dedoublonne.
+   */
+  const existing = new Map<string, ArchiveUser>();
+  try {
+    for await (const user of readNdjson<ArchiveUser>(options.paths.users)) {
+      existing.set(user.id, user);
+    }
+  } catch {
+    // Fichier absent au premier run.
+  }
+
+  const pending = [...options.userIds].filter((id) => !existing.has(id));
+  if (pending.length === 0) {
+    // Rien a resoudre, mais le fichier peut contenir des doublons herites.
+    if (existing.size > 0) await rewriteUsers(options.paths.users, [...existing.values()]);
+    return { count: existing.size, warnings };
+  }
 
   let users: MmUser[];
   try {
@@ -86,11 +109,9 @@ export async function extractUsers(
     },
   );
 
-  const writer = await NdjsonWriter.open(options.paths.users, { append: true });
-  try {
-    for (const [index, user] of users.entries()) {
-      const avatar = avatars[index] ?? null;
-
+  for (const [index, user] of users.entries()) {
+    const avatar = avatars[index] ?? null;
+    {
       const record: ArchiveUser = {
         id: user.id,
         username: user.username,
@@ -106,13 +127,24 @@ export async function extractUsers(
         // Aucun champ de contact n entre dans l archive sans demande explicite.
         ...(options.includeEmails && user.email !== undefined ? { email: user.email } : {}),
       };
-      await writer.write(record);
+      existing.set(record.id, record);
     }
+  }
+
+  await rewriteUsers(options.paths.users, [...existing.values()]);
+  return { count: existing.size, warnings };
+}
+
+/** Reecrit l annuaire complet de facon atomique, sans doublon. */
+async function rewriteUsers(path: string, records: readonly ArchiveUser[]): Promise<void> {
+  const temporary = `${path}.rewrite`;
+  const writer = await NdjsonWriter.open(temporary);
+  try {
+    await writer.writeMany(records);
   } finally {
     await writer.close();
   }
-
-  return { count: users.length, warnings };
+  await rename(temporary, path);
 }
 
 export interface EmojisResult {

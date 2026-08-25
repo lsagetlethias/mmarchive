@@ -329,6 +329,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
       state.state.downloaded_file_ids.push(file.id);
     }
     state.state.attachments_bytes = attachmentBytes;
+    state.touch();
     await state.saveThrottled();
   });
 
@@ -370,7 +371,6 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     api,
     paths,
     userIds: allUserIds,
-    alreadyDone: new Set(state.state.fetched_user_ids),
     includeEmails: runOptions.includeEmails,
     skipFiles: runOptions.skipFiles,
     maxFileSizeBytes: runOptions.maxFileSizeBytes,
@@ -382,7 +382,8 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     },
   });
   warnings.push(...usersResult.warnings);
-  state.state.fetched_user_ids.push(...allUserIds);
+  state.state.fetched_user_ids = [...new Set([...state.state.fetched_user_ids, ...allUserIds])];
+  state.touch();
 
   // Compte relu sur le fichier plutot que sur le resultat de l extraction :
   // en reprise, les emojis ne sont pas reextraits et le compteur serait a zero.
@@ -526,6 +527,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
   }
   const allWarnings = [...mergedWarnings.values()];
   state.state.warnings = allWarnings;
+  state.touch();
 
   const manifest: Manifest = {
     schema_version: SCHEMA_VERSION,

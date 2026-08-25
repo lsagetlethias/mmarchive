@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -218,20 +218,24 @@ describe("concurrence des emojis et des avatars", () => {
 });
 
 describe("fenetre glissante contre tranches verrouillees", () => {
-  it("garde la concurrence pleine malgre un element tres lent", async () => {
-    // Constat mesure sur l archive reelle : avec des tranches successives, un
-    // seul fichier de 74 Mo immobilisait les autres connexions du lot, ramenant
-    // la concurrence effective de 5 a 1,35.
-    let inFlight = 0;
-    const samples: number[] = [];
+  it("continue de demarrer des telechargements pendant qu un gros fichier traine", async () => {
+    // Mesure deterministe, insensible a la charge de la machine : on compte les
+    // telechargements qui DEMARRENT pendant que le lent est en cours. Avec des
+    // tranches verrouillees, seuls ses compagnons de tranche peuvent l accompagner,
+    // soit quatre au plus. Avec une fenetre glissante, tous les autres defilent.
+    let slowRunning = false;
+    let startedDuringSlow = 0;
+
     const api = {
       downloadFile: async (fileId: string) => {
-        inFlight += 1;
-        samples.push(inFlight);
-        // Le premier fichier est cent fois plus lent que les autres.
-        const slow = fileId.endsWith("0".repeat(25));
-        await new Promise((resolve) => setTimeout(resolve, slow ? 120 : 2));
-        inFlight -= 1;
+        const isSlow = fileId.endsWith("0".repeat(25));
+        if (isSlow) {
+          slowRunning = true;
+        } else if (slowRunning) {
+          startedDuringSlow += 1;
+        }
+        await new Promise((resolve) => setTimeout(resolve, isSlow ? 150 : 1));
+        if (isSlow) slowRunning = false;
         return { bytes: new Uint8Array([1]), contentType: "image/png", size: 1 };
       },
     } as unknown as MattermostApi;
@@ -249,9 +253,7 @@ describe("fenetre glissante contre tranches verrouillees", () => {
       alreadyDone: new Set<string>(),
     });
 
-    // Avec des tranches, la moyenne s effondre pendant l attente du lent.
-    const average = samples.reduce((sum, n) => sum + n, 0) / samples.length;
-    expect(average).toBeGreaterThan(3);
+    expect(startedDuringSlow).toBeGreaterThan(10);
   });
 
   it("conserve l ordre des enregistrements malgre les fins desordonnees", async () => {
@@ -284,5 +286,116 @@ describe("fenetre glissante contre tranches verrouillees", () => {
     for (const line of lines) {
       expect(String(line.path)).toContain(String(line.id));
     }
+  });
+});
+
+describe("annuaire des utilisateurs", () => {
+  function usersApi(): MattermostApi {
+    return {
+      getUsersByIds: (ids: readonly string[]) =>
+        Promise.resolve(
+          ids.map((id, i) => ({
+            id,
+            username: `user-${String(i)}`,
+            nickname: "",
+            first_name: "",
+            last_name: "",
+            position: "",
+            roles: "system_user",
+            create_at: 1,
+            delete_at: 0,
+          })),
+        ),
+      downloadAvatar: () =>
+        Promise.resolve({ bytes: new Uint8Array([1]), contentType: "image/png", size: 1 }),
+    } as unknown as MattermostApi;
+  }
+
+  async function readUsers(): Promise<Record<string, unknown>[]> {
+    return (await readFile(join(workDir, "users.ndjson"), "utf8"))
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+  }
+
+  it("ne duplique personne quand on relance sans etat", async () => {
+    // Constat sur une archive reelle : l etat n etait pas persiste, donc chaque
+    // run reecrivait tout l annuaire en ajout. 7 727 lignes pour 3 277 personnes.
+    const ids = new Set(Array.from({ length: 5 }, (_, i) => `u${String(i).padStart(25, "0")}`));
+    const base = {
+      api: usersApi(),
+      paths: createArchivePaths(workDir),
+      includeEmails: false,
+      skipFiles: false,
+      maxFileSizeBytes: 1024,
+      userIds: ids,
+    };
+
+    const first = await extractUsers(base);
+    expect(first.count).toBe(5);
+    const second = await extractUsers(base);
+    expect(second.count).toBe(5);
+    const third = await extractUsers(base);
+    expect(third.count).toBe(5);
+
+    const lines = await readUsers();
+    expect(lines).toHaveLength(5);
+    expect(new Set(lines.map((l) => l.id)).size).toBe(5);
+  });
+
+  it("repare un annuaire deja pollue par des doublons", async () => {
+    const ids = Array.from({ length: 3 }, (_, i) => `u${String(i).padStart(25, "0")}`);
+    const paths = createArchivePaths(workDir);
+    await extractUsers({
+      api: usersApi(),
+      paths,
+      includeEmails: false,
+      skipFiles: false,
+      maxFileSizeBytes: 1024,
+      userIds: new Set(ids),
+    });
+
+    // On simule l archive abimee en dupliquant le fichier sur lui-meme.
+    const polluted = await readFile(join(workDir, "users.ndjson"), "utf8");
+    await writeFile(join(workDir, "users.ndjson"), polluted + polluted, "utf8");
+    expect(await readUsers()).toHaveLength(6);
+
+    const result = await extractUsers({
+      api: usersApi(),
+      paths,
+      includeEmails: false,
+      skipFiles: false,
+      maxFileSizeBytes: 1024,
+      userIds: new Set(ids),
+    });
+    expect(result.count).toBe(3);
+    expect(await readUsers()).toHaveLength(3);
+  });
+
+  it("conserve les utilisateurs deja presents en ajoutant les nouveaux", async () => {
+    const paths = createArchivePaths(workDir);
+    const first = Array.from({ length: 3 }, (_, i) => `a${String(i).padStart(25, "0")}`);
+    const second = Array.from({ length: 2 }, (_, i) => `b${String(i).padStart(25, "0")}`);
+
+    await extractUsers({
+      api: usersApi(),
+      paths,
+      includeEmails: false,
+      skipFiles: false,
+      maxFileSizeBytes: 1024,
+      userIds: new Set(first),
+    });
+    await extractUsers({
+      api: usersApi(),
+      paths,
+      includeEmails: false,
+      skipFiles: false,
+      maxFileSizeBytes: 1024,
+      userIds: new Set([...first, ...second]),
+    });
+
+    const lines = await readUsers();
+    expect(lines).toHaveLength(5);
+    expect(new Set(lines.map((l) => l.id))).toEqual(new Set([...first, ...second]));
   });
 });
