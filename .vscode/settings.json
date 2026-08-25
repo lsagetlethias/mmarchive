@@ -1,0 +1,32 @@
+{
+  "// archives": "Une archive contient un repertoire par piece jointe, soit des dizaines de milliers d entrees pour plusieurs dizaines de Go. Sans ces exclusions, le surveillant de fichiers et l indexation de recherche saturent l editeur.",
+  "files.watcherExclude": {
+    "**/archive/**": true,
+    "**/archive-*/**": true,
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/.turbo/**": true,
+    "**/coverage/**": true
+  },
+  "search.exclude": {
+    "**/archive": true,
+    "**/archive-*": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/coverage": true,
+    "**/pnpm-lock.yaml": true,
+    "**/*.ndjson": true
+  },
+  "files.exclude": {
+    "**/archive": true,
+    "**/archive-*": true
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "eslint.workingDirectories": [{ "mode": "auto" }],
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[yaml]": { "editor.defaultFormatter": "esbenp.prettier-vscode" }
+}
