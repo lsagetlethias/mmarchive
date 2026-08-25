@@ -120,6 +120,14 @@ Trois catégories, distinguées partout :
 mmarchive-extract inventory --out channels.yaml
 ```
 
+Options propres à l'inventaire :
+
+```
+  --out <file>         Fichier de sélection à produire (défaut : ./channels.yaml)
+  --select-archived    Pré-coche aussi les canaux archivés lisibles
+  --no-probe           Ne sonde pas les canaux non rejoints (plus rapide)
+```
+
 Aucune écriture sur l'instance, aucun canal rejoint, aucune donnée extraite. Produit un
 fichier de sélection lisible et modifiable à la main :
 
@@ -155,8 +163,20 @@ teams:
         selected: false # défaut : false, à cocher explicitement
 ```
 
-Règle : un canal dont vous êtes déjà membre est coché par défaut, parce que c'est
-gratuit. Un canal non rejoint ne l'est **jamais**. C'est vous qui cochez.
+Règle : un canal lisible sans effet de bord est coché par défaut, parce que c'est
+gratuit. Un canal qui exigerait de le rejoindre ne l'est **jamais**. C'est vous qui cochez.
+
+**Le sondage vaut la peine.** Par défaut, l'inventaire teste chaque canal non rejoint avec
+une requête en lecture (`posts?per_page=1`) pour savoir s'il est lisible tel quel. Rien
+dans l'API ne garantit qu'un compte donné puisse, ou ne puisse pas, lire un canal public
+dont il n'est pas membre : cela dépend de la configuration des permissions du serveur.
+Sonder donne la réponse vraie, sans aucun effet de bord, et peut supprimer la totalité des
+joins qui semblaient nécessaires.
+
+**Les canaux archivés restent décochés par défaut**, même lisibles : embarquer
+l'historique d'un canal mort est une décision, pas un automatisme. Sur une instance
+destinée à être décommissionnée, ils disparaîtront pourtant définitivement.
+`--select-archived` les pré-coche.
 
 ### 2. Sélection
 
@@ -190,7 +210,7 @@ mmarchive-extract run --out ./archive
 ## Options
 
 ```
-mmarchive-extract inventory [options]
+mmarchive-extract inventory [options]   (voir aussi --select-archived, --no-probe)
 mmarchive-extract select --file <yaml>
 mmarchive-extract run [options]
 

@@ -23,6 +23,10 @@ program
   .option("--token <token>", "Token porteur (ou MM_TOKEN)")
   .option("--out <file>", "Fichier de selection a produire", "./channels.yaml")
   .option(
+    "--select-archived",
+    "Pre-coche aussi les canaux archives lisibles. Ils ne coutent aucun join, mais disparaitront avec l instance.",
+  )
+  .option(
     "--no-probe",
     "Ne sonde pas les canaux non rejoints. Plus rapide, mais un compte capable de les lire sans join ne sera pas detecte.",
   )

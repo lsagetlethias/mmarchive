@@ -109,12 +109,13 @@ function makeApi(scenario: Scenario = {}): { api: MattermostApi; requests: Recor
   return { api: new MattermostApi(client), requests };
 }
 
-async function runInventory(scenario: Scenario = {}) {
+async function runInventory(scenario: Scenario = {}, selectArchived = false) {
   const { api, requests } = makeApi(scenario);
   const result = await buildInventory({
     api,
     toolVersion: "0.1.0",
     sourceUrl: "https://mm.example.org",
+    selectArchived,
     clock: () => "2026-08-24T10:00:00.000Z",
   });
   return { result, requests };
@@ -190,6 +191,23 @@ describe("inventaire", () => {
     const names = result.file.teams[0]?.channels.map((c) => c.name) ?? [];
     // Les canaux sont ordonnes par display_name : "Tech" precede "Town Square".
     expect(names).toEqual(["tech", "town-square"]);
+  });
+
+  it("laisse les canaux archives decoches par defaut", async () => {
+    const { result } = await runInventory({ probeForbidden: [] });
+    const vieux = result.file.teams[0]?.channels.find((c) => c.name === "vieux");
+    expect(vieux?.readable).toBe(true);
+    expect(vieux?.selected).toBe(false);
+  });
+
+  it("coche les canaux archives lisibles avec --select-archived", async () => {
+    const { result, requests } = await runInventory({ probeForbidden: [] }, true);
+    const vieux = result.file.teams[0]?.channels.find((c) => c.name === "vieux");
+    expect(vieux?.archived).toBe(true);
+    expect(vieux?.selected).toBe(true);
+    // Le flag ne change que des valeurs par defaut : toujours aucune ecriture.
+    expect(requests.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(summarizeSelection(result.file).joinsInduced).toBe(0);
   });
 
   it("renseigne la tracabilite dans le bloc meta", async () => {

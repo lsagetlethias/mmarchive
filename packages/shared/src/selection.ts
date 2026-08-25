@@ -115,13 +115,29 @@ export function requiresJoin(channel: ChannelAccessInput): boolean {
   return categorizeChannel(channel) === "join_required";
 }
 
+export interface SelectionDefaultsOptions {
+  /**
+   * Pre-coche aussi les canaux archives lisibles. Ils ne coutent aucun join,
+   * mais restent decoches par defaut : embarquer l historique d un canal mort
+   * est une decision d archivage, pas un automatisme.
+   */
+  readonly includeArchivedReadable?: boolean | undefined;
+}
+
 /**
  * Valeur par defaut de `selected` a la generation de l inventaire.
- * Regle stricte : selectionne par defaut si et seulement si c est gratuit.
+ * Regle stricte : jamais de selection par defaut qui declencherait un join.
  */
-export function defaultSelected(channel: ChannelAccessInput): boolean {
+export function defaultSelected(
+  channel: ChannelAccessInput,
+  options?: SelectionDefaultsOptions,
+): boolean {
   const category = categorizeChannel(channel);
-  return category === "member" || category === "readable_without_join";
+  if (category === "member" || category === "readable_without_join") return true;
+  if (category === "archived_readable" && options?.includeArchivedReadable === true) {
+    return true;
+  }
+  return false;
 }
 
 /* -------------------------------------------------------------------------- */

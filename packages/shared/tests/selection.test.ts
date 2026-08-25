@@ -111,6 +111,34 @@ describe("defaultSelected", () => {
     expect(defaultSelected({ joined: false, archived: false, readable: false })).toBe(false);
   });
 
+  it("pre-coche un canal archive lisible quand la politique le demande", () => {
+    // Sur une instance en fin de vie, ces canaux disparaissent definitivement.
+    // Les inclure reste un choix explicite, jamais un defaut.
+    expect(
+      defaultSelected(
+        { joined: false, archived: true, readable: true },
+        { includeArchivedReadable: true },
+      ),
+    ).toBe(true);
+  });
+
+  it("ne pre-coche jamais un canal archive ILLISIBLE, meme avec la politique", () => {
+    expect(
+      defaultSelected(
+        { joined: false, archived: true, readable: false },
+        { includeArchivedReadable: true },
+      ),
+    ).toBe(false);
+  });
+
+  it("la politique des archives ne change rien pour un canal exigeant un join", () => {
+    // Garde-fou : aucune option ne doit pouvoir pre-cocher un canal dont
+    // l extraction publierait un message systeme.
+    expect(
+      defaultSelected({ joined: false, archived: false }, { includeArchivedReadable: true }),
+    ).toBe(false);
+  });
+
   it("ne selectionne pas par defaut un canal archive", () => {
     // Meme lisible : l utilisateur doit decider explicitement d embarquer
     // l historique d un canal mort.

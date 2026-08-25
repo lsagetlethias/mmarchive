@@ -29,6 +29,8 @@ export interface BuildInventoryOptions {
    * join. Coute une requete en LECTURE par canal, aucune ecriture.
    */
   readonly probeUnjoined?: boolean | undefined;
+  /** Pre-coche les canaux archives lisibles. Aucun effet de bord sur l instance. */
+  readonly selectArchived?: boolean | undefined;
   readonly onProgress?: ((progress: InventoryProgress) => void) | undefined;
   readonly clock?: (() => string) | undefined;
 }
@@ -51,6 +53,7 @@ function toIsoOrUndefined(millis: number): string | undefined {
 function toSelectionChannel(
   channel: MmChannel,
   input: { joined: boolean; archived: boolean; readable: boolean | undefined },
+  defaults: { includeArchivedReadable: boolean },
 ): SelectionChannel {
   const base = {
     id: channel.id,
@@ -60,7 +63,9 @@ function toSelectionChannel(
     joined: input.joined,
     archived: input.archived,
     message_count: channel.total_msg_count,
-    selected: defaultSelected(input),
+    selected: defaultSelected(input, {
+      includeArchivedReadable: defaults.includeArchivedReadable,
+    }),
   } satisfies Omit<SelectionChannel, "readable" | "last_post_at">;
 
   const lastPostAt = toIsoOrUndefined(channel.last_post_at);
@@ -179,7 +184,13 @@ export async function buildInventory(options: BuildInventoryOptions): Promise<In
         }
       }
 
-      channels.push(toSelectionChannel(channel, { joined, archived, readable }));
+      channels.push(
+        toSelectionChannel(
+          channel,
+          { joined, archived, readable },
+          { includeArchivedReadable: options.selectArchived ?? false },
+        ),
+      );
     }
 
     selectionTeams.push({

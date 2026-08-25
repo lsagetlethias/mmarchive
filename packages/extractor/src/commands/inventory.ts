@@ -9,6 +9,7 @@ import { TOOL_VERSION } from "../version.js";
 
 export interface InventoryCommandOptions extends RawOptions {
   readonly probe?: boolean | undefined;
+  readonly selectArchived?: boolean | undefined;
 }
 
 /**
@@ -33,6 +34,7 @@ export async function inventoryCommand(
     toolVersion: TOOL_VERSION,
     sourceUrl: connection.url,
     probeUnjoined: raw.probe ?? true,
+    selectArchived: raw.selectArchived ?? false,
     onProgress: (progress) => {
       if (progress.phase === "teams") {
         logger.info(`Team ${String(progress.done)}/${String(progress.total)} : ${progress.label}`);
