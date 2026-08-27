@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -513,5 +513,23 @@ describe("redact face a un identifiant invalide", () => {
         logger: silent,
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("redact face a un avatar illisible", () => {
+  it("s arrete au lieu de le prendre pour un avatar absent", async () => {
+    const avatarsDir = join(workDir, "avatars");
+    const avant = await empreinteArchive();
+    await chmod(avatarsDir, 0o000);
+    try {
+      // Un acces refuse n est pas une absence : le confondre ferait echouer la
+      // suppression plus tard, une fois les messages deja reecrits.
+      await expect(
+        redactArchive({ archiveDir: workDir, userId: TARGET, mode: "remove", logger: silent }),
+      ).rejects.toThrow();
+    } finally {
+      await chmod(avatarsDir, 0o755);
+    }
+    expect(await empreinteArchive()).toEqual(avant);
   });
 });

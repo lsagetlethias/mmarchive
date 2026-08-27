@@ -7,6 +7,7 @@ import {
   type ArchiveUser,
   type Manifest,
   manifestSchema,
+  systemErrorCode,
 } from "@mmarchive/shared";
 import { countNdjsonLines, NdjsonWriter, readNdjson } from "@mmarchive/shared/ndjson";
 import { ArchivePathError, type ArchivePaths, createArchivePaths } from "../archive/paths.js";
@@ -90,9 +91,15 @@ export async function redactArchive(options: {
   // dry-run qui reussit la ou la passe reelle echoue ne sert plus a rien, alors
   // qu il est le seul moyen de relire une operation irreversible.
   const avatarPath = paths.avatarFile(options.userId);
+  // Seule l absence vaut "pas d avatar". Un acces refuse avale par ce sondage
+  // ferait echouer rm() plus loin, apres la reecriture des messages, et la
+  // simulation annoncerait une operation qui ne peut pas aboutir.
   const avatarPresent = await stat(avatarPath).then(
     () => true,
-    () => false,
+    (cause: unknown) => {
+      if (systemErrorCode(cause) === "ENOENT") return false;
+      throw cause;
+    },
   );
 
   const pseudonym = pseudonymFor(options.userId);

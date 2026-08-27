@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import type { WriteStream } from "node:fs";
 import { type FileHandle, mkdir, open } from "node:fs/promises";
 import { dirname } from "node:path";
-import { ERROR_CODES, type ErrorCode } from "./errors.js";
+import { ERROR_CODES, type ErrorCode, systemErrorCode } from "./errors.js";
 
 const NEWLINE = "\n";
 const LINE_FEED = 0x0a;
@@ -15,12 +15,7 @@ function describeCause(cause: unknown): string {
   return cause instanceof Error ? cause.message : "cause inconnue";
 }
 
-function causeCode(cause: unknown): string | undefined {
-  if (cause instanceof Error && "code" in cause && typeof cause.code === "string") {
-    return cause.code;
-  }
-  return undefined;
-}
+const causeCode = systemErrorCode;
 
 export class NdjsonWriteError extends Error {
   readonly code: ErrorCode = ERROR_CODES.NdjsonWriteError;

@@ -73,3 +73,18 @@ export function describeError(error: unknown): string {
   }
   return message;
 }
+
+/**
+ * Code systeme pose par Node sur ses erreurs d entree-sortie, ENOENT ou EACCES.
+ *
+ * Distinguer l absence du reste est la difference entre un fichier qui n existe
+ * pas, ce qui est souvent normal, et un fichier qu on n arrive pas a lire, ce
+ * qui ne l est jamais. Confondre les deux fait echouer plus loin, sur un
+ * message qui ne designe plus la cause.
+ */
+export function systemErrorCode(cause: unknown): string | undefined {
+  if (cause instanceof Error && "code" in cause && typeof cause.code === "string") {
+    return cause.code;
+  }
+  return undefined;
+}
