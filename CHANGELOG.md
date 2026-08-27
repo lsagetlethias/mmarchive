@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0](https://github.com/lsagetlethias/mmarchive/compare/v0.2.1...v1.0.0) (2026-08-27)
+
+
+### Documentation
+
+* spell out what the search autocompletion would take ([#9](https://github.com/lsagetlethias/mmarchive/issues/9)) ([fb1f23f](https://github.com/lsagetlethias/mmarchive/commit/fb1f23ffd25fe9b1e6c84b7358db84b5b6a09e53))
+
 ## [0.2.1](https://github.com/lsagetlethias/mmarchive/compare/v0.2.0...v0.2.1) (2026-08-27)
 
 

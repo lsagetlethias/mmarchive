@@ -1,6 +1,6 @@
 {
   "name": "@mmarchive/shared",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Types, schemas zod et specification du format d archive mmarchive.",
