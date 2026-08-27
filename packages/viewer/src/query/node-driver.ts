@@ -1,5 +1,5 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
-import { INDEX_SCHEMA_VERSION } from "../index/schema.js";
+import { missingIndexTables } from "../index/schema.js";
 import { IndexReadError, type SqlDriver, type SqlRow, type SqlValue } from "./driver.js";
 
 /**
@@ -47,24 +47,22 @@ export class NodeSqlDriver implements SqlDriver {
   }
 
   #assertUsableIndex(path: string): void {
-    let version: unknown;
+    let tables: string[];
     try {
-      version = this.#db
-        .prepare("SELECT value FROM meta WHERE key = 'index_schema_version'")
-        .get()?.value;
+      tables = this.#db
+        .prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")
+        .all()
+        .map((row) => String(row.name));
     } catch (cause) {
-      throw new IndexReadError(
-        `${path} n est pas un index mmarchive : la table meta est absente.`,
-        { cause },
-      );
+      throw new IndexReadError(`${path} n est pas lisible comme une base SQLite.`, { cause });
     }
-    if (version === undefined) {
-      throw new IndexReadError(`${path} n est pas un index mmarchive : version absente.`);
-    }
-    if (Number(version) !== INDEX_SCHEMA_VERSION) {
-      throw new IndexReadError(
-        `Index en version ${String(version)}, ce viewer attend la version ${String(INDEX_SCHEMA_VERSION)}. Reconstruisez le : c est un derive de l archive, l operation prend une minute.`,
-      );
-    }
+
+    const missing = missingIndexTables(tables);
+    if (missing.length === 0) return;
+    throw new IndexReadError(
+      tables.length === 0
+        ? `${path} est vide : ce n est pas un index mmarchive.`
+        : `${path} n a pas la forme attendue, il manque : ${missing.join(", ")}. Reconstruisez le avec mmarchive-index : c est un derive de l archive, l operation prend une minute.`,
+    );
   }
 }

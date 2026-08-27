@@ -257,16 +257,17 @@ describe("bornes de dates", () => {
 });
 
 describe("ouverture de l index", () => {
-  it("refuse un index construit par une version anterieure du schema", async () => {
-    // Un index d une version precedente s ouvre sans erreur mais lui manque une
-    // table : sans ce controle, la panne surgit bien plus tard, sous la forme
-    // d une erreur SQL que personne ne peut relier a la cause.
+  it("refuse un index auquel manque une table", async () => {
+    // Un index construit avant l ajout d une table s ouvre sans erreur et ne
+    // rate que plus tard, sur une erreur SQL que personne ne relie a la cause.
+    // Le controle porte donc sur la forme du fichier, pas sur un numero qu il
+    // se contenterait d annoncer.
     const ancien = join(workDir, "ancien.db");
     await copyFile(join(workDir, "index.db"), ancien);
     const db = new DatabaseSync(ancien);
-    db.exec("UPDATE meta SET value = '1' WHERE key = 'index_schema_version'");
+    db.exec("DROP TABLE asset");
     db.close();
-    expect(() => new NodeSqlDriver(ancien)).toThrow(/version/);
+    expect(() => new NodeSqlDriver(ancien)).toThrow(/asset/);
   });
 
   it("refuse un fichier qui n est pas un index mmarchive", async () => {

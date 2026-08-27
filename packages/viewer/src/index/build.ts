@@ -17,7 +17,6 @@ import {
   INDEX_DDL,
   INDEX_FTS,
   INDEX_INDEXES,
-  INDEX_SCHEMA_VERSION,
   normalizeHashtag,
   POST_FLAGS,
   TAG_PREFIX,
@@ -367,7 +366,6 @@ async function fill(
   `);
 
   const insertMeta = db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?,?)");
-  insertMeta.run("index_schema_version", String(INDEX_SCHEMA_VERSION));
   // La version de l archive lue, pas la plus haute que cet outil sait lire :
   // le premier chiffre decrit l index produit, le second decrirait l outil.
   insertMeta.run("archive_schema_version", String(archiveVersion));

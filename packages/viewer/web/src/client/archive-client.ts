@@ -17,7 +17,6 @@ export interface MessageBundle {
 }
 
 export interface MetaInfo {
-  readonly indexSchemaVersion: number;
   readonly builtAt: string | null;
   readonly counts: { readonly posts: number; readonly channels: number; readonly users: number };
 }

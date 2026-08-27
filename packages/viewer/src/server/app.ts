@@ -2,7 +2,6 @@ import { resolve } from "node:path";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
-import { INDEX_SCHEMA_VERSION } from "../index/schema.js";
 import { num, type SqlDriver, str } from "../query/driver.js";
 import {
   getChannel,
@@ -152,7 +151,6 @@ export function createServer(options: ViewerServerOptions): FastifyInstance {
     );
     const builtAt = driver.get("SELECT value FROM meta WHERE key = 'built_at'");
     return {
-      indexSchemaVersion: INDEX_SCHEMA_VERSION,
       builtAt: builtAt === undefined ? null : str(builtAt, "value"),
       counts:
         counts === undefined

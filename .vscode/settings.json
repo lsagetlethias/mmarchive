@@ -21,12 +21,20 @@
     "**/archive": true,
     "**/archive-*": true
   },
+
+  "// typescript": "L editeur analyse avec TypeScript 7, par l extension TypeScript (Native Preview), comme le fait pnpm typecheck. TypeScript 6 ne reste installe que pour typescript-eslint, qui ne sait pas encore lire l API de la 7 : le tsdk ci dessous ne sert donc qu a lui.",
+  "typescript.experimental.useTsgo": true,
   "typescript.tsdk": "node_modules/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "eslint.workingDirectories": [{ "mode": "auto" }],
+
+  "// formatage": "Biome met en forme et corrige la syntaxe, ESLint ne garde que les regles qui exigent le verificateur de types. Prettier est ecarte volontairement : deux formateurs sur un meme fichier produisent des allers-retours a chaque enregistrement, et c est Biome que fait tourner pnpm verify.",
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[yaml]": { "editor.defaultFormatter": "esbenp.prettier-vscode" }
+  "editor.defaultFormatter": "biomejs.biome",
+  "[typescript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[javascript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[json]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[jsonc]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[css]": { "editor.defaultFormatter": "biomejs.biome" }
 }

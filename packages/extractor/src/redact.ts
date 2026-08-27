@@ -16,19 +16,28 @@ program
   .requiredOption("--archive <dir>", "Repertoire de l archive")
   .requiredOption("--user <user_id>", "Identifiant de l utilisateur concerne")
   .requiredOption("--mode <mode>", "remove ou pseudonymize")
-  .action(async (opts: { archive: string; user: string; mode: string }) => {
+  .option(
+    "--dry-run",
+    "Annonce ce qui serait efface, sans rien modifier. L operation est irreversible : la simulation est le seul moyen de la relire avant.",
+  )
+  .action(async (opts: { archive: string; user: string; mode: string; dryRun?: boolean }) => {
     const logger = new Logger();
     if (opts.mode !== "remove" && opts.mode !== "pseudonymize") {
       logger.error(`--mode doit valoir "remove" ou "pseudonymize", recu "${opts.mode}".`);
       process.exitCode = 2;
       return;
     }
-    await redactArchive({
+    const result = await redactArchive({
       archiveDir: opts.archive,
       userId: opts.user,
       mode: opts.mode as RedactMode,
+      dryRun: opts.dryRun ?? false,
       logger,
     });
+    if (result.dryRun) {
+      logger.info("Relancez sans --dry-run pour appliquer.");
+      return;
+    }
     logger.warn("Une reindexation du viewer est necessaire apres cette operation.");
   });
 

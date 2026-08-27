@@ -65,12 +65,14 @@ Ce qui suit ne sera plus rattrapable une fois l'instance décommissionnée.
       publié un jour.
 - [ ] **CHANGELOG**. Les conventional commits sont en place, `release-please` ou
       `changesets` le générerait tout seul. Voir `~/source/roadmaps-faciles`.
-- [ ] **TypeScript 7**. Le paquet `typescript` reste en 6 : typescript-eslint ne supporte
-      pas encore l'API TS 7 (issue upstream 10940). tsgo est déjà en 7 et fournit la
-      vitesse. À rebasculer dès que l'issue est close.
-- [ ] **`--dry-run` sur `redact`**. La commande modifie l'archive en place sans retour
-      possible. Un mode qui annonce ce qui serait supprimé, sans écrire, réduirait le
-      risque sur une opération de conformité.
+- [x] **TypeScript 7**, requalifié : ce n'est pas une dette tant que la répartition est
+      nette. TS 7 fait le typecheck (`pnpm typecheck`) et l'analyse dans l'éditeur, via
+      l'extension TypeScript (Native Preview). TS 6 ne sert plus qu'à typescript-eslint,
+      qui ne lit pas encore l'API de la 7 (issue upstream 10940, toujours ouverte). La
+      configuration de l'éditeur est versionnée et dit laquelle sert à quoi.
+- [x] **`--dry-run` sur `redact`**. La simulation parcourt et compte exactement ce que
+      ferait la vraie passe, sans ouvrir un seul flux d'écriture. Un test compare les deux
+      décomptes et vérifie que l'archive est rigoureusement inchangée après simulation.
 - [ ] **Test d'intégration contre un Mattermost local** en docker-compose, avec données
       seedées : canal archivé, utilisateur désactivé, canal public non rejoint. Tout est
       aujourd'hui vérifié contre un serveur simulé.

@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { pseudonymFor, redactArchive } from "../src/redact/redact-archive.js";
 import { Logger } from "../src/ui/logger.js";
@@ -13,6 +13,18 @@ const TEAM = "m".repeat(26);
 const FILE_OF_TARGET = "f".repeat(26);
 
 let workDir: string;
+
+/** Chemin et contenu de chaque fichier de l archive, pour comparer avant et apres. */
+async function empreinteArchive(): Promise<[string, string][]> {
+  const entries = await readdir(workDir, { recursive: true, withFileTypes: true });
+  const out: [string, string][] = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const chemin = join(entry.parentPath, entry.name);
+    out.push([relative(workDir, chemin), await readFile(chemin, "utf8").catch(() => "binaire")]);
+  }
+  return out.sort(([a], [b]) => (a < b ? -1 : 1));
+}
 
 const silent = new Logger({ level: "error" });
 
@@ -430,5 +442,50 @@ describe("garde-fous", () => {
     });
     expect(await exists(join(workDir, "users.ndjson.redact"))).toBe(false);
     expect(await exists(join(workDir, "files.ndjson.redact"))).toBe(false);
+  });
+
+  it("annonce ce qui serait efface sans rien modifier", async () => {
+    // L operation est irreversible : la simulation doit compter exactement ce
+    // que ferait la vraie passe, et laisser l archive rigoureusement intacte.
+    const avant = await empreinteArchive();
+
+    const simule = await redactArchive({
+      archiveDir: workDir,
+      userId: TARGET,
+      mode: "remove",
+      dryRun: true,
+      logger: silent,
+    });
+    expect(simule.dryRun).toBe(true);
+    expect(await empreinteArchive()).toEqual(avant);
+
+    const reel = await redactArchive({
+      archiveDir: workDir,
+      userId: TARGET,
+      mode: "remove",
+      logger: silent,
+    });
+    expect(await empreinteArchive()).not.toEqual(avant);
+
+    // Les decomptes de la simulation sont ceux de l operation.
+    expect(simule.postsRemoved).toBe(reel.postsRemoved);
+    expect(simule.reactionsRemoved).toBe(reel.reactionsRemoved);
+    expect(simule.attachmentsDeleted).toBe(reel.attachmentsDeleted);
+    expect(simule.userRemoved).toBe(reel.userRemoved);
+  });
+
+  it("ne laisse aucun fichier de travail derriere une simulation", async () => {
+    await redactArchive({
+      archiveDir: workDir,
+      userId: TARGET,
+      mode: "pseudonymize",
+      dryRun: true,
+      logger: silent,
+    });
+    const restes: string[] = [];
+    for (const [chemin] of await empreinteArchive()) {
+      if (chemin.endsWith(".redact")) restes.push(chemin);
+    }
+    expect(restes).toEqual([]);
   });
 });
