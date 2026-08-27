@@ -1,6 +1,6 @@
 {
   "name": "mmarchive",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Archivage et consultation hors ligne des canaux publics d une instance Mattermost.",
   "type": "module",
