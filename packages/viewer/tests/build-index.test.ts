@@ -271,7 +271,11 @@ describe("garde-fous", () => {
       '{"pas":"un message"}\n',
       "utf8",
     );
-    await expect(buildIndex({ archiveRoot: archiveDir, output: indexPath })).rejects.toThrow();
+    // L erreur doit rester celle qui nomme la cause : une fermeture en trop
+    // remonterait "database is not open" et masquerait la donnee fautive.
+    await expect(buildIndex({ archiveRoot: archiveDir, output: indexPath })).rejects.toThrow(
+      /invalid|attendu|expected|requis|required/i,
+    );
     await expect(stat(indexPath)).rejects.toThrow();
   });
 
