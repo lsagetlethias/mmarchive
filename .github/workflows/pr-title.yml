@@ -13,6 +13,6 @@ jobs:
     steps:
       # The squashed commit takes the PR title, so the title is what must follow
       # the convention.
-      - uses: amannn/action-semantic-pull-request@v5
+      - uses: amannn/action-semantic-pull-request@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
