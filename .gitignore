@@ -7,8 +7,14 @@
 # Le motif couvre tout repertoire commencant par "archive" (archive-essai,
 # archive-2026-08, etc.) : une archive de test contient exactement les memes
 # donnees qu une archive de production.
-archive/
-archive*/
+#
+# Il est ancre a la racine par le / initial. Sans lui, le motif emportait aussi
+# packages/extractor/src/archive/ et packages/shared/src/archive/, laissant sept
+# fichiers source hors du depot, dont les schemas zod du format. Les motifs de
+# contenu ci-dessous restent non ancres : ils rattrapent une archive extraite
+# ailleurs qu a la racine, et aucun ne peut designer du code.
+/archive/
+/archive*/
 manifest.json
 .extract-state.json
 *.ndjson
