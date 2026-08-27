@@ -27,6 +27,7 @@ channels.*.yaml
 
 # Build output
 dist/
+dist-standalone/
 *.tsbuildinfo
 
 # Dependances
