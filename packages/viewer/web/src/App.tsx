@@ -4,6 +4,7 @@ import { formatDate, useArchive } from "./data.js";
 import { channelHref, navigate, type Route, searchHref, useRoute } from "./route.js";
 import { MessageList } from "./ui/MessageList.js";
 import { SearchView } from "./ui/SearchView.js";
+import { TakeAwayView } from "./ui/TakeAwayView.js";
 import { ThreadPanel } from "./ui/ThreadPanel.js";
 
 function ChannelSidebar({ current }: { readonly current: number | undefined }): ReactNode {
@@ -244,6 +245,8 @@ function currentChannel(route: Route): number | undefined {
 
 export function App(): ReactNode {
   const route = useRoute();
+  // Une copie deja autonome n a personne a qui demander la suivante.
+  const servedByServer = globalThis.location.protocol !== "file:";
   const [thread, setThread] = useState<Message | undefined>();
   const [draft, setDraft] = useState(route.view === "recherche" ? route.query : "");
 
@@ -283,6 +286,11 @@ export function App(): ReactNode {
         <a className="lien-annuaire" href="#/annuaire">
           Annuaire
         </a>
+        {servedByServer ? (
+          <a className="lien-annuaire" href="#/emporter">
+            Emporter
+          </a>
+        ) : null}
       </header>
 
       <div className="corps">
@@ -298,6 +306,7 @@ export function App(): ReactNode {
           ) : null}
           {route.view === "recherche" ? <SearchView query={route.query} /> : null}
           {route.view === "annuaire" ? <DirectoryView /> : null}
+          {route.view === "emporter" ? <TakeAwayView /> : null}
           {route.view === "permalien" ? <PermalinkView pid={route.pid} /> : null}
         </main>
         {thread === undefined ? null : (

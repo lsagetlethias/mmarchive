@@ -19,6 +19,11 @@ program
   // tant que l operateur ne demande pas explicitement le contraire.
   .option("--host <host>", "Interface d ecoute", "127.0.0.1")
   .option("--web <dir>", "Frontend construit a servir", "packages/viewer/web/dist")
+  .option(
+    "--standalone <file>",
+    "Viewer en un seul fichier, inclus dans la copie autonome",
+    "packages/viewer/web/dist-standalone/archive.html",
+  )
   .option("--verbose", "Journalise chaque requete")
   .action(
     async (opts: {
@@ -27,6 +32,7 @@ program
       port: string;
       host: string;
       web?: string;
+      standalone?: string;
       verbose?: boolean;
     }) => {
       const port = Number(opts.port);
@@ -41,6 +47,10 @@ program
         driver,
         archiveRoot: opts.archive,
         ...(opts.web === undefined || !existsSync(opts.web) ? {} : { webRoot: opts.web }),
+        ...(opts.standalone === undefined || !existsSync(opts.standalone)
+          ? {}
+          : { standalonePath: opts.standalone }),
+        indexPath: opts.index,
         logger: opts.verbose ?? false,
       });
       if (opts.web !== undefined && !existsSync(opts.web)) {

@@ -20,6 +20,7 @@ import {
   searchMessages,
 } from "../query/queries.js";
 import { contentDisposition, resolveArchivePath, UnsafeArchivePathError } from "./archive-files.js";
+import { planLitePackage, streamLitePackage } from "./lite-package.js";
 
 export interface ViewerServerOptions {
   readonly driver: SqlDriver;
@@ -27,6 +28,10 @@ export interface ViewerServerOptions {
   readonly archiveRoot: string;
   /** Frontend construit. Absent, le serveur n expose que l API. */
   readonly webRoot?: string | undefined;
+  /** Chemin de l index servi, pour pouvoir en produire une copie autonome. */
+  readonly indexPath?: string | undefined;
+  /** Viewer en un seul fichier, pour la copie ouvrable par double clic. */
+  readonly standalonePath?: string | undefined;
   readonly logger?: boolean;
 }
 
@@ -245,8 +250,57 @@ export function createServer(options: ViewerServerOptions): FastifyInstance {
   app.get("/api/users", () => ({ users: listUsers(driver) }));
 
   registerFileRoutes(app, driver, archiveRoot);
+  registerLiteRoutes(app, options);
   registerWebRoutes(app, options.webRoot);
   return app;
+}
+
+/**
+ * Produit une copie autonome de l archive, consultable sans ce serveur.
+ *
+ * C est la contrainte du cadrage : le mode complet doit savoir engendrer le mode
+ * allege. Il n y a pour cela ni second format ni seconde chaine de fabrication,
+ * puisque l index est le meme fichier dans les deux cas ; il ne reste qu a le
+ * mettre dans une archive avec le viewer et de quoi s en servir.
+ */
+function registerLiteRoutes(app: FastifyInstance, options: ViewerServerOptions): void {
+  const sources = {
+    indexPath: options.indexPath ?? "",
+    webRoot: options.webRoot,
+    standalonePath: options.standalonePath,
+  };
+
+  app.get("/api/lite", async () => {
+    if (sources.indexPath === "") {
+      return { disponible: false, manquant: ["index.db"], octets: 0, fichiers: 0 };
+    }
+    const plan = await planLitePackage(sources);
+    return {
+      disponible: plan.missing.length === 0,
+      manquant: plan.missing,
+      octets: plan.rawBytes,
+      fichiers: plan.entries.length,
+    };
+  });
+
+  app.get("/lite.zip", async (_request, reply) => {
+    if (sources.indexPath === "") {
+      return reply.code(404).send({ error: "Aucun index a copier." });
+    }
+    const plan = await planLitePackage(sources);
+    if (plan.missing.length > 0) {
+      return reply.code(409).send({
+        error: "Copie incomplete.",
+        manquant: plan.missing,
+        detail: "Construisez le viewer avec pnpm --filter @mmarchive/viewer build.",
+      });
+    }
+    // Aucune longueur annoncee : l archive est comprimee au fil de l envoi, sa
+    // taille finale n est connue qu une fois le dernier octet ecrit.
+    void reply.header("content-type", "application/zip");
+    void reply.header("content-disposition", contentDisposition("archive-mmarchive.zip"));
+    return reply.send(streamLitePackage(plan));
+  });
 }
 
 /**

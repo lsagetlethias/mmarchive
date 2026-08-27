@@ -5,6 +5,7 @@ export type Route =
   | { readonly view: "canal"; readonly channelId: number; readonly focusId?: number }
   | { readonly view: "recherche"; readonly query: string }
   | { readonly view: "annuaire" }
+  | { readonly view: "emporter" }
   /** Permalien Mattermost : l identifiant d origine, a resoudre. */
   | { readonly view: "permalien"; readonly pid: string };
 
@@ -33,6 +34,7 @@ export function parseRoute(hash: string): Route {
     return { view: "recherche", query: decodeURIComponent(parts.slice(1).join("/")) };
   }
   if (head === "annuaire") return { view: "annuaire" };
+  if (head === "emporter") return { view: "emporter" };
   if (head === "message" && first !== undefined) return { view: "permalien", pid: first };
   return { view: "accueil" };
 }
