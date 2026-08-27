@@ -67,6 +67,24 @@ La raison est une protection de GitHub contre les boucles : un tag posé avec le
 partirait donc jamais, et il faudrait créer une GitHub App uniquement pour contourner
 cela. Tout enchaîner dans un job évite cette machinerie.
 
+## À faire une fois, après la toute première release
+
+Un package poussé sur ghcr.io par un workflow naît **privé**, même quand le dépôt qui le
+produit est public. Tant qu'il n'est pas ouvert, `docker pull` anonyme échoue et le
+`docker compose pull` documenté plus haut ne fonctionne que pour quelqu'un
+d'authentifié.
+
+Après la première release, sur la page du package (`github.com/users/<vous>/packages`),
+il faut donc passer sa visibilité à **public**. C'est une action manuelle et unique : les
+releases suivantes conservent le réglage.
+
+Sans cela, il reste la voie authentifiée, à réserver aux cas où l'image doit rester
+fermée :
+
+```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <vous> --password-stdin
+```
+
 ## Vérifier une release
 
 ```bash

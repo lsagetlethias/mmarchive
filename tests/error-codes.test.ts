@@ -83,15 +83,15 @@ describe("registre des codes d erreur", () => {
  * main : un binaire ajoute sans code d erreur visible est justement celui qu on
  * oublierait dans une liste ecrite ici.
  */
-function pointsDEntree(): { binaire: string; source: string }[] {
-  const trouves: { binaire: string; source: string }[] = [];
+function pointsDEntree(): { paquet: string; binaire: string; source: string }[] {
+  const trouves: { paquet: string; binaire: string; source: string }[] = [];
   for (const paquet of ["extractor", "viewer"]) {
     const manifeste = JSON.parse(readFileSync(join(RACINE, paquet, "package.json"), "utf8")) as {
       bin?: Record<string, string>;
     };
     for (const [binaire, chemin] of Object.entries(manifeste.bin ?? {})) {
       const source = join(RACINE, paquet, "src", `${basename(chemin, ".js")}.ts`);
-      trouves.push({ binaire, source });
+      trouves.push({ paquet, binaire, source });
     }
   }
   return trouves;
@@ -99,7 +99,17 @@ function pointsDEntree(): { binaire: string; source: string }[] {
 
 describe("points d entree", () => {
   it("en declarent au moins un par paquet livrable", () => {
-    expect(pointsDEntree().length).toBeGreaterThanOrEqual(4);
+    // Par paquet et non au total : un paquet qui perdrait tous ses binaires
+    // passerait inapercu derriere le compte d un autre.
+    const parPaquet = new Map<string, number>([
+      ["extractor", 0],
+      ["viewer", 0],
+    ]);
+    for (const { paquet } of pointsDEntree()) {
+      parPaquet.set(paquet, (parPaquet.get(paquet) ?? 0) + 1);
+    }
+    const sansBinaire = [...parPaquet].filter(([, n]) => n === 0).map(([nom]) => nom);
+    expect(sansBinaire, "ces paquets ne declarent plus aucun binaire").toEqual([]);
   });
 
   it("affichent tous le code de l erreur qui les arrete", () => {

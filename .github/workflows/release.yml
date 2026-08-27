@@ -79,8 +79,14 @@ jobs:
         run: |
           set -eu
           docker pull "$IMAGE"
-          sortie=$(docker run --rm "$IMAGE" --index /absent.db --archive /tmp 2>&1 || true)
+          sortie=$(docker run --rm "$IMAGE" --index /absent.db --archive /tmp 2>&1) && code=0 || code=$?
           echo "$sortie"
+          # Le texte ne suffit pas : une image qui affiche l erreur puis sort en
+          # zero passerait pour saine aupres de tout ce qui lit un code retour.
+          if [ "$code" -eq 0 ]; then
+            echo "L image sort en succes alors que l index est introuvable."
+            exit 1
+          fi
           echo "$sortie" | grep -q "E5002" || {
             echo "L image ne signale pas l index manquant avec son code d erreur."
             exit 1
