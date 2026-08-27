@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
+import { describeError } from "@mmarchive/shared";
 import { Command } from "commander";
 import pc from "picocolors";
-import { IndexReadError } from "./query/driver.js";
 import { NodeSqlDriver } from "./query/node-driver.js";
 import { createServer } from "./server/app.js";
 import { TOOL_VERSION } from "./version.js";
@@ -82,8 +82,6 @@ program
 try {
   await program.parseAsync(process.argv);
 } catch (error) {
-  const message =
-    error instanceof IndexReadError || error instanceof Error ? error.message : "erreur inattendue";
-  process.stderr.write(`${pc.red("Echec")} : ${message}\n`);
+  process.stderr.write(`${pc.red("Echec")} : ${describeError(error)}\n`);
   process.exitCode = 1;
 }
