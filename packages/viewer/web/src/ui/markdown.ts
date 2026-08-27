@@ -193,6 +193,11 @@ export function renderMarkdown(text: string, renderContext: RenderContext): stri
     ALLOWED_ATTR,
     // Un lien ou une image ne doit pouvoir designer qu une ressource, jamais un
     // script : ce filtre couvre javascript:, data: et leurs variantes encodees.
-    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|tel:|#|\/)/i,
+    //
+    // blob: est admis parce que le mode sans serveur sert ainsi les emojis
+    // personnalises, extraits de l index. Une telle adresse ne designe qu un
+    // contenu que cette page a elle meme cree, et devient inerte des qu elle
+    // est revoquee : elle n ouvre aucune voie qu un message pourrait emprunter.
+    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|tel:|blob:|#|\/)/i,
   });
 }

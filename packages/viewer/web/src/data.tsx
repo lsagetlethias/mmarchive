@@ -148,8 +148,18 @@ export function formatTime(ms: number): string {
   return TIME_FORMAT.format(new Date(ms));
 }
 
+/**
+ * Cle de jour, dans le fuseau du lecteur.
+ *
+ * toISOString donnerait le jour en temps universel, alors que l heure et la date
+ * affichees sont locales : autour de minuit, le separateur de jour annoncerait
+ * une date et les messages en dessous en porteraient une autre.
+ */
 export function formatDay(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
+  const date = new Date(ms);
+  const mois = String(date.getMonth() + 1).padStart(2, "0");
+  const jour = String(date.getDate()).padStart(2, "0");
+  return `${String(date.getFullYear())}-${mois}-${jour}`;
 }
 
 export function formatSize(bytes: number): string {
