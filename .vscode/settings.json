@@ -36,5 +36,8 @@
   "[javascript]": { "editor.defaultFormatter": "biomejs.biome" },
   "[json]": { "editor.defaultFormatter": "biomejs.biome" },
   "[jsonc]": { "editor.defaultFormatter": "biomejs.biome" },
-  "[css]": { "editor.defaultFormatter": "biomejs.biome" }
+  "[css]": { "editor.defaultFormatter": "biomejs.biome" },
+
+  "// yaml": "Biome 2.5 ne sait pas encore formater YAML : il repond files/missingHandler et ne traite pas le fichier. Sans cette exception, enregistrer compose.yaml declenche une erreur de formateur pour rien. A retirer quand Biome saura le faire.",
+  "[yaml]": { "editor.formatOnSave": false }
 }
