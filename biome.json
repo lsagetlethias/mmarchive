@@ -13,7 +13,8 @@
       "!**/coverage",
       "!archive*",
       "!**/*.ndjson",
-      "!pnpm-lock.yaml"
+      "!pnpm-lock.yaml",
+      "!.release-please-manifest.json"
     ]
   },
   "formatter": {
