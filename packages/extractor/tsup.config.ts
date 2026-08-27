@@ -10,6 +10,11 @@ export default defineConfig({
   format: ["esm"],
   target: "node22",
   platform: "node",
+  // tsup 8 retire le prefixe node: par defaut, un heritage des runtimes qui ne
+  // le comprenaient pas. node:fs survit grace a son alias historique, mais
+  // node:sqlite n en a aucun : le binaire construit cherchait alors un paquet
+  // npm nomme "sqlite" et ne demarrait pas.
+  removeNodeProtocol: false,
   clean: true,
   sourcemap: true,
   // Le CLI est distribue en bundle : shared est inline, aucune resolution
