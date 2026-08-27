@@ -489,3 +489,29 @@ describe("garde-fous", () => {
     expect(restes).toEqual([]);
   });
 });
+
+describe("redact face a un identifiant invalide", () => {
+  const INVALIDE = "pas-un-identifiant";
+
+  it("refuse avant d avoir touche a l archive", async () => {
+    const avant = await empreinteArchive();
+    await expect(
+      redactArchive({ archiveDir: workDir, userId: INVALIDE, mode: "remove", logger: silent }),
+    ).rejects.toThrow();
+    // Une demande d effacement est irreversible : echouer a mi-parcours laisse
+    // les messages deja reecrits et le manifeste en desaccord avec eux.
+    expect(await empreinteArchive()).toEqual(avant);
+  });
+
+  it("le signale des la simulation, qui sert justement a relire l operation", async () => {
+    await expect(
+      redactArchive({
+        archiveDir: workDir,
+        userId: INVALIDE,
+        mode: "remove",
+        dryRun: true,
+        logger: silent,
+      }),
+    ).rejects.toThrow();
+  });
+});

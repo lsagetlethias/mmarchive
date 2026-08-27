@@ -62,6 +62,8 @@ export interface RedactResult {
   readonly userRemoved: boolean;
   /** Binaires de pieces jointes reellement effaces du disque. */
   readonly attachmentsDeleted: number;
+  /** L avatar existait et disparait, dans les deux modes. */
+  readonly avatarRemoved: boolean;
 }
 
 export async function redactArchive(options: {
@@ -84,6 +86,15 @@ export async function redactArchive(options: {
       `${options.archiveDir} ne ressemble pas a une archive mmarchive : manifest.json est introuvable.`,
     );
   }
+  // Valider l identifiant avant tout, et surtout avant la simulation : un
+  // dry-run qui reussit la ou la passe reelle echoue ne sert plus a rien, alors
+  // qu il est le seul moyen de relire une operation irreversible.
+  const avatarPath = paths.avatarFile(options.userId);
+  const avatarPresent = await stat(avatarPath).then(
+    () => true,
+    () => false,
+  );
+
   const pseudonym = pseudonymFor(options.userId);
 
   let postsRemoved = 0;
@@ -169,7 +180,7 @@ export async function redactArchive(options: {
 
   // L avatar est un fichier a part : il ne disparait pas avec l enregistrement,
   // et aucun des deux modes ne doit le laisser derriere lui.
-  if (!dryRun) await rm(paths.avatarFile(options.userId), { force: true });
+  if (!dryRun) await rm(avatarPath, { force: true });
 
   if (!dryRun) await refreshManifestCounts(paths);
 
@@ -177,7 +188,7 @@ export async function redactArchive(options: {
     postsRewritten,
   )} pseudonymises, ${String(reactionsRemoved)} reactions retirees, ${String(
     attachmentsDeleted,
-  )} pieces jointes effacees`;
+  )} pieces jointes effacees${avatarPresent ? ", avatar efface" : ""}`;
   if (dryRun) {
     logger.info(`Simulation, mode ${options.mode} : ${resume}. Rien n a ete modifie.`);
   } else {
@@ -190,6 +201,7 @@ export async function redactArchive(options: {
     reactionsRemoved,
     userRemoved,
     attachmentsDeleted,
+    avatarRemoved: avatarPresent,
   };
 }
 
