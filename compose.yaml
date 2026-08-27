@@ -4,13 +4,19 @@ name: mmarchive
 #   MMARCHIVE_ARCHIVE   repertoire de l archive        (defaut ./archive)
 #   MMARCHIVE_INDEX     fichier d index deja construit (defaut ./index.db)
 #   MMARCHIVE_PORT      port publie sur la machine     (defaut 4173)
+#   MMARCHIVE_IMAGE     image a executer               (defaut :latest)
+#
+# Deux facons de faire tourner ce compose :
+#   docker compose pull && docker compose up -d   execute l image publiee
+#   docker compose up -d --build                  construit depuis ces sources
+# En production, epinglez une version plutot que latest, avec MMARCHIVE_IMAGE.
 
 services:
   viewer:
+    image: ${MMARCHIVE_IMAGE:-ghcr.io/lsagetlethias/mmarchive-viewer:latest}
     build:
       context: .
       target: runtime
-    image: mmarchive-viewer:local
     restart: unless-stopped
 
     # L archive et l index restent dehors, montes en lecture seule. Ils pesent
@@ -45,10 +51,10 @@ services:
   index:
     profiles:
       - outils
+    image: ${MMARCHIVE_IMAGE:-ghcr.io/lsagetlethias/mmarchive-viewer:latest}
     build:
       context: .
       target: runtime
-    image: mmarchive-viewer:local
     restart: "no"
 
     # La sortie a son propre montage : /data serait a la fois en lecture seule

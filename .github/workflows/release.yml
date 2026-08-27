@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Ouvre et tient a jour une pull request de release. Rien ne sort tant qu elle
+  # n est pas fusionnee : le moment de la sortie reste une decision humaine.
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # Construit et publie l image, dans le meme workflow plutot que declenchee par
+  # le tag. Un tag pose avec GITHUB_TOKEN ne redeclenche aucun workflow, protection
+  # contre les boucles : un workflow separe sur "push: tags" ne partirait jamais,
+  # et il faudrait une GitHub App uniquement pour contourner cela.
+  image:
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag }}
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # arm64 passe par l emulation, ce que ce build supporte : il n y a aucune
+      # dependance native a compiler, node:sqlite etant fourni par Node lui meme.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/mmarchive-viewer:${{ needs.release-please.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/mmarchive-viewer:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # L image sert des donnees internes chez ceux qui l installent : verifier
+      # qu elle demarre vaut mieux que de decouvrir a l execution qu elle est
+      # cassee. Sans index monte, le serveur doit refuser proprement, pas planter.
+      - name: Verifier que l image publiee demarre
+        env:
+          # Par env plutot qu interpole dans le script : une sortie d action n a
+          # rien a faire dans le corps d un shell, meme quand elle vient d une
+          # source sure.
+          IMAGE: ghcr.io/${{ github.repository_owner }}/mmarchive-viewer:${{ needs.release-please.outputs.version }}
+        run: |
+          set -eu
+          docker pull "$IMAGE"
+          sortie=$(docker run --rm "$IMAGE" --index /absent.db --archive /tmp 2>&1 || true)
+          echo "$sortie"
+          echo "$sortie" | grep -q "E5002" || {
+            echo "L image ne signale pas l index manquant avec son code d erreur."
+            exit 1
+          }

@@ -80,8 +80,11 @@ Ce qui suit ne sera plus rattrapable une fois l'instance décommissionnée.
       donne la conduite à tenir pour chaque code. Un test lit les sources et refuse toute
       classe sans code, tout code attribué deux fois et toute entrée orpheline, ce qui
       empêche la documentation de se désynchroniser en silence.
-- [ ] **CHANGELOG**. Les conventional commits sont en place, `release-please` ou
-      `changesets` le générerait tout seul. Voir `~/source/roadmaps-faciles`.
+- [x] **CHANGELOG**, traité par le process de release. `release-please` tient une pull
+      request de release à jour à chaque fusion sur `main` et génère le CHANGELOG depuis
+      les titres de pull requests, que le squash rend seuls porteurs de sens. `changesets`
+      a été écarté : il est conçu pour publier des paquets npm à versions indépendantes,
+      alors que tout est ici `private` et ne forme qu'un produit. Voir `docs/RELEASE.md`.
 - [x] **TypeScript 7**, requalifié : ce n'est pas une dette tant que la répartition est
       nette. TS 7 fait le typecheck (`pnpm typecheck`) et l'analyse dans l'éditeur, via
       l'extension TypeScript (Native Preview). TS 6 ne sert plus qu'à typescript-eslint,
