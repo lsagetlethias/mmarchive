@@ -1,16 +1,32 @@
 /**
- * Version du schema d index. Sans rapport avec SCHEMA_VERSION, qui versionne le
- * format d archive : l archive est la donnee durable, l index est un derive
- * jetable que l on reconstruit en moins d une minute. Incrementer ici oblige
- * seulement a relancer le builder, jamais a toucher a l archive.
+ * Tables que tout index doit porter pour etre exploitable.
  *
- * Version 2 : ajout de la table asset. Un index de version 1 s ouvre sans
- * erreur mais n a ni avatars ni emojis, et le mode sans serveur echoue alors sur
- * une erreur SQL brute au lieu de dire ce qui manque. Toute table ajoutee au
- * schema doit incrementer ce nombre, meme quand rien n est encore livre : un
- * index construit entre deux versions existe des la premiere execution.
+ * Il n y a pas de numero de version ici, et c est voulu : un numero dit
+ * quelle forme le fichier pretend avoir, pas celle qu il a. Un index construit
+ * avant l ajout d une table annoncait la bonne version et echouait ensuite sur
+ * une erreur SQL brute. La liste, elle, se verifie.
+ *
+ * Ajouter une table au schema suffit donc a rendre les index anterieurs
+ * detectables, sans rien avoir a incrementer.
  */
-export const INDEX_SCHEMA_VERSION = 2;
+export const INDEX_TABLES = [
+  "meta",
+  "channel",
+  "user",
+  "emoji",
+  "asset",
+  "post",
+  "post_text",
+  "reaction",
+  "file",
+  "search",
+] as const;
+
+/** Ce qui manque a un fichier pour servir d index, vide s il est complet. */
+export function missingIndexTables(present: Iterable<string>): string[] {
+  const found = new Set(present);
+  return INDEX_TABLES.filter((table) => !found.has(table));
+}
 
 /** Bits du champ post.flags. Un entier plutot que six colonnes a 1,3 million de lignes. */
 export const POST_FLAGS = {

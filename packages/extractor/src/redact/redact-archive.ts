@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type ArchiveFile,
@@ -7,9 +7,10 @@ import {
   type ArchiveUser,
   type Manifest,
   manifestSchema,
+  systemErrorCode,
 } from "@mmarchive/shared";
 import { countNdjsonLines, NdjsonWriter, readNdjson } from "@mmarchive/shared/ndjson";
-import { type ArchivePaths, createArchivePaths } from "../archive/paths.js";
+import { ArchivePathError, type ArchivePaths, createArchivePaths } from "../archive/paths.js";
 import { Logger } from "../ui/logger.js";
 
 export type RedactMode = "remove" | "pseudonymize";
@@ -26,11 +27,15 @@ export function pseudonymFor(userId: string): string {
 async function rewriteNdjson<T>(
   path: string,
   transform: (record: T) => T | null,
+  dryRun: boolean,
 ): Promise<{ kept: number; changed: number }> {
   const temporary = `${path}.redact`;
   let kept = 0;
   let changed = 0;
-  const writer = await NdjsonWriter.open(temporary);
+  // En simulation, le fichier est parcouru et compte exactement comme il le
+  // serait, mais aucun flux n est ouvert : c est la seule facon d annoncer ce
+  // qui disparaitra sans avoir deja commence a le faire disparaitre.
+  const writer = dryRun ? undefined : await NdjsonWriter.open(temporary);
   try {
     for await (const record of readNdjson<T>(path)) {
       const next = transform(record);
@@ -39,33 +44,64 @@ async function rewriteNdjson<T>(
         continue;
       }
       if (next !== record) changed += 1;
-      await writer.write(next);
+      await writer?.write(next);
       kept += 1;
     }
   } finally {
-    await writer.close();
+    await writer?.close();
   }
-  await rename(temporary, path);
+  if (!dryRun) await rename(temporary, path);
   return { kept, changed };
 }
 
 export interface RedactResult {
+  /** Vrai quand rien n a ete ecrit : le decompte decrit ce qui se produirait. */
+  readonly dryRun: boolean;
   readonly postsRemoved: number;
   readonly postsRewritten: number;
   readonly reactionsRemoved: number;
   readonly userRemoved: boolean;
   /** Binaires de pieces jointes reellement effaces du disque. */
   readonly attachmentsDeleted: number;
+  /** L avatar existait et disparait, dans les deux modes. */
+  readonly avatarRemoved: boolean;
 }
 
 export async function redactArchive(options: {
   archiveDir: string;
   userId: string;
   mode: RedactMode;
+  /** Annonce ce qui serait fait sans rien modifier. */
+  dryRun?: boolean;
   logger?: Logger;
 }): Promise<RedactResult> {
   const logger = options.logger ?? new Logger();
+  const dryRun = options.dryRun ?? false;
   const paths = createArchivePaths(options.archiveDir);
+  // Sans ce controle, un chemin errone ressort en erreur systeme brute sur le
+  // premier repertoire ouvert, ce qui ne dit pas au lecteur ce qui manque.
+  try {
+    await stat(paths.manifest);
+  } catch {
+    throw new ArchivePathError(
+      `${options.archiveDir} ne ressemble pas a une archive mmarchive : manifest.json est introuvable.`,
+    );
+  }
+  // Valider l identifiant avant tout, et surtout avant la simulation : un
+  // dry-run qui reussit la ou la passe reelle echoue ne sert plus a rien, alors
+  // qu il est le seul moyen de relire une operation irreversible.
+  const avatarPath = paths.avatarFile(options.userId);
+  // Seule l absence vaut "pas d avatar". Un acces refuse avale par ce sondage
+  // ferait echouer rm() plus loin, apres la reecriture des messages, et la
+  // simulation annoncerait une operation qui ne peut pas aboutir.
+  const avatarPresent = await stat(avatarPath).then(
+    () => true,
+    (cause: unknown) => {
+      if (systemErrorCode(cause) === "ENOENT") return false;
+      throw cause;
+    },
+  );
+
   const pseudonym = pseudonymFor(options.userId);
 
   let postsRemoved = 0;
@@ -76,42 +112,50 @@ export async function redactArchive(options: {
   for (const name of postFiles) {
     if (!name.endsWith(".ndjson")) continue;
     const path = join(paths.root, "posts", name);
-    await rewriteNdjson<ArchivePost>(path, (post) => {
-      const before = post.reactions.length;
-      const reactions = post.reactions.filter((reaction) => reaction.user_id !== options.userId);
-      reactionsRemoved += before - reactions.length;
+    await rewriteNdjson<ArchivePost>(
+      path,
+      (post) => {
+        const before = post.reactions.length;
+        const reactions = post.reactions.filter((reaction) => reaction.user_id !== options.userId);
+        reactionsRemoved += before - reactions.length;
 
-      if (post.user_id === options.userId) {
-        if (options.mode === "remove") {
-          postsRemoved += 1;
-          return null;
+        if (post.user_id === options.userId) {
+          if (options.mode === "remove") {
+            postsRemoved += 1;
+            return null;
+          }
+          postsRewritten += 1;
+          return { ...post, user_id: pseudonym, reactions };
         }
-        postsRewritten += 1;
-        return { ...post, user_id: pseudonym, reactions };
-      }
-      if (reactions.length !== before) return { ...post, reactions };
-      return post;
-    });
+        if (reactions.length !== before) return { ...post, reactions };
+        return post;
+      },
+      dryRun,
+    );
   }
 
   let userRemoved = false;
-  await rewriteNdjson<ArchiveUser>(paths.users, (user) => {
-    if (user.id !== options.userId) return user;
-    if (options.mode === "remove") {
-      userRemoved = true;
-      return null;
-    }
-    return {
-      ...user,
-      id: pseudonym,
-      username: pseudonym,
-      nickname: "",
-      first_name: "",
-      last_name: "",
-      position: "",
-      avatar: null,
-    };
-  });
+  await rewriteNdjson<ArchiveUser>(
+    paths.users,
+    (user) => {
+      if (user.id !== options.userId) return user;
+      if (options.mode === "remove") {
+        userRemoved = true;
+        return null;
+      }
+      return {
+        ...user,
+        id: pseudonym,
+        username: pseudonym,
+        nickname: "",
+        first_name: "",
+        last_name: "",
+        position: "",
+        avatar: null,
+      };
+    },
+    dryRun,
+  );
 
   /**
    * Chemins des binaires a effacer.
@@ -122,33 +166,50 @@ export async function redactArchive(options: {
    * l archive.
    */
   const attachmentsToDelete: string[] = [];
-  await rewriteNdjson<ArchiveFile>(paths.files, (file) => {
-    if (file.user_id !== options.userId) return file;
-    if (options.mode === "remove") {
-      if (file.path !== null) attachmentsToDelete.push(file.path);
-      return null;
-    }
-    return { ...file, user_id: pseudonym };
-  });
+  await rewriteNdjson<ArchiveFile>(
+    paths.files,
+    (file) => {
+      if (file.user_id !== options.userId) return file;
+      if (options.mode === "remove") {
+        if (file.path !== null) attachmentsToDelete.push(file.path);
+        return null;
+      }
+      return { ...file, user_id: pseudonym };
+    },
+    dryRun,
+  );
 
   let attachmentsDeleted = 0;
   for (const relative of attachmentsToDelete) {
-    await rm(join(paths.root, relative), { force: true });
+    if (!dryRun) await rm(join(paths.root, relative), { force: true });
     attachmentsDeleted += 1;
   }
 
   // L avatar est un fichier a part : il ne disparait pas avec l enregistrement,
   // et aucun des deux modes ne doit le laisser derriere lui.
-  await rm(paths.avatarFile(options.userId), { force: true });
+  if (!dryRun) await rm(avatarPath, { force: true });
 
-  await refreshManifestCounts(paths);
+  if (!dryRun) await refreshManifestCounts(paths);
 
-  logger.info(
-    `Mode ${options.mode} : ${String(postsRemoved)} messages supprimes, ${String(
-      postsRewritten,
-    )} pseudonymises, ${String(reactionsRemoved)} reactions retirees.`,
-  );
-  return { postsRemoved, postsRewritten, reactionsRemoved, userRemoved, attachmentsDeleted };
+  const resume = `${String(postsRemoved)} messages supprimes, ${String(
+    postsRewritten,
+  )} pseudonymises, ${String(reactionsRemoved)} reactions retirees, ${String(
+    attachmentsDeleted,
+  )} pieces jointes effacees${avatarPresent ? ", avatar efface" : ""}`;
+  if (dryRun) {
+    logger.info(`Simulation, mode ${options.mode} : ${resume}. Rien n a ete modifie.`);
+  } else {
+    logger.info(`Mode ${options.mode} : ${resume}.`);
+  }
+  return {
+    dryRun,
+    postsRemoved,
+    postsRewritten,
+    reactionsRemoved,
+    userRemoved,
+    attachmentsDeleted,
+    avatarRemoved: avatarPresent,
+  };
 }
 
 /**

@@ -1,5 +1,5 @@
 import { isAbsolute, join, relative as relativeNativePath, resolve, sep } from "node:path";
-import { ARCHIVE_LAYOUT, isMattermostId } from "@mmarchive/shared";
+import { ARCHIVE_LAYOUT, ERROR_CODES, type ErrorCode, isMattermostId } from "@mmarchive/shared";
 
 /** Borne imposee par les systemes de fichiers courants, comptee en octets UTF-8. */
 const MAX_FILE_NAME_BYTES = 200;
@@ -51,6 +51,7 @@ const RESERVED_WINDOWS_NAMES = new Set<string>([
 ]);
 
 export class ArchivePathError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.ArchivePathError;
   constructor(message: string) {
     super(message);
     this.name = "ArchivePathError";

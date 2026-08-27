@@ -1,3 +1,4 @@
+import { ERROR_CODES, type ErrorCode } from "@mmarchive/shared";
 /** Corps d erreur standard Mattermost. Aucun champ n est garanti par la spec. */
 export interface MattermostAppError {
   readonly id?: string;
@@ -8,6 +9,7 @@ export interface MattermostAppError {
 }
 
 export class MattermostError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.MattermostError;
   constructor(message: string) {
     super(message);
     this.name = new.target.name;
@@ -15,6 +17,7 @@ export class MattermostError extends Error {
 }
 
 export class MattermostHttpError extends MattermostError {
+  override readonly code: ErrorCode = ERROR_CODES.MattermostHttpError;
   readonly status: number;
   readonly method: string;
   readonly template: string;
@@ -40,13 +43,20 @@ export class MattermostHttpError extends MattermostError {
   }
 }
 
-export class MattermostAuthError extends MattermostHttpError {}
+export class MattermostAuthError extends MattermostHttpError {
+  override readonly code: ErrorCode = ERROR_CODES.MattermostAuthError;
+}
 
-export class MattermostForbiddenError extends MattermostHttpError {}
+export class MattermostForbiddenError extends MattermostHttpError {
+  override readonly code: ErrorCode = ERROR_CODES.MattermostForbiddenError;
+}
 
-export class MattermostNotFoundError extends MattermostHttpError {}
+export class MattermostNotFoundError extends MattermostHttpError {
+  override readonly code: ErrorCode = ERROR_CODES.MattermostNotFoundError;
+}
 
 export class MattermostRateLimitError extends MattermostHttpError {
+  override readonly code: ErrorCode = ERROR_CODES.MattermostRateLimitError;
   /** Duree d attente deduite des en-tetes, en millisecondes. */
   readonly retryAfterMs: number;
 
@@ -71,6 +81,7 @@ export class MattermostRateLimitError extends MattermostHttpError {
  * rejoindre un canal publie un message systeme visible par tous ses membres.
  */
 export class ForbiddenMutationError extends MattermostError {
+  override readonly code: ErrorCode = ERROR_CODES.ForbiddenMutationError;
   readonly template: string;
 
   constructor(template: string, method: string) {
@@ -87,6 +98,7 @@ export class ForbiddenMutationError extends MattermostError {
  * bug, pas une erreur utilisateur : la selection et le consentement ont diverge.
  */
 export class ConsentViolationError extends MattermostError {
+  override readonly code: ErrorCode = ERROR_CODES.ConsentViolationError;
   readonly targetId: string;
 
   constructor(kind: "canal" | "team", targetId: string) {
@@ -99,6 +111,7 @@ export class ConsentViolationError extends MattermostError {
 }
 
 export class NetworkError extends MattermostError {
+  override readonly code: ErrorCode = ERROR_CODES.NetworkError;
   constructor(message: string, cause: unknown) {
     super(message);
     this.cause = cause;
@@ -110,4 +123,6 @@ export class NetworkError extends MattermostError {
  * une erreur de statut HTTP. Typiquement un JSON valide mais dont un champ dont
  * on depend est absent ou mal type.
  */
-export class MattermostResponseError extends MattermostError {}
+export class MattermostResponseError extends MattermostError {
+  override readonly code: ErrorCode = ERROR_CODES.MattermostResponseError;
+}

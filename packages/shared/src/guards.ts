@@ -1,4 +1,5 @@
 import { CHANNEL_TYPE, type ChannelType, MM_ID_LENGTH } from "./constants.js";
+import { ERROR_CODES, type ErrorCode } from "./errors.js";
 
 /**
  * Filtre defensif central. Tout canal qui traverse mmarchive doit passer par
@@ -11,6 +12,7 @@ export function isPublicChannel(channel: { readonly type?: string | undefined })
 }
 
 export class NonPublicChannelError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.NonPublicChannelError;
   readonly channelId: string;
   readonly channelType: string;
 

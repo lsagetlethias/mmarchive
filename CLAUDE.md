@@ -83,11 +83,16 @@ mmarchive/
 │   ├── hooks/block-secrets.sh   # PreToolUse : bloque tout accès au .env
 │   ├── settings.json            # branche le hook + deny rules
 │   └── skills/                  # verif, add-tests, sync-docs
-├── docs/ARCHIVE_FORMAT.md       # spec du format, normative, versionnée
+├── docs/
+│   ├── ARCHIVE_FORMAT.md        # spec du format, normative, versionnée
+│   ├── CODES-ERREUR.md          # registre des codes, conduite à tenir
+│   └── DEPLOIEMENT.md           # héberger le viewer
 ├── packages/
 │   ├── shared/                  # types, schémas zod, logique de sélection, garde-fous
-│   └── extractor/               # CLI mmarchive-extract + mmarchive-redact
-├── docker/
+│   ├── extractor/               # CLI mmarchive-extract + mmarchive-redact
+│   └── viewer/                  # index, serveur lecture seule, frontend React
+├── Dockerfile                   # image du viewer seul, jamais de l'extracteur
+├── compose.yaml                 # service viewer + construction d'index à la demande
 └── .env.example
 ```
 

@@ -1,0 +1,38 @@
+# Docker ne lit pas .gitignore. Sans ce fichier, le contexte de build embarque
+# les 27 Go de archive/ et les donnees internes qui vivent a cote.
+
+# Donnees. Une archive, un index et un fichier de selection portent des echanges
+# internes et la topologie de l instance : rien de tout cela n entre dans une
+# image, qui se pousse et se partage.
+/archive
+/archive*/
+/index.db
+/*.db
+/*.yaml
+/*.yml
+!/pnpm-workspace.yaml
+!/pnpm-lock.yaml
+**/*.ndjson
+
+# Le fichier d environnement porte un token d ecriture sur toute l instance.
+.env
+.env.*
+!.env.example
+
+# Reconstruits dans l image : les copier ecraserait le resultat du build par des
+# artefacts de la machine de developpement, et casserait le cache de couches.
+**/node_modules
+**/dist
+**/dist-standalone
+**/.turbo
+/coverage
+.eslintcache
+
+# Sans effet sur le build.
+.git
+.github
+.vscode
+.claude
+Dockerfile*
+.dockerignore
+docker-compose*.yml

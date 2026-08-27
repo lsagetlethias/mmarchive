@@ -1,5 +1,5 @@
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
-import { INDEX_SCHEMA_VERSION } from "../../../src/index/schema.js";
+import { missingIndexTables } from "../../../src/index/schema.js";
 import type { SqlDriver, SqlRow, SqlValue } from "../../../src/query/driver.js";
 import {
   getChannel,
@@ -100,11 +100,15 @@ async function open(makeCache: () => BlockCache): Promise<{ label: string }> {
   db = new sqlite3.oo1.DB({ filename: "index.db", flags: "r", vfs: LITE_VFS_NAME });
   driver = createDriver(db);
 
-  const version = driver.get("SELECT value FROM meta WHERE key = 'index_schema_version'");
-  const found = version === undefined ? undefined : Number(version.value);
-  if (found !== INDEX_SCHEMA_VERSION) {
+  const tables = driver
+    .all("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")
+    .map((row) => String(row.name));
+  const missing = missingIndexTables(tables);
+  if (missing.length > 0) {
     throw new Error(
-      `Cet index est en version ${String(found ?? "inconnue")}, ce viewer attend la version ${String(INDEX_SCHEMA_VERSION)}. Reconstruisez le avec mmarchive-index : c est un derive de l archive, l operation prend une minute.`,
+      tables.length === 0
+        ? "Ce fichier n est pas un index mmarchive."
+        : `Cet index n a pas la forme attendue, il manque : ${missing.join(", ")}. Reconstruisez le avec mmarchive-index.`,
     );
   }
   return { label: "ouvert" };
@@ -153,7 +157,6 @@ function call(method: string, args: unknown[]): unknown {
       );
       const builtAt = driver.get("SELECT value FROM meta WHERE key = 'built_at'");
       return {
-        indexSchemaVersion: INDEX_SCHEMA_VERSION,
         builtAt: builtAt === undefined ? null : String(builtAt.value),
         counts: {
           posts: Number(counts?.posts ?? 0),

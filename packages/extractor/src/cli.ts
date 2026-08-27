@@ -1,3 +1,4 @@
+import { describeError } from "@mmarchive/shared";
 import { Command } from "commander";
 import { doctorCommand } from "./commands/doctor.js";
 import { inventoryCommand } from "./commands/inventory.js";
@@ -115,11 +116,11 @@ async function main(): Promise<void> {
     await program.parseAsync(process.argv);
   } catch (error) {
     if (error instanceof OptionsError) {
-      logger.error(error.message);
+      logger.error(describeError(error));
       process.exitCode = 2;
       return;
     }
-    logger.error(error instanceof Error ? error.message : String(error));
+    logger.error(describeError(error));
     process.exitCode = 1;
   }
 }

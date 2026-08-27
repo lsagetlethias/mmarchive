@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { pseudonymFor, redactArchive } from "../src/redact/redact-archive.js";
 import { Logger } from "../src/ui/logger.js";
@@ -13,6 +13,18 @@ const TEAM = "m".repeat(26);
 const FILE_OF_TARGET = "f".repeat(26);
 
 let workDir: string;
+
+/** Chemin et contenu de chaque fichier de l archive, pour comparer avant et apres. */
+async function empreinteArchive(): Promise<[string, string][]> {
+  const entries = await readdir(workDir, { recursive: true, withFileTypes: true });
+  const out: [string, string][] = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const chemin = join(entry.parentPath, entry.name);
+    out.push([relative(workDir, chemin), await readFile(chemin, "utf8").catch(() => "binaire")]);
+  }
+  return out.sort(([a], [b]) => (a < b ? -1 : 1));
+}
 
 const silent = new Logger({ level: "error" });
 
@@ -430,5 +442,103 @@ describe("garde-fous", () => {
     });
     expect(await exists(join(workDir, "users.ndjson.redact"))).toBe(false);
     expect(await exists(join(workDir, "files.ndjson.redact"))).toBe(false);
+  });
+
+  it("annonce ce qui serait efface sans rien modifier", async () => {
+    // L operation est irreversible : la simulation doit compter exactement ce
+    // que ferait la vraie passe, et laisser l archive rigoureusement intacte.
+    const avant = await empreinteArchive();
+
+    const simule = await redactArchive({
+      archiveDir: workDir,
+      userId: TARGET,
+      mode: "remove",
+      dryRun: true,
+      logger: silent,
+    });
+    expect(simule.dryRun).toBe(true);
+    expect(await empreinteArchive()).toEqual(avant);
+
+    const reel = await redactArchive({
+      archiveDir: workDir,
+      userId: TARGET,
+      mode: "remove",
+      logger: silent,
+    });
+    expect(await empreinteArchive()).not.toEqual(avant);
+
+    // Les decomptes de la simulation sont ceux de l operation.
+    expect(simule.postsRemoved).toBe(reel.postsRemoved);
+    expect(simule.reactionsRemoved).toBe(reel.reactionsRemoved);
+    expect(simule.attachmentsDeleted).toBe(reel.attachmentsDeleted);
+    expect(simule.userRemoved).toBe(reel.userRemoved);
+  });
+
+  it("ne laisse aucun fichier de travail derriere une simulation", async () => {
+    await redactArchive({
+      archiveDir: workDir,
+      userId: TARGET,
+      mode: "pseudonymize",
+      dryRun: true,
+      logger: silent,
+    });
+    const restes: string[] = [];
+    for (const [chemin] of await empreinteArchive()) {
+      if (chemin.endsWith(".redact")) restes.push(chemin);
+    }
+    expect(restes).toEqual([]);
+  });
+});
+
+describe("redact face a un identifiant invalide", () => {
+  const INVALIDE = "pas-un-identifiant";
+
+  it("refuse avant d avoir touche a l archive", async () => {
+    const avant = await empreinteArchive();
+    await expect(
+      redactArchive({ archiveDir: workDir, userId: INVALIDE, mode: "remove", logger: silent }),
+    ).rejects.toThrow();
+    // Une demande d effacement est irreversible : echouer a mi-parcours laisse
+    // les messages deja reecrits et le manifeste en desaccord avec eux.
+    expect(await empreinteArchive()).toEqual(avant);
+  });
+
+  it("le signale des la simulation, qui sert justement a relire l operation", async () => {
+    await expect(
+      redactArchive({
+        archiveDir: workDir,
+        userId: INVALIDE,
+        mode: "remove",
+        dryRun: true,
+        logger: silent,
+      }),
+    ).rejects.toThrow();
+  });
+});
+
+describe("redact face a un avatar illisible", () => {
+  it("s arrete au lieu de le prendre pour un avatar absent", async (ctx) => {
+    const avatarsDir = join(workDir, "avatars");
+    const avant = await empreinteArchive();
+    await chmod(avatarsDir, 0o000);
+    try {
+      // root traverse un repertoire en 0o000, et certains systemes de fichiers
+      // ignorent les permissions : la ou le refus ne se produit pas, il n y a
+      // rien a observer, et affirmer le contraire ne testerait que l hote.
+      const refuse = await stat(join(avatarsDir, `${TARGET}.png`)).then(
+        () => false,
+        () => true,
+      );
+      if (!refuse) ctx.skip();
+
+      // Un acces refuse n est pas une absence : le confondre ferait echouer la
+      // suppression plus tard, une fois les messages deja reecrits.
+      await expect(
+        redactArchive({ archiveDir: workDir, userId: TARGET, mode: "remove", logger: silent }),
+      ).rejects.toThrow();
+    } finally {
+      await chmod(avatarsDir, 0o755);
+    }
+    expect(await empreinteArchive()).toEqual(avant);
   });
 });

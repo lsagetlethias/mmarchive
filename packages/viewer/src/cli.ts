@@ -1,11 +1,7 @@
+import { describeError } from "@mmarchive/shared";
 import { Command } from "commander";
 import pc from "picocolors";
-import {
-  type BuildProgress,
-  type BuildReport,
-  buildIndex,
-  IndexBuildError,
-} from "./index/build.js";
+import { type BuildProgress, type BuildReport, buildIndex } from "./index/build.js";
 import { TOOL_VERSION } from "./version.js";
 
 const STEP_LABEL: Record<BuildProgress["step"], string> = {
@@ -125,10 +121,6 @@ program
 try {
   await program.parseAsync(process.argv);
 } catch (error) {
-  const message =
-    error instanceof IndexBuildError || error instanceof Error
-      ? error.message
-      : "erreur inattendue";
-  process.stderr.write(`${pc.red("Echec")} : ${message}\n`);
+  process.stderr.write(`${pc.red("Echec")} : ${describeError(error)}\n`);
   process.exitCode = 1;
 }

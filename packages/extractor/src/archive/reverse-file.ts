@@ -2,6 +2,7 @@ import { once } from "node:events";
 import { createWriteStream, type Stats, type WriteStream } from "node:fs";
 import { type FileHandle, open, rm, stat } from "node:fs/promises";
 import { resolve } from "node:path";
+import { ERROR_CODES, type ErrorCode } from "@mmarchive/shared";
 
 const LINE_FEED = 0x0a;
 const CARRIAGE_RETURN = 0x0d;
@@ -14,6 +15,7 @@ export interface ReverseLinesOptions {
 }
 
 export class ReverseFileError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.ReverseFileError;
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "ReverseFileError";

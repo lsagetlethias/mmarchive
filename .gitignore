@@ -32,6 +32,7 @@ index.db-*
 /*.yaml
 /*.yml
 !/pnpm-workspace.yaml
+!/compose.yaml
 
 # Build output
 dist/

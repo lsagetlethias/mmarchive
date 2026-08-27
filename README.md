@@ -7,8 +7,7 @@ Conçu pour les instances en fin de vie : quand le serveur s'éteint, l'historiq
 lisible sans Mattermost, sans base de données à maintenir, et sans dépendre de l'outil
 qui l'a produit.
 
-> **État du projet.** L'extracteur est en cours de livraison. Le viewer (index SQLite,
-> API en lecture seule, interface React) vient ensuite. Le format d'archive est déjà
+> **État du projet.** L'extracteur et le viewer sont livrés. Le format d'archive est
 > spécifié et versionné : voir [`docs/ARCHIVE_FORMAT.md`](docs/ARCHIVE_FORMAT.md).
 
 ---
@@ -346,6 +345,36 @@ mmarchive-extract verify --archive ./archive --json | jq '.conformant'
 À lancer après toute extraction, et surtout après une reprise : c'est ce contrôle qui
 révèle qu'une archive assemblée en plusieurs runs est incohérente avec elle-même.
 
+## Consulter l'archive
+
+Le viewer est en lecture seule de bout en bout : aucune route d'écriture, aucun composeur,
+et il ne connaît que l'archive, jamais Mattermost.
+
+Il travaille sur un **index**, dérivé de l'archive et reconstruit en entier à chaque fois.
+Rien n'y vit uniquement : le perdre ne coûte que le temps de le refaire.
+
+```bash
+pnpm mm:index build --archive ./archive --out ./index.db
+pnpm mm:serve --index ./index.db --archive ./archive
+```
+
+L'archive est alors lisible sur `http://127.0.0.1:4173` : navigation par canal, fils de
+discussion, recherche plein texte, pièces jointes et permaliens.
+
+Depuis cette interface, le bouton de copie autonome produit un zip qui contient l'archive
+et un viewer en un seul fichier HTML. Il s'ouvre en double-clic, sans serveur ni
+installation : c'est le mode de consultation qui survivra le plus longtemps.
+
+Pour héberger le viewer plutôt que de le lancer à la main, un `Dockerfile` et un
+`compose.yaml` sont fournis :
+
+```bash
+docker compose up -d
+```
+
+Lisez [`docs/DEPLOIEMENT.md`](docs/DEPLOIEMENT.md) avant de l'exposer : le viewer n'a
+aucune authentification, et c'est au mandataire inverse placé devant de la fournir.
+
 ## Conformité
 
 Pour honorer une demande d'effacement après extraction :
@@ -379,7 +408,9 @@ L'opération modifie l'archive **en place, sans retour possible**. Sauvegardez a
 - **Le token donne un accès en écriture à toute l'instance.** Ne le committez jamais.
   Le `.gitignore` couvre `.env`, les archives, les fichiers de sélection et les index.
 - Une archive contient des échanges internes. Même publics au sein d'une organisation,
-  ils ne sont pas destinés à être exposés. Le futur viewer sera non public par défaut.
+  ils ne sont pas destinés à être exposés. Le viewer n'écoute que la boucle locale par
+  défaut et n'a aucune authentification : au delà de la machine, il faut un mandataire
+  inverse qui authentifie. Voir [`docs/DEPLOIEMENT.md`](docs/DEPLOIEMENT.md).
 - Les fichiers d'une archive sont des contenus arbitraires téléversés par des tiers.
   Servez-les avec `Content-Disposition: attachment` et `X-Content-Type-Options: nosniff`.
 
@@ -399,11 +430,24 @@ Toutes les commandes se comportent correctement hors terminal :
 - `NO_COLOR` et `--no-color` sont respectés, la couleur est désactivée automatiquement
   quand la sortie est redirigée.
 
+## Codes d'erreur
+
+Chaque erreur qui remonte à l'utilisateur porte un code stable, affiché devant le message :
+
+```text
+Echec : [E3002] posts/abc.ndjson ligne 41 : JSON invalide.
+```
+
+La famille dit d'où vient le problème : `E10xx` ce que vous avez fourni, `E20xx`
+l'instance et les garde-fous, `E30xx` l'archive, `E40xx` la reprise, `E50xx` l'index.
+La liste complète, avec la conduite à tenir pour chaque code, est dans
+[docs/CODES-ERREUR.md](docs/CODES-ERREUR.md).
+
 ## Développement
 
 ```bash
 pnpm typecheck     # tsgo --noEmit
-pnpm lint          # ESLint
+pnpm lint          # Biome puis ESLint type-aware
 pnpm test          # Vitest
 pnpm verify        # pipeline complet
 ```

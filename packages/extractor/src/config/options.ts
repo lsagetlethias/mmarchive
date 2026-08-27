@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { ERROR_CODES, type ErrorCode } from "@mmarchive/shared";
 
 export interface ConnectionOptions {
   readonly url: string;
@@ -23,6 +24,7 @@ export interface RunOptions {
 }
 
 export class OptionsError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.OptionsError;
   constructor(message: string) {
     super(message);
     this.name = "OptionsError";

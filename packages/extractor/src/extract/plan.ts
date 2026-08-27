@@ -1,6 +1,8 @@
 import {
   assertPublicChannel,
   categorizeChannel,
+  ERROR_CODES,
+  type ErrorCode,
   type SelectionChannel,
   type SelectionFile,
   type SelectionSummary,
@@ -31,6 +33,7 @@ export interface ExtractionPlan {
 }
 
 export class SelectionMismatchError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.SelectionMismatchError;
   constructor(expectedUrl: string, fileUrl: string) {
     super(
       `Le fichier de selection a ete genere depuis ${fileUrl}, mais la cible est ${expectedUrl}.\n` +

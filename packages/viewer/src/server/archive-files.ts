@@ -1,6 +1,8 @@
 import { isAbsolute, relative, resolve, sep } from "node:path";
+import { ERROR_CODES, type ErrorCode } from "@mmarchive/shared";
 
 export class UnsafeArchivePathError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.UnsafeArchivePathError;
   readonly requested: string;
 
   constructor(requested: string) {
