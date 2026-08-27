@@ -115,9 +115,10 @@ méritent d'être vus plutôt que découverts.
 
 - [ ] **Aucune authentification, même optionnelle.** Le cadrage prévoyait « un basic auth
       optionnel par variable d'environnement, et la mise derrière un mandataire inverse ».
-      Seule la seconde moitié est faite : le viewer n'écoute que la boucle locale et la
-      documentation renvoie au mandataire. Le basic auth n'existe pas. C'est défendable
-      pour un service qui n'a aucune raison d'être exposé directement, mais c'est un écart.
+      Ni l'un ni l'autre n'est livré, et le mandataire ne le sera pas : il vit hors de ce
+      dépôt. Ce que le dépôt fournit, c'est une écoute limitée à la boucle locale et une
+      documentation qui explique quoi placer devant. Défendable pour un service qui n'a
+      aucune raison d'être exposé directement, mais le basic auth manque bel et bien.
 - [ ] **Pas d'autocomplétion sur `from:` et `in:`.** Le cadrage la demandait à la frappe.
       Le parser gère les deux modificateurs, l'aide de la vue recherche les documente, mais
       rien ne complète pendant la saisie.
