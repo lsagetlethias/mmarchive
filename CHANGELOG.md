@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/lsagetlethias/mmarchive/compare/v0.2.0...v0.2.1) (2026-08-27)
+
+
+### Documentation
+
+* correct the ghcr visibility claim, and silence the index healthcheck ([#6](https://github.com/lsagetlethias/mmarchive/issues/6)) ([ecdee18](https://github.com/lsagetlethias/mmarchive/commit/ecdee18d7ee678fc6b4ad83c1e6190ba63c1aa87))
+* make todo.md say what was decided, and record the RAG scope ([#8](https://github.com/lsagetlethias/mmarchive/issues/8)) ([3e7349b](https://github.com/lsagetlethias/mmarchive/commit/3e7349b966accce2122d8b88653554cde91c5fa5))
+
 ## [0.2.0](https://github.com/lsagetlethias/mmarchive/compare/v0.1.0...v0.2.0) (2026-08-27)
 
 
