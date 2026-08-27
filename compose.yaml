@@ -1,0 +1,76 @@
+name: mmarchive
+
+# Chemins surchargeables sans toucher a ce fichier :
+#   MMARCHIVE_ARCHIVE   repertoire de l archive        (defaut ./archive)
+#   MMARCHIVE_INDEX     fichier d index deja construit (defaut ./index.db)
+#   MMARCHIVE_PORT      port publie sur la machine     (defaut 4173)
+
+services:
+  viewer:
+    build:
+      context: .
+      target: runtime
+    image: mmarchive-viewer:local
+    restart: unless-stopped
+
+    # L archive et l index restent dehors, montes en lecture seule. Ils pesent
+    # des dizaines de Go et portent des echanges internes : les copier dans
+    # l image reviendrait a les rendre poussables sur un registre.
+    volumes:
+      - ${MMARCHIVE_ARCHIVE:-./archive}:/data/archive:ro
+      - ${MMARCHIVE_INDEX:-./index.db}:/data/index.db:ro
+
+    # Publie sur la boucle locale uniquement. Le viewer n a aucune
+    # authentification : tout ce qui l atteint peut tout lire. Pour un acces
+    # au dela de cette machine, un mandataire inverse qui authentifie doit
+    # etre place devant. Voir docs/DEPLOIEMENT.md.
+    ports:
+      - "127.0.0.1:${MMARCHIVE_PORT:-4173}:4173"
+
+    # Le process n ecrit rien : l index est ouvert en lecture seule et son
+    # journal est en mode delete, donc SQLite ne cree ni -wal ni -shm a cote.
+    # Le zip de la copie autonome est assemble en flux, jamais sur disque.
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # Construction de l index, a la demande :
+  #   docker compose run --rm index
+  # L index est un derive de l archive : le perdre ne coute que le temps de
+  # reconstruction, et aucune donnee ne vit uniquement dedans.
+  index:
+    profiles:
+      - outils
+    build:
+      context: .
+      target: runtime
+    image: mmarchive-viewer:local
+    restart: "no"
+
+    # La sortie a son propre montage : /data serait a la fois en lecture seule
+    # pour l archive et en ecriture pour l index, ce qui ne peut pas coexister.
+    volumes:
+      - ${MMARCHIVE_ARCHIVE:-./archive}:/archive:ro
+      - ${MMARCHIVE_INDEX_DIR:-.}:/sortie
+
+    # Numeroter les messages dans l ordre chronologique trie plus d un million de
+    # lignes, ce que SQLite deverse dans des fichiers temporaires. Les envoyer
+    # dans le volume de sortie plutot qu en memoire : il a forcement la place,
+    # puisqu il doit deja accueillir l index lui meme.
+    environment:
+      SQLITE_TMPDIR: /sortie
+
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    entrypoint: ["node", "/app/dist/cli.js", "build"]
+    command: ["--archive", "/archive", "--out", "/sortie/index.db"]

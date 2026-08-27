@@ -58,6 +58,18 @@ Ce qui suit ne sera plus rattrapable une fois l'instance décommissionnée.
       affichée avec la mention qui convient. À reconsidérer si une remise complète devient
       nécessaire, par exemple en produisant un second volume à côté du zip.
 
+## Déploiement
+
+- [x] **Image et compose du viewer.** `Dockerfile` multi-étages et `compose.yaml`, vérifiés
+      de bout en bout sur l'archive réelle : conteneur `healthy`, utilisateur non
+      privilégié, système de fichiers en lecture seule, `cap_drop: ALL`, port publié sur la
+      boucle locale uniquement, écriture refusée en 405 et traversée de chemin en 404.
+      L'archive et l'index restent dehors, montés en lecture seule. Un service `index` du
+      profil `outils` construit l'index à la demande. Voir `docs/DEPLOIEMENT.md`.
+- [ ] **Mandataire inverse avec authentification.** Hors périmètre de ce dépôt : le viewer
+      n'a aucune authentification et ne prétend pas en avoir. La documentation le dit et le
+      défaut protège, mais rien n'empêche quelqu'un de retirer le `127.0.0.1:`.
+
 ## Dette identifiée
 
 - [x] **Codes d'erreur traçables** (§6.1 du guide CLI). Les 25 classes d'erreur portent un
@@ -80,7 +92,8 @@ Ce qui suit ne sera plus rattrapable une fois l'instance décommissionnée.
       décomptes et vérifie que l'archive est rigoureusement inchangée après simulation.
 - [ ] **Test d'intégration contre un Mattermost local** en docker-compose, avec données
       seedées : canal archivé, utilisateur désactivé, canal public non rejoint. Tout est
-      aujourd'hui vérifié contre un serveur simulé.
+      aujourd'hui vérifié contre un serveur simulé. Le `compose.yaml` du déploiement ne sert
+      pas à cela : il ne parle qu'au viewer, jamais à une instance.
 
 ## Non retenu, et pourquoi
 
