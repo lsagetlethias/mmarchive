@@ -81,6 +81,13 @@ function inlinedWasm(): Uint8Array | undefined {
 }
 
 async function open(makeCache: () => BlockCache): Promise<{ label: string }> {
+  // Deux ouvertures successives reinstalleraient le VFS sous le meme nom et
+  // laisseraient la premiere base ouverte sur un cache qui n est plus le sien.
+  if (db !== undefined) {
+    throw new Error(
+      "Un index est deja ouvert dans cette page. Rechargez la pour en ouvrir un autre.",
+    );
+  }
   const wasmBinary = inlinedWasm();
   // Le typage publie n annonce aucun parametre, alors que le module Emscripten
   // accepte la configuration habituelle, wasmBinary compris.
@@ -159,6 +166,10 @@ function call(method: string, args: unknown[]): unknown {
       return listChannels(driver);
     case "users":
       return listUsers(driver);
+    case "customEmojis":
+      return driver
+        .all("SELECT name FROM emoji WHERE image IS NOT NULL ORDER BY name")
+        .map((row) => String(row.name));
     case "channelMessages": {
       const page = listChannelMessages(driver, Number(args[0]), pageOptions(args[1] as PageArgs));
       return withDetails(page.items, page.nextCursor);
@@ -175,7 +186,13 @@ function call(method: string, args: unknown[]): unknown {
       return withDetails(all, undefined);
     }
     case "search": {
-      const result = searchMessages(driver, String(args[0]), pageOptions(args[1] as PageArgs));
+      const options = args[1] as PageArgs & { timeZoneOffsetMinutes?: number };
+      const result = searchMessages(driver, String(args[0]), {
+        ...pageOptions(options),
+        ...(options?.timeZoneOffsetMinutes === undefined
+          ? {}
+          : { timeZoneOffsetMinutes: options.timeZoneOffsetMinutes }),
+      });
       if (result.kind !== "ok") {
         return result.kind === "introuvable"
           ? { status: "introuvable", names: result.names }

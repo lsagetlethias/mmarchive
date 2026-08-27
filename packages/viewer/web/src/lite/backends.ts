@@ -81,9 +81,14 @@ export function createHttpBackend(url: string): ReadBackend {
     label: url,
     read(offset, readLength) {
       const request = requestRange(url, offset, readLength);
-      if (request.status !== 206 && request.status !== 200) {
+      // Un 200 porte le fichier entier, pas la plage demandee. L accepter ferait
+      // prendre le debut du fichier pour le bloc situe a cet offset, et SQLite
+      // lirait des pages incoherentes sans que rien ne signale l erreur.
+      if (request.status !== 206) {
         throw new ReadBackendError(
-          `Lecture refusee a l offset ${String(offset)} (statut ${String(request.status)}).`,
+          request.status === 200
+            ? `L hebergement de ${url} a ignore la plage demandee et renvoye le fichier entier. Un index de cette taille ne peut pas etre lu ainsi.`
+            : `Lecture refusee a l offset ${String(offset)} (statut ${String(request.status)}).`,
         );
       }
       const body: unknown = request.response;

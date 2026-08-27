@@ -47,16 +47,17 @@ export function ArchiveProvider({
   useEffect(() => {
     let cancelled = false;
     const load = async (): Promise<void> => {
-      const [meta, channels, users] = await Promise.all([
+      const [meta, channels, users, emojis] = await Promise.all([
         client.meta(),
         client.channels(),
         client.users(),
+        client.customEmojis(),
       ]);
       if (cancelled) return;
 
       const channelById = new Map(channels.map((channel) => [channel.id, channel]));
       const userById = new Map(users.map((user) => [user.id, user]));
-      const customEmojis = new Set<string>();
+      const customEmojis = new Set(emojis);
       const render: RenderContext = {
         usernames: new Set(users.map((user) => user.username.toLowerCase())),
         channels: new Map(channels.map((channel) => [channel.name.toLowerCase(), channel.id])),

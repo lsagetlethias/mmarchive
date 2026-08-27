@@ -67,6 +67,11 @@ echo "Ce qui est desormais interdit sur main : la poussee directe sans pull"
 echo "request, la reecriture d historique, la suppression de la branche, et la"
 echo "fusion tant que verify et conventional ne sont pas verts."
 echo
+echo "enforce_admins reste a false : un administrateur du depot peut donc passer"
+echo "outre. Sur un depot a un seul mainteneur, c est une porte de sortie voulue"
+echo "plutot qu une faille, mais elle signifie que la regle guide sans contraindre."
+echo "Passez le a true pour qu elle s applique aussi a vous."
+echo
 echo "Le nombre de relecteurs exige est zero : sur un depot a un seul mainteneur,"
 echo "en demander un se contourne en s auto-approuvant, ce qui donne l illusion"
 echo "d un controle. La barriere utile ici est la verification automatique."

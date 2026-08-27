@@ -249,6 +249,14 @@ export function createServer(options: ViewerServerOptions): FastifyInstance {
 
   app.get("/api/users", () => ({ users: listUsers(driver) }));
 
+  // Les noms suffisent : le rendu d un message doit savoir, sans attendre, si
+  // ":perroquet:" designe un emoji de l archive ou reste du texte.
+  app.get("/api/emojis", () => ({
+    emojis: driver
+      .all("SELECT name FROM emoji WHERE image IS NOT NULL ORDER BY name")
+      .map((row) => str(row, "name")),
+  }));
+
   registerFileRoutes(app, driver, archiveRoot);
   registerLiteRoutes(app, options);
   registerWebRoutes(app, options.webRoot);

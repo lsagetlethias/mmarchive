@@ -62,6 +62,7 @@ export function MessageList({
 }: MessageListProps): ReactNode {
   const [bundle, setBundle] = useState<MessageBundle>(initial);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pendingAnchor = useRef<number | null>(null);
   const initialised = useRef(false);
@@ -119,6 +120,7 @@ export function MessageList({
     const cursor = bundle.nextCursor;
     if (cursor === null || loading) return;
     setLoading(true);
+    setFailed(false);
     loadOlder(cursor)
       .then((older) => {
         pendingAnchor.current = messages[0]?.id ?? null;
@@ -129,6 +131,11 @@ export function MessageList({
           replyCounts: { ...current.replyCounts, ...older.replyCounts },
           nextCursor: older.nextCursor,
         }));
+      })
+      .catch(() => {
+        // Sans cela, l echec passe en rejet non gere et l indication revient a
+        // "Remontez pour lire la suite", comme si rien ne s etait produit.
+        setFailed(true);
       })
       .finally(() => {
         setLoading(false);
@@ -157,6 +164,10 @@ export function MessageList({
     <div className="liste-messages" ref={scrollRef} onScroll={onScroll} key={sourceKey}>
       {bundle.nextCursor === null ? (
         <p className="debut-canal">Debut de ce qui a ete archive</p>
+      ) : failed ? (
+        <p className="erreur">
+          Les messages plus anciens n ont pas pu etre lus. Reessayez en remontant.
+        </p>
       ) : (
         <p className="chargement">{loading ? "Chargement" : "Remontez pour lire la suite"}</p>
       )}

@@ -5,6 +5,7 @@ import type {
   MessageBundle,
   MetaInfo,
   PageOptions,
+  SearchOptions,
   SearchOutcome,
   User,
 } from "./archive-client.js";
@@ -65,6 +66,11 @@ export class HttpArchiveClient implements ArchiveClient {
     return body.users;
   }
 
+  async customEmojis(): Promise<readonly string[]> {
+    const body = await this.#json<{ emojis: string[] }>("/api/emojis");
+    return body.emojis;
+  }
+
   async channelMessages(channelId: number, options?: PageOptions): Promise<MessageBundle> {
     return this.#json<MessageBundle>(
       `/api/channels/${String(channelId)}/messages${query(options)}`,
@@ -81,8 +87,12 @@ export class HttpArchiveClient implements ArchiveClient {
     return this.#json<MessageBundle>(`/api/threads/${String(rootId)}`);
   }
 
-  async search(text: string, options?: PageOptions): Promise<SearchOutcome> {
-    return this.#json<SearchOutcome>(`/api/search${query(options, { q: text })}`);
+  async search(text: string, options?: SearchOptions): Promise<SearchOutcome> {
+    const extra: Record<string, string> = { q: text };
+    if (options?.timeZoneOffsetMinutes !== undefined) {
+      extra.tz = String(options.timeZoneOffsetMinutes);
+    }
+    return this.#json<SearchOutcome>(`/api/search${query(options, extra)}`);
   }
 
   async permalink(pid: string): Promise<Message | null> {

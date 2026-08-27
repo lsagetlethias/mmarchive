@@ -31,10 +31,20 @@ function Resultat({ message }: { readonly message: Message }): ReactNode {
   );
 }
 
+/**
+ * Decalage du lecteur, dans le sens attendu par la recherche : positif a l est
+ * de Greenwich. getTimezoneOffset rend l inverse, et le confondre decalerait
+ * toutes les bornes de dates d autant.
+ */
+function readerOffsetMinutes(): number {
+  return -new Date().getTimezoneOffset();
+}
+
 export function SearchView({ query }: { readonly query: string }): ReactNode {
   const { client } = useArchive();
   const [outcome, setOutcome] = useState<SearchOutcome | undefined>();
   const [busy, setBusy] = useState(false);
+  const [erreur, setErreur] = useState<string | undefined>();
 
   useEffect(() => {
     if (query.trim() === "") {
@@ -43,10 +53,16 @@ export function SearchView({ query }: { readonly query: string }): ReactNode {
     }
     let cancelled = false;
     setBusy(true);
+    setErreur(undefined);
     client
-      .search(query, { limit: 50 })
+      .search(query, { limit: 50, timeZoneOffsetMinutes: readerOffsetMinutes() })
       .then((result) => {
         if (!cancelled) setOutcome(result);
+      })
+      .catch((cause: unknown) => {
+        // Sans branche d erreur, l attente disparait et l ecran reste vide,
+        // ce qui se lit comme une recherche sans resultat.
+        if (!cancelled) setErreur(cause instanceof Error ? cause.message : "recherche impossible");
       })
       .finally(() => {
         if (!cancelled) setBusy(false);
@@ -78,6 +94,7 @@ export function SearchView({ query }: { readonly query: string }): ReactNode {
       ) : null}
 
       {busy ? <p className="chargement">Recherche</p> : null}
+      {erreur === undefined ? null : <p className="erreur">{erreur}</p>}
 
       {outcome?.status === "introuvable" ? (
         // Un filtre qui ne designe personne ne doit pas etre ignore en silence :

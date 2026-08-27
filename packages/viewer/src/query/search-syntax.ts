@@ -262,6 +262,10 @@ function startOfDayMs(date: string, offsetMinutes: number): number {
  * Les bornes suivent la convention Mattermost : before et after excluent le jour
  * cite, on le couvre entierement. Le decalage est celui du lecteur, pas celui du
  * serveur : sans lui, un message ecrit a 00h30 a Paris tomberait la veille.
+ *
+ * Il se compte positivement a l est de Greenwich, soit 120 pour Paris en ete.
+ * C est l oppose de Date.prototype.getTimezoneOffset, dont le signe inverse
+ * decalerait toutes les bornes de deux fois le fuseau.
  */
 export function timeRangeFor(parsed: ParsedSearch, offsetMinutes = 0): TimeRange {
   let fromMs: number | undefined;

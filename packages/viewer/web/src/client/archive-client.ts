@@ -33,6 +33,15 @@ export interface PageOptions {
   readonly before?: number;
 }
 
+export interface SearchOptions extends PageOptions {
+  /**
+   * Decalage du lecteur, positif a l est de Greenwich. Sans lui, les bornes de
+   * dates sont comprises en temps universel et un message ecrit en soiree
+   * bascule sur la veille.
+   */
+  readonly timeZoneOffsetMinutes?: number;
+}
+
 /**
  * Seul contrat que connait l interface.
  *
@@ -45,10 +54,12 @@ export interface ArchiveClient {
   meta(): Promise<MetaInfo>;
   channels(): Promise<readonly Channel[]>;
   users(): Promise<readonly User[]>;
+  /** Noms des emojis personnalises presents dans l archive. */
+  customEmojis(): Promise<readonly string[]>;
   channelMessages(channelId: number, options?: PageOptions): Promise<MessageBundle>;
   messageContext(messageId: number): Promise<MessageBundle & { readonly focus: number }>;
   thread(rootId: number): Promise<MessageBundle>;
-  search(query: string, options?: PageOptions): Promise<SearchOutcome>;
+  search(query: string, options?: SearchOptions): Promise<SearchOutcome>;
   permalink(pid: string): Promise<Message | null>;
   /** Adresse d une piece jointe, d un avatar ou d un emoji custom. */
   fileUrl(fid: string): string;

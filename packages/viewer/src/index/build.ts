@@ -114,7 +114,7 @@ function scalar(db: DatabaseSync, sql: string): number {
   return typeof value === "number" ? value : 0;
 }
 
-async function readManifest(archiveRoot: string): Promise<void> {
+async function readManifest(archiveRoot: string): Promise<number> {
   const path = join(archiveRoot, ARCHIVE_LAYOUT.manifest);
   let raw: string;
   try {
@@ -147,6 +147,7 @@ async function readManifest(archiveRoot: string): Promise<void> {
       `Archive en version de format ${String(result.data.schema_version)}, cet outil ne lit que la version ${String(SCHEMA_VERSION)}. Mettez le viewer a jour.`,
     );
   }
+  return result.data.schema_version;
 }
 
 export async function buildIndex(options: BuildIndexOptions): Promise<BuildReport> {
@@ -157,7 +158,7 @@ export async function buildIndex(options: BuildIndexOptions): Promise<BuildRepor
   };
 
   report("manifest", 0);
-  await readManifest(archiveRoot);
+  const archiveVersion = await readManifest(archiveRoot);
   report("manifest", 1, 1);
 
   if (await fileExists(output)) {
@@ -175,7 +176,7 @@ export async function buildIndex(options: BuildIndexOptions): Promise<BuildRepor
 
   const db = new DatabaseSync(output);
   try {
-    return await fill(db, options, report, started);
+    return await fill(db, options, report, started, archiveVersion);
   } finally {
     db.close();
   }
@@ -186,6 +187,7 @@ async function fill(
   options: BuildIndexOptions,
   report: (step: BuildStep, done: number, total?: number) => void,
   started: number,
+  archiveVersion: number,
 ): Promise<BuildReport> {
   const { archiveRoot, output } = options;
 
@@ -332,13 +334,16 @@ async function fill(
 
   report("recherche", 0);
   db.exec(INDEX_FTS);
+  // Jointure a gauche : un message reduit a une piece jointe n a pas de texte,
+  // mais il porte un canal et un auteur. L exclure le rendrait introuvable par
+  // in: comme par from:, alors qu il existe bel et bien.
   db.exec(`
     INSERT INTO search (rowid, message, tag)
-    SELECT p.rowid, t.message,
+    SELECT p.rowid, COALESCE(t.message, ''),
            '${TAG_PREFIX.CHANNEL}' || p.ch || ' ${TAG_PREFIX.USER}' || COALESCE(p.usr, 0)
            || CASE WHEN s.hashtags = '' THEN '' ELSE ' ' || s.hashtags END
     FROM post p
-    JOIN post_text t ON t.rowid = p.rowid
+    LEFT JOIN post_text t ON t.rowid = p.rowid
     JOIN staging s ON s.pid = p.pid
   `);
   db.exec("INSERT INTO search(search) VALUES('optimize')");
@@ -353,7 +358,9 @@ async function fill(
 
   const insertMeta = db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?,?)");
   insertMeta.run("index_schema_version", String(INDEX_SCHEMA_VERSION));
-  insertMeta.run("archive_schema_version", String(SCHEMA_VERSION));
+  // La version de l archive lue, pas la plus haute que cet outil sait lire :
+  // le premier chiffre decrit l index produit, le second decrirait l outil.
+  insertMeta.run("archive_schema_version", String(archiveVersion));
   insertMeta.run("built_at", new Date().toISOString());
 
   report("compactage", 0);

@@ -130,6 +130,10 @@ export class NdjsonWriter {
       );
     }
 
+    if (append) {
+      await assertCompleteLastLine(filePath);
+    }
+
     let handle: FileHandle;
     try {
       handle = await open(filePath, append ? "a" : "w");
@@ -262,6 +266,39 @@ export class NdjsonWriter {
         cause: this.#failure,
       });
     }
+  }
+}
+
+/**
+ * Refuse d ajouter a la suite d une ligne inachevee.
+ *
+ * Une ecriture interrompue laisse un fichier dont le dernier enregistrement n a
+ * pas de saut de ligne. Y ajouter souderait le nouvel enregistrement au
+ * precedent, produisant une ligne que plus aucun lecteur ne saurait analyser, et
+ * l archive paraitrait corrompue sans que rien n indique ou ni quand.
+ */
+async function assertCompleteLastLine(filePath: string): Promise<void> {
+  // Le controle precede l ouverture en ajout : un descripteur ouvert en mode
+  // "a" n autorise pas la lecture, et tenter d y lire echoue sur EBADF.
+  let handle: FileHandle;
+  try {
+    handle = await open(filePath, "r");
+  } catch {
+    // Le fichier n existe pas encore : il n y a pas de frontiere a verifier.
+    return;
+  }
+  try {
+    const { size } = await handle.stat();
+    if (size === 0) return;
+    const tail = Buffer.allocUnsafe(1);
+    await handle.read(tail, 0, 1, size - 1);
+    if (tail[0] === LINE_FEED) return;
+    throw new NdjsonWriteError(
+      filePath,
+      "la derniere ligne n est pas terminee par un saut de ligne, signe d une ecriture interrompue. Ajouter a la suite souderait le prochain enregistrement au precedent.",
+    );
+  } finally {
+    await handle.close();
   }
 }
 

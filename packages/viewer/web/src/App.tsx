@@ -104,7 +104,9 @@ function ChannelView({
       </header>
       {error !== undefined ? <p className="erreur">{error}</p> : null}
       {initial === undefined ? (
-        <p className="chargement">Chargement</p>
+        error === undefined ? (
+          <p className="chargement">Chargement</p>
+        ) : null
       ) : (
         <MessageList
           sourceKey={`${String(channelId)}-${String(focusId ?? 0)}`}

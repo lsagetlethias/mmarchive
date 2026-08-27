@@ -23,13 +23,23 @@ export function TakeAwayView(): ReactNode {
   useEffect(() => {
     let cancelled = false;
     fetch("api/lite")
-      .then(async (response) => (await response.json()) as LiteInfo)
+      .then(async (response) => {
+        // Un statut d erreur porte rarement du JSON : tenter de l analyser
+        // ferait passer une panne du serveur pour une copie deja autonome.
+        if (!response.ok) throw new Error(`Le serveur a repondu ${String(response.status)}.`);
+        return (await response.json()) as LiteInfo;
+      })
       .then((value) => {
         if (!cancelled) setInfo(value);
       })
-      .catch(() => {
-        if (!cancelled)
-          setErreur("Cette copie est deja autonome : elle ne peut pas en produire une autre.");
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setErreur(
+            cause instanceof TypeError
+              ? "Cette copie est deja autonome : elle ne peut pas en produire une autre."
+              : `Copie indisponible. ${cause instanceof Error ? cause.message : ""}`.trim(),
+          );
+        }
       });
     return () => {
       cancelled = true;

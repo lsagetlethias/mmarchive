@@ -86,6 +86,14 @@ const js = mainBundle.outputFiles[0]?.text ?? "";
 const css = readFileSync(join(webRoot, "src/ui/styles.css"), "utf8");
 if (js === "") throw new Error("Bundle principal vide.");
 
+/**
+ * Neutralise la seule sequence capable de refermer la balise qui contient le
+ * bundle. Le navigateur cherche "</script" litteralement, sans analyser le
+ * JavaScript : une telle sequence dans une chaine du code couperait le script en
+ * deux, et la page ne demarrerait pas alors que la construction s annonce reussie.
+ */
+const forInlineScript = (code) => code.replaceAll("</script", "<\\/script");
+
 const html = `<!doctype html>
 <html lang="fr">
   <head>
@@ -93,11 +101,11 @@ const html = `<!doctype html>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
     <title>Archive</title>
-    <style>${css}</style>
+    <style>${css.replaceAll("</style", "<\\/style")}</style>
   </head>
   <body>
     <div id="racine"></div>
-    <script>${js}</script>
+    <script>${forInlineScript(js)}</script>
   </body>
 </html>
 `;

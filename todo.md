@@ -25,8 +25,8 @@ Ce qui suit ne sera plus rattrapable une fois l'instance décommissionnée.
 - [x] **Builder d'index** (`mmarchive-index`). 588 Mo pour 1,3 M de messages, construit
       en 61 s. Invariants couverts par les tests.
 - [x] Couche de requêtes **isomorphe**. Les requêtes sont synchrones et ne connaissent
-      qu'une interface `SqlDriver` de trois méthodes. Le pilote `node:sqlite` existe, celui
-      de SQLite WASM reste à écrire et n'exigera aucun changement de requête.
+      qu'une interface `SqlDriver` de trois méthodes. Les deux pilotes existent,
+      `node:sqlite` et SQLite WASM, sans qu'aucune requête ait eu à changer.
 - [x] Parser de syntaxe de recherche (`from:`, `in:`, `before:`, `after:`, `on:`, phrase
       exacte, exclusion, préfixe, `#hashtag`). Les expressions produites sont exécutées
       contre un vrai FTS5 dans les tests, y compris sur une liste de saisies hostiles.

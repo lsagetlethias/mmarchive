@@ -16,6 +16,19 @@ export type Route =
  * une ouverture par double clic depuis le disque : le mode lite doit fonctionner
  * sans serveur du tout.
  */
+/**
+ * decodeURIComponent leve sur une sequence de pourcentage invalide, et cette
+ * analyse s execute au tout premier rendu : une adresse mal recopiee ferait
+ * alors une page blanche au lieu d une recherche sans resultat.
+ */
+function decodeQuery(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export function parseRoute(hash: string): Route {
   const path = hash.replace(/^#\/?/, "");
   const parts = path.split("/").filter((part) => part !== "");
@@ -31,7 +44,7 @@ export function parseRoute(hash: string): Route {
     }
   }
   if (head === "recherche") {
-    return { view: "recherche", query: decodeURIComponent(parts.slice(1).join("/")) };
+    return { view: "recherche", query: decodeQuery(parts.slice(1).join("/")) };
   }
   if (head === "annuaire") return { view: "annuaire" };
   if (head === "emporter") return { view: "emporter" };

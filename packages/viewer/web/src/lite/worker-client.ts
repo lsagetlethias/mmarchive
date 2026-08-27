@@ -5,6 +5,7 @@ import type {
   MessageBundle,
   MetaInfo,
   PageOptions,
+  SearchOptions,
   SearchOutcome,
   User,
 } from "../client/archive-client.js";
@@ -42,6 +43,23 @@ export class WorkerArchiveClient implements ArchiveClient {
       if (data.ok) waiting.resolve(data.value);
       else waiting.reject(new Error(data.error ?? "erreur inconnue"));
     });
+
+    // Un worker qui echoue avant d avoir repondu, au chargement du module ou a
+    // l instanciation du moteur, ne renverra jamais rien : sans ce relais, les
+    // appels en cours resteraient en suspens et l interface afficherait
+    // indefiniment son ecran d ouverture.
+    this.#worker.addEventListener("error", (event: ErrorEvent) => {
+      this.#failAll(event.message === "" ? "le worker a echoue" : event.message);
+    });
+    this.#worker.addEventListener("messageerror", () => {
+      this.#failAll("reponse du worker illisible");
+    });
+  }
+
+  #failAll(reason: string): void {
+    const waiting = [...this.#pending.values()];
+    this.#pending.clear();
+    for (const { reject } of waiting) reject(new Error(reason));
   }
 
   #send(message: Record<string, unknown>, transfer?: Transferable[]): Promise<unknown> {
@@ -78,6 +96,10 @@ export class WorkerArchiveClient implements ArchiveClient {
     return this.#call<User[]>("users");
   }
 
+  async customEmojis(): Promise<readonly string[]> {
+    return this.#call<string[]>("customEmojis");
+  }
+
   async channelMessages(channelId: number, options?: PageOptions): Promise<MessageBundle> {
     return this.#call<MessageBundle>("channelMessages", channelId, options ?? {});
   }
@@ -90,7 +112,7 @@ export class WorkerArchiveClient implements ArchiveClient {
     return this.#call<MessageBundle>("thread", rootId);
   }
 
-  async search(query: string, options?: PageOptions): Promise<SearchOutcome> {
+  async search(query: string, options?: SearchOptions): Promise<SearchOutcome> {
     return this.#call<SearchOutcome>("search", query, options ?? {});
   }
 
