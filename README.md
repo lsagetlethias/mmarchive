@@ -13,20 +13,6 @@ qui l'a produit.
 
 ---
 
-
-## Réglages du dépôt
-
-La protection de la branche principale et le mode de fusion sont décrits dans
-`.github/setup-repo.sh`, à appliquer une fois avec le CLI `gh` :
-
-```bash
-./.github/setup-repo.sh
-```
-
-Il exige que `verify` et `conventional` soient verts avant toute fusion, interdit
-la poussée directe sur `main`, et n'autorise que la fusion par squash, dont le
-message reprend le titre de la pull request.
-
 ## Ce que fait mmarchive
 
 - Extrait l'intégralité des messages des canaux publics que vous désignez, avec leurs
