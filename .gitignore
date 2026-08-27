@@ -21,9 +21,17 @@ manifest.json
 index.db
 index.db-*
 
-# Fichier de selection genere (contient la topologie de l instance)
-channels.yaml
-channels.*.yaml
+# Fichier de selection genere (contient la topologie de l instance : URL,
+# identifiants et noms de tous les canaux).
+#
+# Le motif porte sur tout YAML pose a la racine, pas seulement sur le nom par
+# defaut : un fichier de selection sauvegarde sous un autre nom est passe une
+# fois a travers les mailles et s est retrouve dans l historique. Les YAML du
+# projet vivent tous dans des sous-repertoires ou sont explicitement re-inclus
+# ci-dessous.
+/*.yaml
+/*.yml
+!/pnpm-workspace.yaml
 
 # Build output
 dist/
