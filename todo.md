@@ -120,8 +120,14 @@ méritent d'être vus plutôt que découverts.
       documentation qui explique quoi placer devant. Défendable pour un service qui n'a
       aucune raison d'être exposé directement, mais le basic auth manque bel et bien.
 - [ ] **Pas d'autocomplétion sur `from:` et `in:`.** Le cadrage la demandait à la frappe.
-      Le parser gère les deux modificateurs, l'aide de la vue recherche les documente, mais
-      rien ne complète pendant la saisie.
+      Le parser gère les deux modificateurs et l'aide de la vue recherche les documente,
+      mais rien ne complète pendant la saisie.
+      Le travail est entièrement côté interface : `data.tsx` charge déjà la liste complète
+      des canaux et des utilisateurs au démarrage, la même que celle qui sert à résoudre les
+      mentions, donc aucune route ni aucun aller-retour réseau n'est à ajouter. Reste à
+      détecter le modificateur en cours de saisie dans le champ de recherche, à proposer les
+      valeurs correspondantes et à gérer la navigation au clavier. À faire en même temps que
+      la coloration des modificateurs, qui vient du même cadrage et touche le même champ.
 - [ ] Pas de route `GET /api/users/:id` : l'annuaire complet est servi d'un coup par
       `/api/users`, ce qui suffit au frontend actuel et évite une requête par message.
 - Noms divergents du cahier des charges, sans conséquence : `mmarchive-index build` plutôt
