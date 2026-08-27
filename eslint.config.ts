@@ -25,6 +25,8 @@ export default defineConfig([
       "archive*/**",
       "docker/**",
       "**/*.config.ts",
+      // Outillage de generation, en JavaScript : hors du projet TypeScript.
+      "packages/*/scripts/**",
       "eslint.config.ts",
       "vitest.config.ts",
       "commitlint.config.js",

@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
 import type { ArchivePost, ArchiveWarning, ChannelProgress } from "@mmarchive/shared";
-import { countNdjsonLines, NdjsonWriter, readNdjson } from "../archive/ndjson.js";
+import { countNdjsonLines, NdjsonWriter, readNdjson } from "@mmarchive/shared/ndjson";
 import type { ArchivePaths } from "../archive/paths.js";
 import { reverseLines } from "../archive/reverse-file.js";
 import type { MattermostApi } from "../mattermost/api.js";

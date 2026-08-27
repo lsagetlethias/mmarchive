@@ -7,20 +7,35 @@
 # Le motif couvre tout repertoire commencant par "archive" (archive-essai,
 # archive-2026-08, etc.) : une archive de test contient exactement les memes
 # donnees qu une archive de production.
-archive/
-archive*/
+#
+# Il est ancre a la racine par le / initial. Sans lui, le motif emportait aussi
+# packages/extractor/src/archive/ et packages/shared/src/archive/, laissant sept
+# fichiers source hors du depot, dont les schemas zod du format. Les motifs de
+# contenu ci-dessous restent non ancres : ils rattrapent une archive extraite
+# ailleurs qu a la racine, et aucun ne peut designer du code.
+/archive/
+/archive*/
 manifest.json
 .extract-state.json
 *.ndjson
 index.db
 index.db-*
 
-# Fichier de selection genere (contient la topologie de l instance)
-channels.yaml
-channels.*.yaml
+# Fichier de selection genere (contient la topologie de l instance : URL,
+# identifiants et noms de tous les canaux).
+#
+# Le motif porte sur tout YAML pose a la racine, pas seulement sur le nom par
+# defaut : un fichier de selection sauvegarde sous un autre nom est passe une
+# fois a travers les mailles et s est retrouve dans l historique. Les YAML du
+# projet vivent tous dans des sous-repertoires ou sont explicitement re-inclus
+# ci-dessous.
+/*.yaml
+/*.yml
+!/pnpm-workspace.yaml
 
 # Build output
 dist/
+dist-standalone/
 *.tsbuildinfo
 
 # Dependances

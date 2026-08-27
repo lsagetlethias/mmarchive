@@ -10,7 +10,7 @@ import {
   type SelectionFile,
   type SelectionMode,
 } from "@mmarchive/shared";
-import { countNdjsonLines, NdjsonWriter, readNdjson } from "../archive/ndjson.js";
+import { countNdjsonLines, NdjsonWriter, readNdjson } from "@mmarchive/shared/ndjson";
 import { type ArchivePaths, createArchivePaths } from "../archive/paths.js";
 import { StateStore } from "../archive/state-store.js";
 import type { RunOptions } from "../config/options.js";

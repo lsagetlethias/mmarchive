@@ -7,7 +7,7 @@ import type {
   ArchiveWarning,
   FileSkipReason,
 } from "@mmarchive/shared";
-import { NdjsonWriter, readNdjson } from "../archive/ndjson.js";
+import { NdjsonWriter, readNdjson } from "@mmarchive/shared/ndjson";
 import type { ArchivePaths } from "../archive/paths.js";
 import type { MattermostApi } from "../mattermost/api.js";
 import { isBotUser, type MmEmoji, type MmFileInfo, type MmUser } from "../mattermost/types.js";

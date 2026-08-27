@@ -12,7 +12,7 @@
   "scripts": {
     "build": "pnpm -r --if-present build",
     "clean": "rm -rf packages/*/dist .eslintcache coverage",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsgo --noEmit && tsgo --noEmit -p packages/viewer/web/tsconfig.json",
     "typecheck:tsc": "tsc --noEmit",
     "lint": "biome check --write . && eslint .",
     "lint:fix": "eslint . --fix",
@@ -28,7 +28,9 @@
     "mm:run": "node --env-file-if-exists=.env --import tsx packages/extractor/src/cli.ts run",
     "mm:doctor": "node --env-file-if-exists=.env --import tsx packages/extractor/src/cli.ts doctor",
     "mm:verify": "node --env-file-if-exists=.env --import tsx packages/extractor/src/cli.ts verify",
-    "mm:redact": "node --env-file-if-exists=.env --import tsx packages/extractor/src/redact.ts"
+    "mm:redact": "node --env-file-if-exists=.env --import tsx packages/extractor/src/redact.ts",
+    "mm:index": "node --import tsx packages/viewer/src/cli.ts",
+    "mm:serve": "node --import tsx packages/viewer/src/serve.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",

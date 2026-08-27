@@ -13,7 +13,7 @@ import {
   manifestSchema,
   SCHEMA_VERSION,
 } from "@mmarchive/shared";
-import { readNdjson } from "../archive/ndjson.js";
+import { readNdjson } from "@mmarchive/shared/ndjson";
 import { type ArchivePaths, createArchivePaths } from "../archive/paths.js";
 
 export type Severity = "error" | "warning" | "info";

@@ -8,6 +8,7 @@ import {
   truncateToWidth,
 } from "../src/ui/run-reporter.js";
 
+const COLOR_SEQUENCE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 const ESC = "\u001B";
 
 class Capture extends Writable {
@@ -283,7 +284,10 @@ describe("RunReporter", () => {
     reporter.channelFinished(100);
     reporter.stop();
     for (const line of out.text.split(`${ESC}[2K`)) {
-      const visible = line.replace(/\r/g, "");
+      // Les sequences de couleur n occupent aucune colonne a l ecran : les
+      // compter faisait echouer ce test partout ou la couleur est active, et
+      // passer partout ou elle ne l est pas, c est a dire en local.
+      const visible = line.replace(/\r/g, "").replace(COLOR_SEQUENCE, "");
       if (visible.length === 0) continue;
       expect(displayWidth(visible)).toBeLessThanOrEqual(40);
     }

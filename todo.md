@@ -18,11 +18,45 @@ Ce qui suit ne sera plus rattrapable une fois l'instance décommissionnée.
 
 ## Bloc 2, viewer
 
-- [ ] Challenger la stack avant de commencer, maintenant que la volumétrie réelle est
-      connue : 1,9 M de messages, 43 000 pièces jointes, 25 Go.
-- [ ] Builder d'index, API en lecture seule, parser de syntaxe de recherche.
-- [ ] Frontend React : canaux, messages virtualisés, threads, permaliens, recherche,
-      annuaire.
+- [x] Challenger la stack avant de commencer, maintenant que la volumétrie réelle est
+      connue. Fait, sur mesures : voir `docs/DECISION-INDEX.md`. SQLite et FTS5 sont
+      conservés, l'index est unique et lu paresseusement, ce qui rend le mode lite
+      dérivable du mode full sans second pipeline.
+- [x] **Builder d'index** (`mmarchive-index`). 588 Mo pour 1,3 M de messages, construit
+      en 61 s. Invariants couverts par les tests.
+- [x] Couche de requêtes **isomorphe**. Les requêtes sont synchrones et ne connaissent
+      qu'une interface `SqlDriver` de trois méthodes. Les deux pilotes existent,
+      `node:sqlite` et SQLite WASM, sans qu'aucune requête ait eu à changer.
+- [x] Parser de syntaxe de recherche (`from:`, `in:`, `before:`, `after:`, `on:`, phrase
+      exacte, exclusion, préfixe, `#hashtag`). Les expressions produites sont exécutées
+      contre un vrai FTS5 dans les tests, y compris sur une liste de saisies hostiles.
+- [x] **Serveur Fastify en lecture seule** (`mmarchive-serve`). Écoute sur 127.0.0.1 par
+      défaut. Toute méthode autre que GET et HEAD est refusée par un garde-fou d'exécution,
+      doublé d'un test qui interdit qu'une route d'écriture soit déclarée un jour.
+      Vérifié sur l'archive réelle : `Range`, `ETag`, 304, `Content-Disposition: attachment`
+      avec encodage RFC 5987, `nosniff`, et aucun fichier brut de l'archive exposé.
+- [x] **Frontend React** : canaux, messages virtualisés, fils, permaliens, recherche,
+      annuaire. Affiche le drapeau `orphanRoot` et les pièces jointes non archivées avec
+      leur raison. Aucune ressource distante : polices système, table d'emojis embarquée
+      (99,3 % des réactions de l'archive), emojis personnalisés servis depuis l'archive.
+- [ ] Rendu des messages, points restants : la table d'emojis laisse 0,7 % des raccourcis
+      en clair (`:beach_with_umbrella:`), et le Markdown Mattermost n'est pas couvert en
+      entier (les blocs `props` des intégrations ne sont pas rendus, par décision).
+- [x] **Mode lite**, dans ses deux transports. SQLite compilé en WebAssembly, VFS de
+      lecture seule adossé à un cache de blocs, le tout dans un worker. Aucune requête n'a
+      changé : le worker appelle les mêmes fonctions que le serveur.
+      Mesuré sur l'archive réelle (index de 655 Mo) : ouvrir un canal coûte 25 requêtes et
+      1,6 Mo, sous la seconde. L'ouverture en double-clic exige un artefact distinct
+      (`archive.html`, 1,8 Mo, script classique et moteur inclus), parce que Chrome refuse
+      les modules et les workers chargés depuis un disque.
+- [x] **Le mode full produit le mode lite depuis son interface.** Vue « Emporter », qui
+      annonce la taille avant de lancer quoi que ce soit, puis assemble en flux un zip
+      contenant l'index, le viewer dans ses deux formes et une notice. Mesuré sur l'archive
+      réelle : 690 Mo bruts, 325 Mo une fois compressés, 21 s. Vérifié de bout en bout,
+      l'archive extraite s'ouvrant en double-clic avec les mêmes résultats de recherche.
+- [ ] Les pièces jointes ne sont pas incluses dans la copie (26 Go) : leur métadonnée est
+      affichée avec la mention qui convient. À reconsidérer si une remise complète devient
+      nécessaire, par exemple en produisant un second volume à côté du zip.
 
 ## Dette identifiée
 
