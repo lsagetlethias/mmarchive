@@ -1,20 +1,22 @@
 # À faire
 
-État au 25 août 2026. Le bloc 1 (extracteur) est livré et validé sur une extraction réelle
-de 1 892 791 messages, 758 canaux, 25 Go, archive conforme.
+État au 27 août 2026. L'extracteur et le viewer sont livrés, le déploiement et le process
+de release aussi, et une version 0.2.0 est sortie pour valider la chaîne de bout en bout.
 
-## Irréversible dans le temps
+## Tranché en cours de route
 
-Ce qui suit ne sera plus rattrapable une fois l'instance décommissionnée.
+Ces points ont été ouverts puis fermés par décision, pas par oubli. Ils restent listés
+pour qu'ils ne reviennent pas.
 
-- [ ] **Extraire les 573 canaux archivés** (891 065 messages). Ils sont lisibles et ne
-      coûtent aucun join, mais restent décochés par défaut. Regénérer la sélection avec
-      `inventory --select-archived`, puis `run --resume`.
-- [ ] **Assurance froide hors périmètre de l'outil** : `pg_dump` de la base plus miroir du
-      bucket de stockage objet. L'API ne rend que l'état visible, les messages supprimés et
-      l'historique d'édition sont perdus quoi qu'il arrive.
-- [ ] Décider du sort de la team `fab-geocommuns`, dont le compte n'est pas membre : ses
-      canaux publics sont invisibles. La rejoindre est une écriture (`--join-teams`).
+- Les **canaux archivés** ne seront pas extraits. La sélection sait les prendre, et
+  quelqu'un d'autre pourra s'en servir, mais ce n'est pas le besoin ici.
+- Pas d'**assurance froide** par vidage de base ni miroir du stockage objet : hors du
+  périmètre depuis le début, et l'accès à la base n'existera jamais. La conséquence est
+  assumée et documentée : messages supprimés et historique d'édition sont perdus, l'API ne
+  rendant que l'état visible.
+- Les **teams dont le compte n'est pas membre** ne seront pas rejointes. Leurs canaux
+  publics restent invisibles à l'extraction ; ce qui compte est que le cas soit signalé à
+  l'utilisateur, ce que `doctor` et l'inventaire font.
 
 ## Bloc 2, viewer
 
@@ -69,6 +71,67 @@ Ce qui suit ne sera plus rattrapable une fois l'instance décommissionnée.
 - [ ] **Mandataire inverse avec authentification.** Hors périmètre de ce dépôt : le viewer
       n'a aucune authentification et ne prétend pas en avoir. La documentation le dit et le
       défaut protège, mais rien n'empêche quelqu'un de retirer le `127.0.0.1:`.
+
+## Bloc 3, RAG
+
+Optionnel par construction : l'outil doit rester pleinement fonctionnel sans, et le RAG ne
+concerne que le mode full. Le mode lite tourne dans un navigateur sans serveur, il n'a ni
+clé d'API ni moteur d'inférence, et rien ne doit l'y contraindre.
+
+Rien n'est commencé. Le cadrage ci-dessous vient du cahier des charges initial et n'a pas
+été rejoué contre les mesures réelles, ce qu'il faudra faire avant de coder, comme pour
+l'index du bloc 2.
+
+- [ ] **Activation par configuration**, désactivé par défaut : `RAG_ENABLED`,
+      `RAG_BASE_URL`, `RAG_API_KEY`, `RAG_CHAT_MODEL`, `RAG_EMBED_MODEL`, `RAG_EMBED_DIM`.
+      Client générique compatible OpenAI, ce qui laisse le choix entre un fournisseur
+      distant et un moteur local, `ollama` répondant à la même interface. Ce choix décide
+      de tout le reste : envoyer plus d'un million de messages internes à un tiers n'a pas
+      la même portée que de les traiter sur la machine qui héberge déjà l'archive.
+- [ ] **Découpage par fil, jamais par message.** Un « +1 » isolé est illisible hors
+      contexte et pollue la recherche. Unité de base : la racine et ses réponses. Hors fil,
+      fenêtre glissante coupée sur un écart de plus de trente minutes ou une quarantaine de
+      messages. Cible d'environ 800 tokens, en-tête de contexte donnant canal, date et
+      participants, puis une ligne par message.
+- [ ] **`mmarchive-index embed`**, avec un mode simulation qui annonce le nombre de
+      fragments, de tokens et le coût avant d'engager quoi que ce soit. Les vecteurs sont
+      calculés une fois et stockés, jamais recalculés à l'exécution.
+- [ ] **Stockage vectoriel** via `sqlite-vec`, dans l'index existant ou à côté, à trancher.
+      Prévoir la quantification : 200 000 fragments en flottants sur 1024 dimensions pèsent
+      environ 800 Mo, l'entier 8 bits divise par quatre.
+- [ ] **Recherche hybride**, indispensable sur du dialogue plein de jargon, d'acronymes et
+      de noms propres que le vectoriel rate : cinquante résultats FTS5, cinquante
+      vectoriels, fusion par rang réciproque, huit à douze fragments retenus.
+- [ ] **Génération** en flux, avec une consigne stricte : répondre uniquement à partir des
+      extraits, citer les identifiants de messages, dire quand l'information est absente de
+      l'archive. Les citations deviennent des pastilles cliquables vers le permalien, la
+      réponse cite et le viewer montre le contexte.
+- [ ] Limitation de débit sur la route et comptage des tokens consommés.
+
+## Écarts avec le cadrage initial
+
+Relevés en relisant le cahier des charges d'origine. Aucun n'est bloquant, mais ils
+méritent d'être vus plutôt que découverts.
+
+- [ ] **Aucune authentification, même optionnelle.** Le cadrage prévoyait « un basic auth
+      optionnel par variable d'environnement, et la mise derrière un mandataire inverse ».
+      Seule la seconde moitié est faite : le viewer n'écoute que la boucle locale et la
+      documentation renvoie au mandataire. Le basic auth n'existe pas. C'est défendable
+      pour un service qui n'a aucune raison d'être exposé directement, mais c'est un écart.
+- [ ] **Pas d'autocomplétion sur `from:` et `in:`.** Le cadrage la demandait à la frappe.
+      Le parser gère les deux modificateurs, l'aide de la vue recherche les documente, mais
+      rien ne complète pendant la saisie.
+- [ ] Pas de route `GET /api/users/:id` : l'annuaire complet est servi d'un coup par
+      `/api/users`, ce qui suffit au frontend actuel et évite une requête par message.
+- Noms divergents du cahier des charges, sans conséquence : `mmarchive-index build` plutôt
+  que `mmarchive build`, `/api/channels/:id/messages` plutôt que `/posts`,
+  `/api/threads/:id` plutôt que `/api/posts/:id/thread`, `/files/:fid` plutôt que
+  `/api/files/:file_id`.
+- Choix techniques assumés et documentés : `node:sqlite` au lieu de `better-sqlite3`, ce
+  qui supprime toute dépendance native ; FTS5 sans contenu dupliqué plutôt que `content=`,
+  mesuré dans `docs/DECISION-INDEX.md`.
+- Livré en plus du cadrage initial : le mode lite dans ses deux transports, la commande
+  `verify`, les codes d'erreur traçables, et le process de release.
 
 ## Dette identifiée
 
