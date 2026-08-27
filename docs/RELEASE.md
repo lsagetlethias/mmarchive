@@ -76,14 +76,19 @@ public.
 Ce n'est pas garanti partout : selon les réglages du compte ou de l'organisation, un
 package peut naître privé, auquel cas `docker compose pull` réclame une authentification
 sans que rien ne l'explique. Le vérifier une fois coûte moins cher que de le découvrir en
-déployant :
+déployant.
+
+Le contrôle doit être fait sans identifiants, sans quoi il ne prouve rien : `docker pull`
+réutilise silencieusement une connexion existante à ghcr.io. Un répertoire de
+configuration jetable garantit qu'aucun jeton n'entre en jeu :
 
 ```bash
-docker pull ghcr.io/lsagetlethias/mmarchive-viewer:latest
+DOCKER_CONFIG=$(mktemp -d) docker pull ghcr.io/lsagetlethias/mmarchive-viewer:latest
 ```
 
-Si l'image est refusée, sa visibilité se change sur la page du package
-(`github.com/users/<vous>/packages`), et le réglage vaut pour les releases suivantes.
+Si l'image est refusée, sa visibilité se change dans les réglages du package lui-même,
+atteignable par l'onglet **Packages** du compte ou de l'organisation qui le possède. Le
+réglage vaut ensuite pour les releases suivantes.
 
 Pour garder l'image fermée volontairement, la voie authentifiée demande un jeton personnel
 classique portant la seule permission `read:packages`. `GITHUB_TOKEN` n'existe que dans un

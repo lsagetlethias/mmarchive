@@ -9,11 +9,21 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Ce workflow execute le code d une pull request : il ne lui faut rien de plus
+# que de quoi le lire. Le defaut du depot est deja en lecture seule, mais un
+# defaut se change ailleurs et sans bruit.
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        # Le jeton n a aucune raison de rester sur le disque pendant que les
+        # tests et le build d une pull request s executent.
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
