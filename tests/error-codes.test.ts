@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describeError, ERROR_CODES, isErrorCode } from "@mmarchive/shared";
 import { describe, expect, it } from "vitest";
@@ -75,6 +75,52 @@ describe("registre des codes d erreur", () => {
     const declarees = new Set(classesDErreur().map(({ nom }) => nom));
     const orphelines = Object.keys(ERROR_CODES).filter((nom) => !declarees.has(nom));
     expect(orphelines, "ces entrees ne correspondent plus a aucune classe").toEqual([]);
+  });
+});
+
+/**
+ * Points d entree livres, deduits des binaires declares plutot que listes a la
+ * main : un binaire ajoute sans code d erreur visible est justement celui qu on
+ * oublierait dans une liste ecrite ici.
+ */
+function pointsDEntree(): { paquet: string; binaire: string; source: string }[] {
+  const trouves: { paquet: string; binaire: string; source: string }[] = [];
+  for (const paquet of ["extractor", "viewer"]) {
+    const manifeste = JSON.parse(readFileSync(join(RACINE, paquet, "package.json"), "utf8")) as {
+      bin?: Record<string, string>;
+    };
+    for (const [binaire, chemin] of Object.entries(manifeste.bin ?? {})) {
+      const source = join(RACINE, paquet, "src", `${basename(chemin, ".js")}.ts`);
+      trouves.push({ paquet, binaire, source });
+    }
+  }
+  return trouves;
+}
+
+describe("points d entree", () => {
+  it("en declarent au moins un par paquet livrable", () => {
+    // Par paquet et non au total : un paquet qui perdrait tous ses binaires
+    // passerait inapercu derriere le compte d un autre.
+    const parPaquet = new Map<string, number>([
+      ["extractor", 0],
+      ["viewer", 0],
+    ]);
+    for (const { paquet } of pointsDEntree()) {
+      parPaquet.set(paquet, (parPaquet.get(paquet) ?? 0) + 1);
+    }
+    const sansBinaire = [...parPaquet].filter(([, n]) => n === 0).map(([nom]) => nom);
+    expect(sansBinaire, "ces paquets ne declarent plus aucun binaire").toEqual([]);
+  });
+
+  it("affichent tous le code de l erreur qui les arrete", () => {
+    const muets = pointsDEntree()
+      // L appel, pas l import : un describeError importe puis inutilise
+      // laisserait passer exactement l oubli que ce test doit attraper.
+      .filter(({ source }) => !readFileSync(source, "utf8").includes("describeError("))
+      .map(({ binaire, source }) => `${binaire} (${source})`);
+    // Un binaire qui rend un message sans son code laisse l utilisateur sans
+    // rien a chercher, et la table des codes ne sert plus a rien pour lui.
+    expect(muets, "ces binaires rendent une erreur sans son code").toEqual([]);
   });
 });
 

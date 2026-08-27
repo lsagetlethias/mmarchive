@@ -86,13 +86,15 @@ mmarchive/
 ├── docs/
 │   ├── ARCHIVE_FORMAT.md        # spec du format, normative, versionnée
 │   ├── CODES-ERREUR.md          # registre des codes, conduite à tenir
-│   └── DEPLOIEMENT.md           # héberger le viewer
+│   ├── DEPLOIEMENT.md           # héberger le viewer
+│   └── RELEASE.md               # comment sort une version
 ├── packages/
 │   ├── shared/                  # types, schémas zod, logique de sélection, garde-fous
 │   ├── extractor/               # CLI mmarchive-extract + mmarchive-redact
 │   └── viewer/                  # index, serveur lecture seule, frontend React
 ├── Dockerfile                   # image du viewer seul, jamais de l'extracteur
 ├── compose.yaml                 # service viewer + construction d'index à la demande
+├── release-please-config.json   # une seule version pour tous les paquets
 └── .env.example
 ```
 
@@ -146,6 +148,11 @@ Conventional commits, **en anglais**, valides par commitlint. Le reste du depot
 Portees autorisees : `shared`, `extractor`, `viewer`, `format`, `cli`, `ci`,
 `deps`, `docs`. Le titre de la pull request suit la meme convention, puisque
 c'est lui que reprend le commit de fusion.
+
+Ce titre decide aussi du numero de la prochaine version et de sa ligne de
+CHANGELOG : release-please ne lit que les commits de `main`, et le squash n'en
+laisse qu'un par pull request. Voir `docs/RELEASE.md`. Une version sort quand la
+pull request de release est fusionnee, jamais automatiquement.
 
 ## Hard rules
 
