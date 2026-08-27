@@ -115,8 +115,8 @@ describe("expressions acceptees et justes", () => {
 
   it("trouve un hashtag a tirets sans le confondre avec ses mots", () => {
     expect(search("#note-de-cadrage")).toEqual([5]);
-    // Le mot "technique" du message 3 ne doit pas repondre au hashtag.
-    expect(search("#technique")).toEqual([]);
+    // Le mot "cadrage" du message 1 ne doit pas repondre au hashtag.
+    expect(search("#cadrage")).toEqual([]);
   });
 
   it("trouve un hashtag accentue", () => {

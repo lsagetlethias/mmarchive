@@ -1,6 +1,7 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildIndex } from "../src/index/build.js";
 import { IndexReadError, type SqlDriver } from "../src/query/driver.js";
@@ -256,6 +257,18 @@ describe("bornes de dates", () => {
 });
 
 describe("ouverture de l index", () => {
+  it("refuse un index construit par une version anterieure du schema", async () => {
+    // Un index d une version precedente s ouvre sans erreur mais lui manque une
+    // table : sans ce controle, la panne surgit bien plus tard, sous la forme
+    // d une erreur SQL que personne ne peut relier a la cause.
+    const ancien = join(workDir, "ancien.db");
+    await copyFile(join(workDir, "index.db"), ancien);
+    const db = new DatabaseSync(ancien);
+    db.exec("UPDATE meta SET value = '1' WHERE key = 'index_schema_version'");
+    db.close();
+    expect(() => new NodeSqlDriver(ancien)).toThrow(/version/);
+  });
+
   it("refuse un fichier qui n est pas un index mmarchive", async () => {
     const bogus = join(workDir, "bogus.db");
     await rm(bogus, { force: true });

@@ -3,8 +3,14 @@
  * format d archive : l archive est la donnee durable, l index est un derive
  * jetable que l on reconstruit en moins d une minute. Incrementer ici oblige
  * seulement a relancer le builder, jamais a toucher a l archive.
+ *
+ * Version 2 : ajout de la table asset. Un index de version 1 s ouvre sans
+ * erreur mais n a ni avatars ni emojis, et le mode sans serveur echoue alors sur
+ * une erreur SQL brute au lieu de dire ce qui manque. Toute table ajoutee au
+ * schema doit incrementer ce nombre, meme quand rien n est encore livre : un
+ * index construit entre deux versions existe des la premiere execution.
  */
-export const INDEX_SCHEMA_VERSION = 1;
+export const INDEX_SCHEMA_VERSION = 2;
 
 /** Bits du champ post.flags. Un entier plutot que six colonnes a 1,3 million de lignes. */
 export const POST_FLAGS = {

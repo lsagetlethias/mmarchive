@@ -97,7 +97,7 @@ async function open(makeCache: () => BlockCache): Promise<{ label: string }> {
   const found = version === undefined ? undefined : Number(version.value);
   if (found !== INDEX_SCHEMA_VERSION) {
     throw new Error(
-      `Cet index est en version ${String(found ?? "inconnue")}, ce viewer attend la version ${String(INDEX_SCHEMA_VERSION)}.`,
+      `Cet index est en version ${String(found ?? "inconnue")}, ce viewer attend la version ${String(INDEX_SCHEMA_VERSION)}. Reconstruisez le avec mmarchive-index : c est un derive de l archive, l operation prend une minute.`,
     );
   }
   return { label: "ouvert" };
