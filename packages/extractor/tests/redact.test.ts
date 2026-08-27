@@ -517,11 +517,20 @@ describe("redact face a un identifiant invalide", () => {
 });
 
 describe("redact face a un avatar illisible", () => {
-  it("s arrete au lieu de le prendre pour un avatar absent", async () => {
+  it("s arrete au lieu de le prendre pour un avatar absent", async (ctx) => {
     const avatarsDir = join(workDir, "avatars");
     const avant = await empreinteArchive();
     await chmod(avatarsDir, 0o000);
     try {
+      // root traverse un repertoire en 0o000, et certains systemes de fichiers
+      // ignorent les permissions : la ou le refus ne se produit pas, il n y a
+      // rien a observer, et affirmer le contraire ne testerait que l hote.
+      const refuse = await stat(join(avatarsDir, `${TARGET}.png`)).then(
+        () => false,
+        () => true,
+      );
+      if (!refuse) ctx.skip();
+
       // Un acces refuse n est pas une absence : le confondre ferait echouer la
       // suppression plus tard, une fois les messages deja reecrits.
       await expect(
