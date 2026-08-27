@@ -103,8 +103,18 @@ Le zip de la copie autonome, servi par `/lite.zip`, est assemblé en flux et n'e
 écrit sur disque : c'est ce qui permet de garder le système de fichiers en lecture seule
 malgré une route qui produit un fichier de plusieurs centaines de mégaoctets.
 
-Sur un hôte Linux, le montage de l'index doit être lisible par l'utilisateur `node`
-(uid 1000) du conteneur. C'est le seul point d'attention sur les droits.
+Sur un hôte Linux, les droits sont le seul point d'attention, et ils diffèrent selon le
+service. Le viewer a besoin que l'archive et l'index soient **lisibles** par l'utilisateur
+`node` (uid 1000) du conteneur. Le service `index`, lui, doit pouvoir **écrire** dans le
+répertoire de sortie, qui accueille à la fois l'index et les fichiers temporaires du tri :
+
+```bash
+chown -R 1000:1000 /srv/mmarchive
+```
+
+Sans cela, la construction échoue sur une erreur d'écriture. Docker Desktop sur macOS et
+Windows masque ce point en remappant les propriétaires, ce qui fait que le problème
+n'apparaît qu'une fois en production.
 
 ## Contrôle de santé
 

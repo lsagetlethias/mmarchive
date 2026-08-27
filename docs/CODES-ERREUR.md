@@ -3,7 +3,7 @@
 Chaque erreur que mmarchive fait remonter à l'utilisateur porte un code stable, affiché
 entre crochets devant le message :
 
-```
+```text
 Echec : [E3002] posts/abc.ndjson ligne 41 : JSON invalide.
 ```
 
@@ -82,7 +82,7 @@ qu'après coup.
 | Code    | Situation                                          | Que faire                                                       |
 | ------- | -------------------------------------------------- | --------------------------------------------------------------- |
 | `E5001` | La construction de l'index a échoué                 | Le message nomme l'étape. L'index partiel est supprimé, rien à nettoyer |
-| `E5002` | Le fichier fourni n'est pas un index exploitable    | Reconstruire avec `mmarchive-view index build`                  |
+| `E5002` | Le fichier fourni n'est pas un index exploitable    | Reconstruire avec `mmarchive-index build`                       |
 
 L'index est dérivé : il se reconstruit intégralement depuis l'archive, et le perdre ne
 coûte que le temps de reconstruction. Aucune donnée ne vit uniquement dedans.

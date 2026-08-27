@@ -434,7 +434,7 @@ Toutes les commandes se comportent correctement hors terminal :
 
 Chaque erreur qui remonte à l'utilisateur porte un code stable, affiché devant le message :
 
-```
+```text
 Echec : [E3002] posts/abc.ndjson ligne 41 : JSON invalide.
 ```
 
