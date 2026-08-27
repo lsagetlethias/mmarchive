@@ -1,6 +1,6 @@
 {
   "name": "@mmarchive/extractor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "CLI d extraction des canaux publics Mattermost vers une archive NDJSON.",
