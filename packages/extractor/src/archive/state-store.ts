@@ -266,6 +266,20 @@ export class StateStore {
         await handle.writeFile(payload, "utf8");
         // fsync avant rename : sans lui, une coupure de courant peut laisser un
         // fichier renomme mais vide, donc la liste des canaux rejoints perdue.
+        //
+        // Ce qui n est pas garanti, et qui est assume. L entree de repertoire
+        // creee par le rename ci dessous n est pas synchronisee : apres une
+        // coupure brutale de la machine, le contenu peut etre sur le disque
+        // pendant que le repertoire designe encore la version precedente. Il
+        // faudrait pour cela ouvrir le repertoire parent et le synchroniser a
+        // son tour.
+        //
+        // Deux raisons de s en passer. La consequence se limite a un etat en
+        // retard d une sauvegarde, cas que la reprise traite deja en recomptant
+        // les lignes reellement ecrites plutot qu en croyant l etat, et qui a
+        // son test. Et sur macOS, fsync ne vide pas le cache du disque, ce que
+        // seul F_FULLFSYNC obtient : ajouter une synchronisation de repertoire
+        // y afficherait une durabilite que la plateforme ne tient pas.
         await handle.sync();
       } finally {
         await handle.close();
