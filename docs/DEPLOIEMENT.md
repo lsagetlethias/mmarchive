@@ -118,6 +118,10 @@ n'apparaît qu'une fois en production.
 
 ## Contrôle de santé
 
+Le contrôle de santé est déclaré dans l'image et non dans le compose : il décrit comment
+le viewer se vérifie lui-même, et vaut donc aussi pour un `docker run` lancé à la main. Le
+service `index` le désactive, puisqu'il ne sert aucune requête.
+
 L'image déclare un `HEALTHCHECK` qui interroge `/api/meta`. Ce point d'entrée compte
 réellement les lignes de l'index : un conteneur sain prouve donc à la fois que le serveur
 répond et que sa base est lisible, là où une simple ouverture de port ne dirait rien. Le

@@ -78,5 +78,11 @@ services:
     security_opt:
       - no-new-privileges:true
 
+    # Le controle de sante vient de l image et interroge le serveur. Ce service
+    # n en lance aucun : sans cette coupure, il passerait sa construction a
+    # sonder un port muet, pour finir declare malade alors qu il a reussi.
+    healthcheck:
+      disable: true
+
     entrypoint: ["node", "/app/dist/cli.js", "build"]
     command: ["--archive", "/archive", "--out", "/sortie/index.db"]

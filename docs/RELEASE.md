@@ -67,21 +67,32 @@ La raison est une protection de GitHub contre les boucles : un tag posé avec le
 partirait donc jamais, et il faudrait créer une GitHub App uniquement pour contourner
 cela. Tout enchaîner dans un job évite cette machinerie.
 
-## À faire une fois, après la toute première release
+## Vérifier la visibilité du package
 
-Un package poussé sur ghcr.io par un workflow naît **privé**, même quand le dépôt qui le
-produit est public. Tant qu'il n'est pas ouvert, `docker pull` anonyme échoue, et le
-`docker compose pull` de la section « Vérifier une release » ne fonctionne que pour
-quelqu'un d'authentifié.
+À la première release, le package est apparu **public**, et un `docker pull` sans aucune
+authentification fonctionne. C'est ce qui a été constaté sur ce dépôt, qui est lui-même
+public.
 
-Après la première release, sur la page du package (`github.com/users/<vous>/packages`),
-il faut donc passer sa visibilité à **public**. C'est une action manuelle et unique : les
-releases suivantes conservent le réglage.
+Ce n'est pas garanti partout : selon les réglages du compte ou de l'organisation, un
+package peut naître privé, auquel cas `docker compose pull` réclame une authentification
+sans que rien ne l'explique. Le vérifier une fois coûte moins cher que de le découvrir en
+déployant.
 
-Sans cela, il reste la voie authentifiée, à réserver aux cas où l'image doit rester
-fermée. Elle demande un jeton personnel classique portant la seule permission
-`read:packages` : `GITHUB_TOKEN` n'existe que dans un workflow GitHub Actions et ne vaut
-rien sur la machine qui déploie.
+Le contrôle doit être fait sans identifiants, sans quoi il ne prouve rien : `docker pull`
+réutilise silencieusement une connexion existante à ghcr.io. Un répertoire de
+configuration jetable garantit qu'aucun jeton n'entre en jeu :
+
+```bash
+DOCKER_CONFIG=$(mktemp -d) docker pull ghcr.io/lsagetlethias/mmarchive-viewer:latest
+```
+
+Si l'image est refusée, sa visibilité se change dans les réglages du package lui-même,
+atteignable par l'onglet **Packages** du compte ou de l'organisation qui le possède. Le
+réglage vaut ensuite pour les releases suivantes.
+
+Pour garder l'image fermée volontairement, la voie authentifiée demande un jeton personnel
+classique portant la seule permission `read:packages`. `GITHUB_TOKEN` n'existe que dans un
+workflow GitHub Actions et ne vaut rien sur la machine qui déploie :
 
 ```bash
 echo "$GHCR_TOKEN" | docker login ghcr.io -u <vous> --password-stdin

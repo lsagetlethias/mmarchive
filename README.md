@@ -447,9 +447,9 @@ La liste complète, avec la conduite à tenir pour chaque code, est dans
 
 Les versions suivent le [semantic versioning](https://semver.org). Chaque release publie un
 tag `vX.Y.Z`, une entrée de `CHANGELOG.md` et l'image du viewer sur
-`ghcr.io/lsagetlethias/mmarchive-viewer`, en `amd64` et `arm64`. Un package ghcr naît privé
-même quand son dépôt est public : tant que sa visibilité n'a pas été ouverte à la main
-après la première release, `docker pull` demande une authentification.
+`ghcr.io/lsagetlethias/mmarchive-viewer`, en `amd64` et `arm64`. L'image se tire sans
+authentification ; si votre compte crée les packages en privé, ouvrez sa visibilité une
+fois, voir [`docs/RELEASE.md`](docs/RELEASE.md).
 
 Le **numéro de schéma du format d'archive est indépendant** de celui de l'outil : une
 nouvelle version de mmarchive ne rend pas les archives existantes illisibles. Voir
