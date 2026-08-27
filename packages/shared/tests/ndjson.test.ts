@@ -10,7 +10,7 @@ import {
   NdjsonWriteError,
   NdjsonWriter,
   readNdjson,
-} from "../src/archive/ndjson.js";
+} from "../src/ndjson.js";
 
 let workDir = "";
 

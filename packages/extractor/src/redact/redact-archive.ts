@@ -8,7 +8,7 @@ import {
   type Manifest,
   manifestSchema,
 } from "@mmarchive/shared";
-import { countNdjsonLines, NdjsonWriter, readNdjson } from "../archive/ndjson.js";
+import { countNdjsonLines, NdjsonWriter, readNdjson } from "@mmarchive/shared/ndjson";
 import { type ArchivePaths, createArchivePaths } from "../archive/paths.js";
 import { Logger } from "../ui/logger.js";
 
