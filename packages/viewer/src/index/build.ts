@@ -177,6 +177,13 @@ export async function buildIndex(options: BuildIndexOptions): Promise<BuildRepor
   const db = new DatabaseSync(output);
   try {
     return await fill(db, options, report, started, archiveVersion);
+  } catch (error) {
+    // Un index interrompu en cours de construction est inutilisable, et le
+    // laisser sur le disque ferait refuser la tentative suivante au motif qu un
+    // index existe deja. Mieux vaut ne rien laisser que laisser un piege.
+    db.close();
+    await rm(output, { force: true });
+    throw error;
   } finally {
     db.close();
   }

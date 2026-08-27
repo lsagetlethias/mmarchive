@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -39,6 +39,14 @@ async function rawContent(filePath: string): Promise<string> {
 }
 
 describe("NdjsonWriter.open", () => {
+  it("distingue un fichier absent d un fichier illisible en mode append", async () => {
+    // Traiter les deux pareil ferait echouer l ouverture plus loin, sur un
+    // message qui ne designerait plus la cause.
+    const directory = join(workDir, "un-repertoire");
+    await mkdir(directory, { recursive: true });
+    await expect(NdjsonWriter.open(directory, { append: true })).rejects.toThrow(NdjsonWriteError);
+  });
+
   it("cree les repertoires parents manquants", async () => {
     const target = pathIn("archive", "posts", "canal.ndjson");
     const writer = await NdjsonWriter.open(target);

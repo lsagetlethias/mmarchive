@@ -283,15 +283,36 @@ async function assertCompleteLastLine(filePath: string): Promise<void> {
   let handle: FileHandle;
   try {
     handle = await open(filePath, "r");
-  } catch {
-    // Le fichier n existe pas encore : il n y a pas de frontiere a verifier.
-    return;
+  } catch (cause) {
+    // Absent, il n y a pas de frontiere a verifier. Tout autre echec est une
+    // vraie anomalie : le confondre avec l absence ferait echouer l ouverture
+    // plus loin, sur un message qui ne designerait plus la cause.
+    if (causeCode(cause) === "ENOENT") return;
+    throw new NdjsonWriteError(
+      filePath,
+      `verification de la derniere ligne impossible (${describeCause(cause)})`,
+      { cause },
+    );
   }
   try {
-    const { size } = await handle.stat();
-    if (size === 0) return;
-    const tail = Buffer.allocUnsafe(1);
-    await handle.read(tail, 0, 1, size - 1);
+    let size: number;
+    let tail: Buffer;
+    try {
+      // Un repertoire s ouvre en lecture sans erreur sur certaines plateformes :
+      // l anomalie n apparait qu ici, et doit sortir avec la meme forme que les
+      // autres echecs d ecriture.
+      const stats = await handle.stat();
+      size = stats.size;
+      if (size === 0) return;
+      tail = Buffer.allocUnsafe(1);
+      await handle.read(tail, 0, 1, size - 1);
+    } catch (cause) {
+      throw new NdjsonWriteError(
+        filePath,
+        `verification de la derniere ligne impossible (${describeCause(cause)})`,
+        { cause },
+      );
+    }
     if (tail[0] === LINE_FEED) return;
     throw new NdjsonWriteError(
       filePath,

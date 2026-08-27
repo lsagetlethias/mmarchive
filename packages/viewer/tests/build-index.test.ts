@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -261,6 +261,18 @@ describe("garde-fous", () => {
     await writeNdjson(join(archiveDir, "posts", `${"z".repeat(26)}.ndjson`), [post()]);
     const report = await buildIndex({ archiveRoot: archiveDir, output: indexPath });
     expect(report.orphanPostFiles).toEqual(["z".repeat(26)]);
+  });
+
+  it("ne laisse pas d index a moitie construit derriere une erreur", async () => {
+    // Sans ce nettoyage, la tentative suivante serait refusee au motif qu un
+    // index existe deja, alors que celui la est inutilisable.
+    await writeFile(
+      join(archiveDir, "posts", `${CHANNEL_A}.ndjson`),
+      '{"pas":"un message"}\n',
+      "utf8",
+    );
+    await expect(buildIndex({ archiveRoot: archiveDir, output: indexPath })).rejects.toThrow();
+    await expect(stat(indexPath)).rejects.toThrow();
   });
 
   it("refuse une archive sans manifeste", async () => {
