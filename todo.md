@@ -60,9 +60,14 @@ Ce qui suit ne sera plus rattrapable une fois l'instance décommissionnée.
 
 ## Dette identifiée
 
-- [ ] **Codes d'erreur traçables** (§6.1 du guide CLI). 21 classes d'erreur avec de bons
-      messages, mais pas de code documenté de type `E1001`. Utile surtout si le paquet est
-      publié un jour.
+- [x] **Codes d'erreur traçables** (§6.1 du guide CLI). Les 25 classes d'erreur portent un
+      code stable, groupé par famille selon l'origine du problème : `E10xx` la saisie de
+      l'utilisateur, `E20xx` l'instance et les garde-fous, `E30xx` l'archive, `E40xx` la
+      reprise, `E50xx` l'index. Le registre de `shared/src/errors.ts` est la source de
+      vérité, `describeError` préfixe le message à l'affichage, et `docs/CODES-ERREUR.md`
+      donne la conduite à tenir pour chaque code. Un test lit les sources et refuse toute
+      classe sans code, tout code attribué deux fois et toute entrée orpheline, ce qui
+      empêche la documentation de se désynchroniser en silence.
 - [ ] **CHANGELOG**. Les conventional commits sont en place, `release-please` ou
       `changesets` le générerait tout seul. Voir `~/source/roadmaps-faciles`.
 - [x] **TypeScript 7**, requalifié : ce n'est pas une dette tant que la répartition est

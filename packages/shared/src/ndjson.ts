@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import type { WriteStream } from "node:fs";
 import { type FileHandle, mkdir, open } from "node:fs/promises";
 import { dirname } from "node:path";
+import { ERROR_CODES, type ErrorCode } from "./errors.js";
 
 const NEWLINE = "\n";
 const LINE_FEED = 0x0a;
@@ -22,6 +23,7 @@ function causeCode(cause: unknown): string | undefined {
 }
 
 export class NdjsonWriteError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.NdjsonWriteError;
   readonly filePath: string;
 
   constructor(filePath: string, detail: string, options?: ErrorOptions) {
@@ -32,6 +34,7 @@ export class NdjsonWriteError extends Error {
 }
 
 export class NdjsonSerializeError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.NdjsonSerializeError;
   readonly index: number;
 
   constructor(index: number, detail: string, options?: ErrorOptions) {
@@ -42,6 +45,7 @@ export class NdjsonSerializeError extends Error {
 }
 
 export class NdjsonReadError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.NdjsonReadError;
   readonly filePath: string;
 
   constructor(filePath: string, detail: string, options?: ErrorOptions) {
@@ -52,6 +56,7 @@ export class NdjsonReadError extends Error {
 }
 
 export class NdjsonParseError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.NdjsonParseError;
   readonly filePath: string;
   readonly lineNumber: number;
 

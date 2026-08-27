@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type ArchiveFile,
@@ -9,7 +9,7 @@ import {
   manifestSchema,
 } from "@mmarchive/shared";
 import { countNdjsonLines, NdjsonWriter, readNdjson } from "@mmarchive/shared/ndjson";
-import { type ArchivePaths, createArchivePaths } from "../archive/paths.js";
+import { ArchivePathError, type ArchivePaths, createArchivePaths } from "../archive/paths.js";
 import { Logger } from "../ui/logger.js";
 
 export type RedactMode = "remove" | "pseudonymize";
@@ -75,6 +75,15 @@ export async function redactArchive(options: {
   const logger = options.logger ?? new Logger();
   const dryRun = options.dryRun ?? false;
   const paths = createArchivePaths(options.archiveDir);
+  // Sans ce controle, un chemin errone ressort en erreur systeme brute sur le
+  // premier repertoire ouvert, ce qui ne dit pas au lecteur ce qui manque.
+  try {
+    await stat(paths.manifest);
+  } catch {
+    throw new ArchivePathError(
+      `${options.archiveDir} ne ressemble pas a une archive mmarchive : manifest.json est introuvable.`,
+    );
+  }
   const pseudonym = pseudonymFor(options.userId);
 
   let postsRemoved = 0;

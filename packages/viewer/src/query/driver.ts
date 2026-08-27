@@ -1,3 +1,4 @@
+import { ERROR_CODES, type ErrorCode } from "@mmarchive/shared";
 /**
  * Frontiere entre les requetes et le moteur SQLite qui les execute.
  *
@@ -21,6 +22,7 @@ export interface SqlDriver {
 }
 
 export class IndexReadError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.IndexReadError;
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "IndexReadError";

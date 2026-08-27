@@ -1,3 +1,4 @@
+import { describeError } from "@mmarchive/shared";
 import { Command } from "commander";
 import { type RedactMode, redactArchive } from "./redact/redact-archive.js";
 import { Logger } from "./ui/logger.js";
@@ -41,4 +42,9 @@ program
     logger.warn("Une reindexation du viewer est necessaire apres cette operation.");
   });
 
-await program.parseAsync(process.argv);
+try {
+  await program.parseAsync(process.argv);
+} catch (error) {
+  new Logger().error(describeError(error));
+  process.exitCode = 1;
+}

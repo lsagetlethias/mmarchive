@@ -5,6 +5,8 @@ import {
   type ChannelProgress,
   createChannelProgress,
   createEmptyState,
+  ERROR_CODES,
+  type ErrorCode,
   type ExtractState,
   extractStateSchema,
   STATE_VERSION,
@@ -28,6 +30,7 @@ const systemClock: Clock = () => new Date();
 export type StateMismatchReason = "source_url" | "account" | "options" | "version";
 
 export class StateMismatchError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.StateMismatchError;
   readonly reason: StateMismatchReason;
 
   constructor(reason: StateMismatchReason, message: string) {
@@ -38,6 +41,7 @@ export class StateMismatchError extends Error {
 }
 
 export class StateCorruptedError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.StateCorruptedError;
   readonly filePath: string;
 
   constructor(filePath: string, detail: string, cause: unknown) {

@@ -399,11 +399,24 @@ Toutes les commandes se comportent correctement hors terminal :
 - `NO_COLOR` et `--no-color` sont respectés, la couleur est désactivée automatiquement
   quand la sortie est redirigée.
 
+## Codes d'erreur
+
+Chaque erreur qui remonte à l'utilisateur porte un code stable, affiché devant le message :
+
+```
+Echec : [E3002] posts/abc.ndjson ligne 41 : JSON invalide.
+```
+
+La famille dit d'où vient le problème : `E10xx` ce que vous avez fourni, `E20xx`
+l'instance et les garde-fous, `E30xx` l'archive, `E40xx` la reprise, `E50xx` l'index.
+La liste complète, avec la conduite à tenir pour chaque code, est dans
+[docs/CODES-ERREUR.md](docs/CODES-ERREUR.md).
+
 ## Développement
 
 ```bash
 pnpm typecheck     # tsgo --noEmit
-pnpm lint          # ESLint
+pnpm lint          # Biome puis ESLint type-aware
 pnpm test          # Vitest
 pnpm verify        # pipeline complet
 ```

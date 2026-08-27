@@ -9,6 +9,8 @@ import {
   archivePostSchema,
   archiveUserSchema,
   assertPublicChannel,
+  ERROR_CODES,
+  type ErrorCode,
   manifestSchema,
   SCHEMA_VERSION,
 } from "@mmarchive/shared";
@@ -28,6 +30,7 @@ const POSTS_EXTENSION = ".ndjson";
 const BATCH_SIZE = 100_000;
 
 export class IndexBuildError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.IndexBuildError;
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "IndexBuildError";

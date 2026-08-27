@@ -1,6 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import {
   categorizeChannel,
+  ERROR_CODES,
+  type ErrorCode,
   type SelectionFile,
   type SelectionSummary,
   selectionFileSchema,
@@ -17,6 +19,7 @@ import {
 } from "yaml";
 
 export class SelectionFileError extends Error {
+  readonly code: ErrorCode = ERROR_CODES.SelectionFileError;
   readonly filePath: string;
 
   constructor(filePath: string, detail: string) {
