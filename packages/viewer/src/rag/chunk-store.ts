@@ -31,6 +31,7 @@ import {
   indexFingerprint,
   missingStoreTables,
   STORE_DDL,
+  STORE_FTS,
   STORE_INDEXES,
   writeStoreMeta,
 } from "./store-schema.js";
@@ -139,6 +140,7 @@ export async function buildChunkStore(options: BuildStoreOptions): Promise<Store
     sortie.exec("COMMIT");
 
     sortie.exec(STORE_INDEXES);
+    sortie.exec(STORE_FTS);
     writeStoreMeta(sortie, {
       indexFingerprint: empreinte,
       builtAt: new Date().toISOString(),

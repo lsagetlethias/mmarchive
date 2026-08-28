@@ -10,7 +10,7 @@
 import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
-export const STORE_TABLES = ["meta", "fragment", "fragment_user"] as const;
+export const STORE_TABLES = ["meta", "fragment", "fragment_user", "fragment_fts"] as const;
 
 /** Ce qui manque a un fichier pour servir de reserve de fragments. */
 export function missingStoreTables(present: Iterable<string>): string[] {
@@ -44,6 +44,29 @@ CREATE TABLE fragment_user (
   fragment INTEGER NOT NULL,
   usr      INTEGER NOT NULL
 );
+`;
+
+/**
+ * Recherche lexicale sur le texte des fragments.
+ *
+ * Le meme decoupeur de mots que l index de consultation, pour qu une recherche
+ * et l autre repondent pareil : `remove_diacritics 2` traite les lettres
+ * accentuees hors du plan latin de base, ce qui compte sur du francais.
+ *
+ * Contrairement a l index, le contenu est duplique plutot que reference. Une
+ * table sans contenu ne sait pas restituer le texte, et la recherche hybride a
+ * besoin de comparer des extraits ; le surcout est celui du texte des fragments,
+ * deja present dans ce fichier.
+ */
+export const STORE_FTS = `
+CREATE VIRTUAL TABLE fragment_fts USING fts5(
+  text,
+  content='fragment',
+  content_rowid='rowid',
+  tokenize="unicode61 remove_diacritics 2"
+);
+INSERT INTO fragment_fts(rowid, text) SELECT rowid, text FROM fragment;
+INSERT INTO fragment_fts(fragment_fts) VALUES ('optimize');
 `;
 
 export const STORE_INDEXES = `
