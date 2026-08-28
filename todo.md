@@ -78,11 +78,11 @@ Optionnel par construction : l'outil doit rester pleinement fonctionnel sans, et
 concerne que le mode full. Le mode lite tourne dans un navigateur sans serveur, il n'a ni
 clé d'API ni moteur d'inférence, et rien ne doit l'y contraindre.
 
-Rien n'est commencé, mais le cadrage est fait : mesures sur l'archive réelle et recherche
-documentaire, dans `docs/DECISION-RAG.md`. Le découpage prescrit produit 392 662 fragments
-pour 92,2 M tokens, indexés en environ 93 minutes pour 9,22 EUR, ou moitié moins en mode
-batch. Modèle recommandé `qwen3-embedding-8b`, tronqué à 1 024 dimensions et quantifié, soit
-402 Mo de vecteurs dans un fichier séparé de l'index de consultation.
+Le cadrage est fait et le découpage livré : mesures sur l'archive réelle et recherche
+documentaire dans `docs/DECISION-RAG.md`. Le découpage produit 297 515 fragments pour
+79,3 M tokens, indexés en environ 80 minutes pour 7,93 EUR, ou moitié moins en mode batch.
+Modèle recommandé `qwen3-embedding-8b`, tronqué à 1 024 dimensions et quantifié, soit
+305 Mo de vecteurs dans un fichier séparé de l'index de consultation.
 
 Trois conclusions du premier jet ont été corrigées par la recherche, et ce sont elles qu'il
 faut retenir. La médiane courte n'est pas un défaut : les encodeurs saturent dès 32
@@ -98,11 +98,15 @@ convexe de scores normalisés quand il n'y a que deux listes à fusionner.
       tokens d'échanges internes sortiront de la machine qui les héberge : conservation,
       exclusion de la réutilisation pour l'entraînement, région, contrat de sous-traitance.
       Voir `docs/DECISION-RAG.md`.
-- [ ] **Découpage par fil, jamais par message.** Un « +1 » isolé est illisible hors
+- [x] **Découpage par fil, jamais par message.** Un « +1 » isolé est illisible hors
       contexte et pollue la recherche. Unité de base : la racine et ses réponses. Hors fil,
       fenêtre glissante coupée sur un écart de plus de trente minutes ou une quarantaine de
       messages. Cible d'environ 800 tokens, en-tête de contexte donnant canal, date et
       participants, puis une ligne par message.
+      Livré dans `rag/chunk.ts`, fonction pure sans accès disque ni réseau, et
+      `mmarchive-index plan-chunks` simule le découpage sans rien envoyer : c'est l'outil
+      qui sert à régler la coupure temporelle, la seule variable qui pilote réellement le
+      résultat. Zéro recouvrement, conformément aux mesures du cadrage.
 - [ ] **`mmarchive-index embed`**, avec un mode simulation qui annonce le nombre de
       fragments, de tokens et le coût avant d'engager quoi que ce soit. Les vecteurs sont
       calculés une fois et stockés, jamais recalculés à l'exécution.
