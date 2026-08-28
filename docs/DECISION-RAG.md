@@ -8,6 +8,9 @@ Le RAG est optionnel par construction et ne concerne que le mode full. Le mode l
 dans un navigateur, sans serveur, sans clé d'API ni moteur d'inférence : rien ne doit l'y
 contraindre.
 
+Deux décisions sont prises et ne sont plus à débattre : **les embeddings sont calculés par
+un service distant**, pas par un moteur local, et **le mode lite n'aura jamais de RAG**.
+
 ## Ce qu'il y a à traiter
 
 | Grandeur                              | Mesure     |
@@ -62,8 +65,24 @@ Les modèles d'embedding de Scaleway sont facturés 0,12 dollar par million de t
 d'entrée. Les 92,2 M tokens de cette archive coûtent donc **environ 11 dollars**, une fois,
 puisque les vecteurs sont calculés une seule fois et stockés.
 
-Ce chiffre règle une question qu'on aurait pu croire structurante : ce n'est pas le prix
-qui décidera entre un fournisseur distant et un moteur local.
+Ce chiffre aurait pu départager un fournisseur distant d'un moteur local ; il ne le fait
+pas, et la question est de toute façon tranchée en faveur du distant.
+
+## L'archive est francophone, ce qui n'autorise pas un modèle anglais
+
+Mesuré sur 60 000 messages de plus de soixante caractères : **90 % de français**, 1,4 %
+d'anglais, le reste indéterminé, l'essentiel étant des messages trop courts, du jargon ou
+du code.
+
+Il faut donc un modèle qui traite le français, et non un modèle couvrant cent langues. La
+nuance a une conséquence contre-intuitive : chez les fournisseurs visés, **il n'existe pas
+de modèle « français seulement »**, et les modèles les meilleurs en français sont
+précisément ceux étiquetés multilingues. `bge-multilingual-gemma2` occupe la première place
+en français au classement MTEB, devant des modèles anglophones bien plus connus.
+
+Écarter un modèle sur son nom mènerait donc à choisir un modèle anglais, c'est à dire à
+dégrader exactement ce qu'on cherche à préserver. Le critère est la performance en
+français, pas le nombre de langues au catalogue.
 
 ## Ce qui décide vraiment : la taille des vecteurs
 
@@ -79,10 +98,23 @@ L'index de consultation actuel pèse 656 Mo. Prendre `bge-multilingual-gemma2` e
 le ferait passer à plus de 6 Go, soit dix fois sa taille, pour une fonctionnalité déclarée
 optionnelle.
 
-**Recommandation : `bge-m3` en 1 024 dimensions, quantifié en entiers 8 bits.** 402 Mo de
-vecteurs, un index total qui reste sous le gigaoctet et dont le RAG représente moins de la
-moitié. La quantification divise par quatre pour une perte de rappel marginale, et si elle
-se révélait sensible, repasser en flottants ne coûte qu'une reconstruction.
+Les deux modèles traitent le français. `bge-multilingual-gemma2` le traite mieux, et pèse
+trois fois et demie plus lourd.
+
+**Recommandation : commencer par `bge-m3` en 1 024 dimensions, quantifié en entiers 8
+bits.** 402 Mo de vecteurs, un index total sous le gigaoctet dont le RAG représente moins
+de la moitié, et une qualité en français déjà solide.
+
+Ce choix n'engage à rien, et c'est ce qui le rend raisonnable : reconstruire avec un autre
+modèle coûte onze dollars et une heure. La bonne façon de trancher entre les deux est donc
+de mesurer le rappel sur une poignée de questions réelles, pas d'arbitrer sur un classement.
+
+Une piste reste à vérifier avant de figer quoi que ce soit : les embeddings dits
+*matryoshka* se laissent tronquer à leurs premières dimensions sans être recalculés, ce qui
+permettrait de garder le meilleur modèle en réduisant l'index. La documentation du
+fournisseur mentionne le procédé, mais je n'ai pas pu confirmer qu'il s'applique à ce
+modèle précis. À vérifier sur la fiche du modèle, l'écart en jeu étant de 1 407 Mo à
+302 Mo.
 
 ## Les vecteurs vivent dans un fichier séparé
 
@@ -99,12 +131,9 @@ second pipeline, et une archive sans RAG ne paie rien pour lui.
 
 ## Ce qui reste à trancher
 
-- **Le fournisseur.** Un moteur local ne fait pas sortir un million de messages internes de
-  la machine qui héberge déjà l'archive ; un fournisseur distant les lui envoie. Le coût ne
-  départage pas, la confidentialité si. À l'inverse, embarquer 92,2 M tokens sur un poste
-  ordinaire se compte en heures ou en jours, là où une API le fait en une heure. L'interface
-  compatible OpenAI permet de ne pas trancher dans le code, mais le défaut documenté est un
-  choix en soi.
+- **Le modèle**, entre qualité en français et taille d'index, à mesurer sur des questions
+  réelles plutôt qu'à arbitrer sur un classement. La troncature matryoshka, si elle
+  s'applique, rendrait l'arbitrage caduc.
 - **La règle de fenêtrage**, au vu de la médiane à 128 tokens.
 - **La quantification**, à valider sur un échantillon plutôt que sur principe : mesurer le
   rappel en flottants et en entiers 8 bits sur une poignée de questions réelles.
