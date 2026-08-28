@@ -78,12 +78,17 @@ Optionnel par construction : l'outil doit rester pleinement fonctionnel sans, et
 concerne que le mode full. Le mode lite tourne dans un navigateur sans serveur, il n'a ni
 clé d'API ni moteur d'inférence, et rien ne doit l'y contraindre.
 
-Rien n'est commencé. Le cadrage a été rejoué contre l'archive réelle, comme pour l'index
-du bloc 2 : voir `docs/DECISION-RAG.md`. Trois chiffres en sortent. Le découpage prescrit
-produit 392 662 fragments pour 92,2 M tokens, mais avec une médiane à 128 tokens et non
-800, ce qui remet en cause la règle de fenêtrage. L'embedding coûte une dizaine de dollars,
-donc le prix ne décide de rien. Et la dimension du modèle décide de tout : 402 Mo de
-vecteurs avec `bge-m3` quantifié, contre 5,6 Go avec un modèle en 3 584 dimensions.
+Rien n'est commencé, mais le cadrage est fait : mesures sur l'archive réelle et recherche
+documentaire, dans `docs/DECISION-RAG.md`. Le découpage prescrit produit 392 662 fragments
+pour 92,2 M tokens, indexés en environ 93 minutes pour 9,22 EUR, ou moitié moins en mode
+batch. Modèle recommandé `qwen3-embedding-8b`, tronqué à 1 024 dimensions et quantifié, soit
+402 Mo de vecteurs dans un fichier séparé de l'index de consultation.
+
+Trois conclusions du premier jet ont été corrigées par la recherche, et ce sont elles qu'il
+faut retenir. La médiane de 128 tokens n'est pas un défaut : les encodeurs saturent dès 32
+tokens, et le vrai problème est la perte de référent, pas la longueur. Le recouvrement
+n'apporte rien de mesurable. Et la fusion par rang réciproque est battue par une combinaison
+convexe de scores normalisés quand il n'y a que deux listes à fusionner.
 
 - [ ] **Activation par configuration**, désactivé par défaut : `RAG_ENABLED`,
       `RAG_BASE_URL`, `RAG_API_KEY`, `RAG_CHAT_MODEL`, `RAG_EMBED_MODEL`, `RAG_EMBED_DIM`.
