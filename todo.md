@@ -110,7 +110,15 @@ convexe de scores normalisés quand il n'y a que deux listes à fusionner.
 - [ ] **`mmarchive-index embed`**, avec un mode simulation qui annonce le nombre de
       fragments, de tokens et le coût avant d'engager quoi que ce soit. Les vecteurs sont
       calculés une fois et stockés, jamais recalculés à l'exécution.
-- [ ] **Stockage vectoriel** via `sqlite-vec`, dans l'index existant ou à côté, à trancher.
+- [x] **Réserve de fragments** dans `vectors.db`, distincte de l'index de consultation.
+      Portée par `rag/chunk-store.ts`, écrite par `mmarchive-index chunks` : 297 515
+      fragments et 293 Mo de texte en 15 secondes sur l'archive de référence.
+      Le garde-fou qui compte n'est pas le schéma mais l'empreinte : les fragments
+      désignent les messages par leur position, qui se décale dès qu'un message est ajouté
+      ou effacé. Servir une réserve périmée ferait citer au RAG des messages que personne
+      n'a écrits, sans la moindre erreur visible. L'empreinte de l'index est donc stockée
+      et revérifiée à l'ouverture, pour moins d'une seconde sur 1,3 million de messages.
+- [ ] **Stockage vectoriel** via `sqlite-vec`, à côté des fragments dans le même fichier.
       Prévoir la quantification : 200 000 fragments en flottants sur 1024 dimensions pèsent
       environ 800 Mo, l'entier 8 bits divise par quatre.
 - [ ] **Recherche hybride**, indispensable sur du dialogue plein de jargon, d'acronymes et

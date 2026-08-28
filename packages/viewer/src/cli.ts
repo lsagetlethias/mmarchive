@@ -6,10 +6,23 @@ import pc from "picocolors";
 import { type BuildProgress, type BuildReport, buildIndex } from "./index/build.js";
 import { IndexReadError } from "./query/driver.js";
 import { CHUNK_DEFAULTS } from "./rag/chunk.js";
+import { buildChunkStore } from "./rag/chunk-store.js";
 import { type PlanReport, planChunks } from "./rag/plan.js";
 import { TOOL_VERSION } from "./version.js";
 
-/** Un nombre lisible : 311407 se compare mal, 311 407 se lit. */
+/** Code 2 : argument invalide, comme le documente le README. */
+function entier(commande: Command, nom: string, valeur: unknown, exigeEntier = true): number {
+  const n = Number(valeur);
+  if (!Number.isFinite(n) || n <= 0 || (exigeEntier && !Number.isInteger(n))) {
+    commande.error(
+      `--${nom} attend un ${exigeEntier ? "entier" : "nombre"} positif, recu "${String(valeur)}".`,
+      { exitCode: 2 },
+    );
+  }
+  return n;
+}
+
+/** Un nombre lisible : 297515 se compare mal, 297 515 se lit. */
 const nb = (n: number): string => n.toLocaleString("fr-FR");
 
 function printPlan(r: PlanReport, prixParMillion: number): void {
@@ -173,17 +186,6 @@ program
   .option("--price <eur>", "Prix au million de tokens, pour chiffrer la passe", "0.10")
   .option("--json", "Emet le rapport en JSON sur la sortie standard")
   .action((opts: Record<string, string | boolean | undefined>, commande: Command) => {
-    const nombre = (nom: string, valeur: unknown, entier = false): number => {
-      const n = Number(valeur);
-      if (!Number.isFinite(n) || n <= 0 || (entier && !Number.isInteger(n))) {
-        // Code 2 : argument invalide, comme le documente le README.
-        commande.error(
-          `--${nom} attend un ${entier ? "entier" : "nombre"} positif, recu "${String(valeur)}".`,
-          { exitCode: 2 },
-        );
-      }
-      return n;
-    };
     const chemin = String(opts.db ?? "./index.db");
     if (!existsSync(chemin)) {
       throw new IndexReadError(
@@ -194,17 +196,65 @@ program
     const db = new DatabaseSync(chemin, { readOnly: true });
     try {
       const rapport = planChunks(db, {
-        gapMs: nombre("gap", opts.gap) * 60000,
-        maxMessages: nombre("max-messages", opts.maxMessages, true),
-        maxChars: nombre("max-chars", opts.maxChars, true),
+        gapMs: entier(commande, "gap", opts.gap, false) * 60000,
+        maxMessages: entier(commande, "max-messages", opts.maxMessages),
+        maxChars: entier(commande, "max-chars", opts.maxChars),
       });
       if (opts.json === true) {
         process.stdout.write(`${JSON.stringify(rapport, null, 2)}\n`);
       } else {
-        printPlan(rapport, nombre("price", opts.price));
+        printPlan(rapport, entier(commande, "price", opts.price, false));
       }
     } finally {
       db.close();
+    }
+  });
+
+program
+  .command("chunks")
+  .description(
+    "Ecrit la reserve de fragments a vectoriser. Rien n est envoye : cette etape prepare le texte, elle ne le soumet a personne.",
+  )
+  .option("--db <file>", "Index de consultation a lire", "./index.db")
+  .option("--out <file>", "Fichier de fragments a produire", "./vectors.db")
+  .option(
+    "--gap <minutes>",
+    "Silence au dela duquel une fenetre se ferme",
+    String(CHUNK_DEFAULTS.gapMs / 60000),
+  )
+  .option(
+    "--max-messages <n>",
+    "Plafond de messages par fenetre",
+    String(CHUNK_DEFAULTS.maxMessages),
+  )
+  .option(
+    "--max-chars <n>",
+    "Taille au dela de laquelle un fragment est coupe",
+    String(CHUNK_DEFAULTS.maxChars),
+  )
+  .option("--force", "Remplace une reserve existante")
+  .option("--json", "Emet le rapport en JSON sur la sortie standard")
+  .action(async (opts: Record<string, string | boolean | undefined>, commande: Command) => {
+    const chemin = String(opts.db ?? "./index.db");
+    if (!existsSync(chemin)) {
+      throw new IndexReadError(
+        `Index ${chemin} introuvable. Construisez le avec mmarchive-index avant de decouper l archive.`,
+      );
+    }
+    const rapport = await buildChunkStore({
+      indexPath: chemin,
+      output: String(opts.out ?? "./vectors.db"),
+      gapMs: entier(commande, "gap", opts.gap, false) * 60000,
+      maxMessages: entier(commande, "max-messages", opts.maxMessages),
+      maxChars: entier(commande, "max-chars", opts.maxChars),
+      ...(opts.force === true ? { force: true } : {}),
+    });
+    if (opts.json === true) {
+      process.stdout.write(`${JSON.stringify(rapport, null, 2)}\n`);
+    } else {
+      process.stderr.write(
+        `${pc.green("Fragments ecrits")} : ${nb(rapport.fragments)} (${nb(rapport.threads)} issus de fils, ${nb(rapport.windows)} de fenetres), ${(rapport.chars / 1e6).toFixed(1)} M caracteres en ${rapport.seconds.toFixed(1)} s\n`,
+      );
     }
   });
 
