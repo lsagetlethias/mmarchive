@@ -20,9 +20,15 @@ Tout ce qui concerne l'archive vient de son index de consultation, interrogé di
 
 Le découpage a été **simulé** en parcourant les messages par canal dans l'ordre
 chronologique, en groupant chaque racine avec ses réponses, et en coupant les fenêtres hors
-fil sur un écart de plus de trente minutes ou au delà de quarante messages, exactement
+fil sur un écart de plus de trente minutes ou au-delà de quarante messages, exactement
 comme le cahier des charges le prescrit. Chaque message se voit ajouter quarante caractères
 pour l'en-tête « auteur : » et chaque fragment cent vingt pour son en-tête de contexte.
+
+Une première version de cette simulation détectait les racines de fil au fil de l'eau, en
+les découvrant à la première réponse rencontrée. Comme le parcours est chronologique, toute
+racine venait avant ses réponses : elle était donc comptée à la fois comme fenêtre et comme
+fil. **Les chiffres ci-dessous sont ceux de la simulation corrigée**, qui connaît les racines
+avant de parcourir. L'erreur gonflait le nombre de fragments d'environ un quart.
 
 Trois approximations à connaître :
 
@@ -59,24 +65,24 @@ Simulation de la règle prescrite :
 
 | Grandeur                     | Mesure             |
 | ---------------------------- | ------------------ |
-| Fils                         | 128 084            |
-| Fenêtres hors fil            | 231 661            |
-| Fragments, avant redécoupage | 359 745            |
-| Fragments, après redécoupage | 392 662            |
-| Tokens à traiter             | 92,2 M             |
-| Médiane                      | 128 tokens         |
-| Moyenne                      | 235 tokens         |
-| 90e centile                  | 495 tokens         |
-| 99e centile                  | 2 016 tokens       |
-| Plus gros fragment           | 177 578 tokens     |
+| Fils                         | 128 084        |
+| Fenêtres hors fil            | 146 868        |
+| Fragments, avant redécoupage | 274 952        |
+| Fragments, après redécoupage | 311 407        |
+| Tokens à traiter             | 89,4 M         |
+| Médiane                      | 162 tokens     |
+| Moyenne                      | 325 tokens     |
+| 90e centile                  | 649 tokens     |
+| 99e centile                  | 2 532 tokens   |
+| Plus gros fragment           | 177 578 tokens |
 
-**La première version de ce document concluait qu'une médiane à 128 tokens, loin des 800
+**La première version de ce document concluait qu'une médiane courte, loin des 800 tokens
 visés, produirait une recherche bruitée. La littérature dit le contraire.**
 
 Cirillo et al. mesurent le nDCG@10 par taille de fragment sur six encodeurs et concluent :
 *« All models attain at least 95% of their peak nDCG@10 performance by a chunk size of 32
-tokens and exhibit no further gains at 64 or 128 tokens »*. Une médiane à 128 tokens est
-donc quatre fois au dessus du seuil de saturation, pas en dessous d'un seuil de qualité.
+tokens and exhibit no further gains at 64 or 128 tokens »*. Une médiane à 162 tokens est
+donc cinq fois au-dessus du seuil de saturation, pas en dessous d'un seuil de qualité.
 Bhat et al. vont dans le même sens : 64 à 128 tokens est l'optimum documenté pour des
 questions factuelles, les fragments longs ne servant que les questions de synthèse.
 
@@ -88,11 +94,12 @@ l'allongement des fragments.**
 
 Deux corrections concrètes à la règle, elles bien étayées :
 
-- **Le plafond de quarante messages ne se déclenche pratiquement jamais.** À 3,34 messages
-  par fragment en moyenne, c'est la coupure à trente minutes qui pilote tout. Elle seule
-  mérite d'être réglée. Les seuils publiés en désenchevêtrement de conversation vont de 129
-  secondes à une heure, un facteur 28 : aucun consensus n'existe, et trente minutes est
-  défendable sans être validé.
+- **Le plafond de quarante messages ne se déclenche pratiquement jamais**, mesuré en
+  comptant les causes de fermeture des 146 868 fenêtres : **0,98 % ferment sur le plafond,
+  98,5 % sur la coupure des trente minutes**, le reste en fin de canal. C'est donc la
+  coupure temporelle qui pilote tout, et elle seule mérite d'être réglée. Les seuils publiés
+  en désenchevêtrement de conversation vont de 129 secondes à une heure, un facteur 28 :
+  aucun consensus n'existe, et trente minutes est défendable sans être validé.
 - **Le vrai signal de structure est `root_id`, pas l'horloge.** La pratique industrielle sur
   Slack converge sur le fil comme unité. La fenêtre temporelle ne doit servir que de recours
   pour les canaux non threadés.
@@ -123,7 +130,7 @@ Un troisième, `sentence-t5-xxl`, est en fin de vie depuis février 2025.
 **Recommandation : `qwen3-embedding-8b`.** Elle ne tient pas à un classement mais à quatre
 propriétés mesurables. Il accepte des dimensions réduites là où l'autre est figé à 3 584. Il
 encaisse un débit deux fois et demie supérieur, ce qui ramène l'indexation complète à
-environ 93 minutes contre près de quatre heures. Son contexte de 32k absorbe les fils longs
+environ 90 minutes contre près de quatre heures. Son contexte de 32k absorbe les fils longs
 là où 8k les découperait. Et sa licence Apache 2.0 convient à un outil destiné à être
 republié, ce qui n'est pas évident avec la licence Gemma.
 
@@ -134,8 +141,8 @@ donne `qwen3-embedding-8b` troisième en novembre 2025. Reprendre le premier chi
 sa date aurait été malhonnête.
 
 Le prix ne départage rien : les deux modèles sont au même tarif, et **l'API Batches supprime
-toute limite de débit avec 50 % de remise**. La passe complète revient à **9,22 EUR en
-synchrone, 4,61 EUR en batch**. Le premier million de tokens est offert.
+toute limite de débit avec 50 % de remise**. La passe complète revient à **8,94 EUR en
+synchrone, 4,47 EUR en batch**. Le premier million de tokens est offert.
 
 Une contradiction à lever avant de coder : la FAQ de Scaleway recommande d'utiliser
 `qwen3-embedding-8b` en 2 000 dimensions, tandis que la page de référence de l'API liste
@@ -143,11 +150,41 @@ Une contradiction à lever avant de coder : la FAQ de Scaleway recommande d'util
 paramètre est refusé, la troncature reste faisable côté client, mais on paie et on transfère
 4 096 flottants par fragment.
 
+## Ce qu'implique d'envoyer l'archive à un tiers
+
+Le choix du calcul distant est acté, mais il n'est pas neutre et le document ne peut pas se
+contenter de l'acter. **89,4 M tokens d'échanges internes sortiront de la machine qui les
+héberge.** Un projet qui refuse les joins implicites et n'écoute que la boucle locale ne
+peut pas traiter ce transfert comme un détail d'implémentation.
+
+Quatre points à établir avec le fournisseur retenu, et à écrire dans la documentation
+d'exploitation avant la première indexation :
+
+- **La conservation.** Combien de temps le contenu soumis est-il gardé, et à quelle fin ?
+  Un fournisseur qui journalise les entrées pour deux mois conserve deux mois d'archive.
+- **La réutilisation pour l'entraînement.** Elle doit être exclue contractuellement, pas
+  seulement absente des mentions commerciales.
+- **La région de traitement.** Scaleway annonce `fr-par` pour ces modèles, ce qui est un
+  argument de choix autant que la qualité.
+- **Le contrat de sous-traitance.** L'archive contient des données personnelles au sens du
+  règlement, ne serait-ce que les noms et les propos de personnes identifiables. Un accord
+  de sous-traitance est nécessaire, et l'analyse d'impact éventuelle relève de
+  l'organisation qui exploite l'archive, pas de cet outil.
+
+Deux atténuations sont à portée et méritent d'être décidées en même temps que le
+fournisseur. **N'indexer qu'un sous-ensemble de canaux** limite mécaniquement ce qui sort,
+et le RAG étant optionnel, l'indexation partielle doit l'être aussi. **Passer l'archive par
+`mmarchive-redact`** avant indexation, pour les personnes ayant demandé un effacement,
+évite d'envoyer chez un tiers ce qu'on a déjà accepté d'effacer chez soi.
+
+Rien de tout cela n'est du code, et c'est pour cette raison que ça doit figurer ici : ce
+sont des décisions à prendre avant d'écrire la première ligne, pas après.
+
 ## La taille des vecteurs, et une bonne surprise sur la troncature
 
-Sur 392 662 fragments, en flottants : 6,43 Go en 4 096 dimensions, 5,63 Go en 3 584,
-1,61 Go en 1 024, 1,21 Go en 768, 0,40 Go en 256. En entiers 8 bits, diviser par quatre.
-L'index de consultation pèse 656 Mo.
+Sur 311 407 fragments, en flottants : 5,10 Go en 4 096 dimensions, 4,46 Go en 3 584,
+2,49 Go en 2 000, 1,28 Go en 1 024, 0,96 Go en 768, 0,32 Go en 256. En entiers 8 bits,
+diviser par quatre. L'index de consultation pèse 656 Mo.
 
 La troncature réserve un résultat contre-intuitif. On croit couramment qu'elle exige un
 modèle entraîné en matryoshka ; Takeshita et al. mesurent que **la troncature simple tient
@@ -155,8 +192,10 @@ jusqu'à environ 80 % de réduction, y compris sur des modèles non entraînés 
 de 3 584 à 1 024 représente 71,4 % de troncature, donc sous le seuil. Matryoshka ne devient
 un critère de sélection que sous 256 dimensions.
 
-**Cible : 1 024 dimensions, quantifiées en entiers 8 bits, soit 402 Mo de vecteurs** pour un
-index total sous le gigaoctet. À valider sur un échantillon plutôt que sur principe.
+**Cible : 1 024 dimensions, quantifiées en entiers 8 bits, soit 319 Mo de vecteurs**, ce qui
+porte l'ensemble à 975 Mo contre 656 aujourd'hui. En 2 000 dimensions, la valeur que
+recommande la FAQ du fournisseur, les vecteurs pèsent 623 Mo et l'ensemble 1,28 Go. À
+valider sur un échantillon plutôt qu'à décider sur principe.
 
 ## Le stockage : `sqlite-vec` tient, vérifié
 
@@ -200,7 +239,7 @@ Injecter du lexical dégrade les requêtes purement conceptuelles.
 
 ### Où le code vit
 
-```
+```text
 packages/viewer/src/rag/
   config.ts        lecture de la configuration, et rien d'autre
   chunk.ts         découpage en fragments, fonction pure
