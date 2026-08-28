@@ -24,11 +24,17 @@ fil sur un écart de plus de trente minutes ou au-delà de quarante messages, ex
 comme le cahier des charges le prescrit. Chaque message se voit ajouter quarante caractères
 pour l'en-tête « auteur : » et chaque fragment cent vingt pour son en-tête de contexte.
 
-Une première version de cette simulation détectait les racines de fil au fil de l'eau, en
-les découvrant à la première réponse rencontrée. Comme le parcours est chronologique, toute
-racine venait avant ses réponses : elle était donc comptée à la fois comme fenêtre et comme
-fil. **Les chiffres ci-dessous sont ceux de la simulation corrigée**, qui connaît les racines
-avant de parcourir. L'erreur gonflait le nombre de fragments d'environ un quart.
+Les chiffres ci-dessous ne viennent plus d'un script jetable mais de la commande
+`mmarchive-index plan-chunks`, qui applique le découpage réel et compte le texte
+effectivement produit, en-têtes compris. Elle parcourt l'archive en flux et rend son rapport
+en une quinzaine de secondes, ce qui permet de comparer deux réglages plutôt que de
+raisonner sur un seul.
+
+Deux erreurs des mesures précédentes sont corrigées au passage. La première détectait les
+racines de fil en chemin, à la première réponse rencontrée ; le parcours étant
+chronologique, toute racine passait avant ses réponses et se retrouvait comptée à la fois
+comme fenêtre et comme fil, ce qui gonflait le total d'un quart. La seconde estimait la
+taille des en-têtes au lieu de les écrire, et surévaluait donc le volume de texte.
 
 Trois approximations à connaître :
 
@@ -63,26 +69,41 @@ extrait, et non 44 % des messages indexés. Tout budget d'embedding se calcule s
 
 Simulation de la règle prescrite :
 
-| Grandeur                     | Mesure             |
-| ---------------------------- | ------------------ |
-| Fils                         | 128 084        |
-| Fenêtres hors fil            | 146 868        |
-| Fragments, avant redécoupage | 274 952        |
-| Fragments, après redécoupage | 311 407        |
-| Tokens à traiter             | 89,4 M         |
-| Médiane                      | 162 tokens     |
-| Moyenne                      | 325 tokens     |
-| 90e centile                  | 649 tokens     |
-| 99e centile                  | 2 532 tokens   |
-| Plus gros fragment           | 177 578 tokens |
+| Grandeur                     | Mesure         |
+| ---------------------------- | -------------- |
+| Fragments                    | 301 285        |
+| dont issus de fils           | 143 841        |
+| dont issus de fenêtres       | 157 444        |
+| Tokens à traiter             | 79,4 M         |
+| Médiane                      | 146 tokens     |
+| Moyenne                      | 263 tokens     |
+| 90e centile                  | 647 tokens     |
+| 99e centile                  | 1 578 tokens   |
+| Plus gros fragment           | 4 456 tokens   |
+
+Les deux premières lignes comptent des fragments, pas des fils : un fil trop long en produit
+plusieurs. Le plus gros fragment est un message unique dépassant à lui seul le plafond, que
+le découpage garde entier plutôt que de le trahir en le coupant.
+
+L'effet du réglage se lit directement, ce pour quoi la commande existe :
+
+| Coupure    | Fragments | Médiane    |
+| ---------- | --------- | ---------- |
+| 10 minutes | 330 803   | 128 tokens |
+| 30 minutes | 301 285   | 146 tokens |
+| 2 heures   | 262 075   | 181 tokens |
+
+Le volume de tokens, lui, ne bouge quasiment pas, de 79,9 à 78,6 M : le texte est le même,
+seul son groupement change. Le réglage déplace donc la forme de la distribution, pas le
+coût.
 
 **La première version de ce document concluait qu'une médiane courte, loin des 800 tokens
 visés, produirait une recherche bruitée. La littérature dit le contraire.**
 
 Cirillo et al. mesurent le nDCG@10 par taille de fragment sur six encodeurs et concluent :
 *« All models attain at least 95% of their peak nDCG@10 performance by a chunk size of 32
-tokens and exhibit no further gains at 64 or 128 tokens »*. Une médiane à 162 tokens est
-donc cinq fois au-dessus du seuil de saturation, pas en dessous d'un seuil de qualité.
+tokens and exhibit no further gains at 64 or 128 tokens »*. Une médiane à 146 tokens est
+donc plus de quatre fois au-dessus du seuil de saturation, pas en dessous d'un seuil de qualité.
 Bhat et al. vont dans le même sens : 64 à 128 tokens est l'optimum documenté pour des
 questions factuelles, les fragments longs ne servant que les questions de synthèse.
 
@@ -95,8 +116,8 @@ l'allongement des fragments.**
 Deux corrections concrètes à la règle, elles bien étayées :
 
 - **Le plafond de quarante messages ne se déclenche pratiquement jamais**, mesuré en
-  comptant les causes de fermeture des 146 868 fenêtres : **0,98 % ferment sur le plafond,
-  98,5 % sur la coupure des trente minutes**, le reste en fin de canal. C'est donc la
+  comptant les causes de fermeture : **1,0 % ferment sur le plafond, 98,6 % sur la coupure
+  des trente minutes**, le reste en fin de canal. C'est donc la
   coupure temporelle qui pilote tout, et elle seule mérite d'être réglée. Les seuils publiés
   en désenchevêtrement de conversation vont de 129 secondes à une heure, un facteur 28 :
   aucun consensus n'existe, et trente minutes est défendable sans être validé.
@@ -112,8 +133,9 @@ le défaut de LlamaIndex est à 2 %. Comme nos frontières de fil sont naturelle
 arbitraires, **partir à zéro recouvrement** et ne l'introduire que si une mesure le
 justifie.
 
-Enfin, le fragment de 177 578 tokens dépasse le contexte de tous les modèles visés : le
-redécoupage reste une nécessité, même sans recouvrement.
+Le redécoupage reste donc une nécessité, même sans recouvrement, ne serait-ce que pour les
+fils très longs : sans lui, le plus gros groupe atteindrait 177 578 tokens, très au-delà du
+contexte de tous les modèles visés.
 
 ## Le modèle : le catalogue réel dément la première recommandation
 
@@ -130,7 +152,7 @@ Un troisième, `sentence-t5-xxl`, est en fin de vie depuis février 2025.
 **Recommandation : `qwen3-embedding-8b`.** Elle ne tient pas à un classement mais à quatre
 propriétés mesurables. Il accepte des dimensions réduites là où l'autre est figé à 3 584. Il
 encaisse un débit deux fois et demie supérieur, ce qui ramène l'indexation complète à
-environ 90 minutes contre près de quatre heures. Son contexte de 32k absorbe les fils longs
+environ 80 minutes contre plus de trois heures. Son contexte de 32k absorbe les fils longs
 là où 8k les découperait. Et sa licence Apache 2.0 convient à un outil destiné à être
 republié, ce qui n'est pas évident avec la licence Gemma.
 
@@ -141,8 +163,8 @@ donne `qwen3-embedding-8b` troisième en novembre 2025. Reprendre le premier chi
 sa date aurait été malhonnête.
 
 Le prix ne départage rien : les deux modèles sont au même tarif, et **l'API Batches supprime
-toute limite de débit avec 50 % de remise**. La passe complète revient à **8,94 EUR en
-synchrone, 4,47 EUR en batch**. Le premier million de tokens est offert.
+toute limite de débit avec 50 % de remise**. La passe complète revient à **7,94 EUR en
+synchrone, 3,97 EUR en batch**. Le premier million de tokens est offert.
 
 Une contradiction à lever avant de coder : la FAQ de Scaleway recommande d'utiliser
 `qwen3-embedding-8b` en 2 000 dimensions, tandis que la page de référence de l'API liste
@@ -153,7 +175,7 @@ paramètre est refusé, la troncature reste faisable côté client, mais on paie
 ## Ce qu'implique d'envoyer l'archive à un tiers
 
 Le choix du calcul distant est acté, mais il n'est pas neutre et le document ne peut pas se
-contenter de l'acter. **89,4 M tokens d'échanges internes sortiront de la machine qui les
+contenter de l'acter. **79,4 M tokens d'échanges internes sortiront de la machine qui les
 héberge.** Un projet qui refuse les joins implicites et n'écoute que la boucle locale ne
 peut pas traiter ce transfert comme un détail d'implémentation.
 
@@ -182,7 +204,7 @@ sont des décisions à prendre avant d'écrire la première ligne, pas après.
 
 ## La taille des vecteurs, et une bonne surprise sur la troncature
 
-Sur 311 407 fragments, en flottants : 5,10 Go en 4 096 dimensions, 4,46 Go en 3 584,
+Sur 301 285 fragments, en flottants : 5,10 Go en 4 096 dimensions, 4,46 Go en 3 584,
 2,49 Go en 2 000, 1,28 Go en 1 024, 0,96 Go en 768, 0,32 Go en 256. En entiers 8 bits,
 diviser par quatre. L'index de consultation pèse 656 Mo.
 
@@ -192,9 +214,9 @@ jusqu'à environ 80 % de réduction, y compris sur des modèles non entraînés 
 de 3 584 à 1 024 représente 71,4 % de troncature, donc sous le seuil. Matryoshka ne devient
 un critère de sélection que sous 256 dimensions.
 
-**Cible : 1 024 dimensions, quantifiées en entiers 8 bits, soit 319 Mo de vecteurs**, ce qui
-porte l'ensemble à 975 Mo contre 656 aujourd'hui. En 2 000 dimensions, la valeur que
-recommande la FAQ du fournisseur, les vecteurs pèsent 623 Mo et l'ensemble 1,28 Go. À
+**Cible : 1 024 dimensions, quantifiées en entiers 8 bits, soit 309 Mo de vecteurs**, ce qui
+porte l'ensemble à 965 Mo contre 656 aujourd'hui. En 2 000 dimensions, la valeur que
+recommande la FAQ du fournisseur, les vecteurs pèsent 603 Mo et l'ensemble 1,26 Go. À
 valider sur un échantillon plutôt qu'à décider sur principe.
 
 ## Le stockage : `sqlite-vec` tient, vérifié

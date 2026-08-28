@@ -98,11 +98,15 @@ convexe de scores normalisés quand il n'y a que deux listes à fusionner.
       tokens d'échanges internes sortiront de la machine qui les héberge : conservation,
       exclusion de la réutilisation pour l'entraînement, région, contrat de sous-traitance.
       Voir `docs/DECISION-RAG.md`.
-- [ ] **Découpage par fil, jamais par message.** Un « +1 » isolé est illisible hors
+- [x] **Découpage par fil, jamais par message.** Un « +1 » isolé est illisible hors
       contexte et pollue la recherche. Unité de base : la racine et ses réponses. Hors fil,
       fenêtre glissante coupée sur un écart de plus de trente minutes ou une quarantaine de
       messages. Cible d'environ 800 tokens, en-tête de contexte donnant canal, date et
       participants, puis une ligne par message.
+      Livré dans `rag/chunk.ts`, fonction pure sans accès disque ni réseau, et
+      `mmarchive-index plan-chunks` simule le découpage sans rien envoyer : c'est l'outil
+      qui sert à régler la coupure temporelle, la seule variable qui pilote réellement le
+      résultat. Zéro recouvrement, conformément aux mesures du cadrage.
 - [ ] **`mmarchive-index embed`**, avec un mode simulation qui annonce le nombre de
       fragments, de tokens et le coût avant d'engager quoi que ce soit. Les vecteurs sont
       calculés une fois et stockés, jamais recalculés à l'exécution.
