@@ -107,6 +107,61 @@ describe("buildChunkStore", () => {
   });
 });
 
+describe("protection des fichiers", () => {
+  it("refuse d ecrire la reserve dans l index lui meme", async () => {
+    creerIndex([{ id: 1, pid: "a".repeat(26) }]);
+    // Avec --force, cet appel effacerait l index en cours de lecture.
+    await expect(
+      buildChunkStore({ indexPath, output: indexPath, force: true }),
+    ).rejects.toThrow(/meme fichier/);
+    const { existsSync } = await import("node:fs");
+    expect(existsSync(indexPath)).toBe(true);
+  });
+
+  it("refuse de remplacer une reserve existante sans --force", async () => {
+    creerIndex([{ id: 1, pid: "a".repeat(26) }]);
+    await buildChunkStore({ indexPath, output: storePath });
+    await expect(buildChunkStore({ indexPath, output: storePath })).rejects.toThrow(/--force/);
+  });
+
+  it("laisse la reserve existante intacte quand il refuse", async () => {
+    creerIndex([{ id: 1, pid: "a".repeat(26) }]);
+    await buildChunkStore({ indexPath, output: storePath });
+    const { readFileSync } = await import("node:fs");
+    const avant = readFileSync(storePath);
+    await expect(buildChunkStore({ indexPath, output: storePath })).rejects.toThrow();
+    // Le refus ne doit rien couter : ouvrir puis echouer sur les tables deja
+    // presentes ferait supprimer par le nettoyage ce qu on venait de proteger.
+    expect(readFileSync(storePath).equals(avant)).toBe(true);
+  });
+
+  it("laisse la reserve existante intacte quand la reconstruction echoue", async () => {
+    creerIndex([{ id: 1, pid: "a".repeat(26) }]);
+    await buildChunkStore({ indexPath, output: storePath });
+    const { readFileSync } = await import("node:fs");
+    const avant = readFileSync(storePath);
+
+    const casse = new DatabaseSync(indexPath);
+    casse.exec("DROP TABLE post_text");
+    casse.close();
+
+    await expect(
+      buildChunkStore({ indexPath, output: storePath, force: true }),
+    ).rejects.toThrow();
+    expect(readFileSync(storePath).equals(avant)).toBe(true);
+  });
+
+  it("ne laisse pas de fichier partiel derriere lui", async () => {
+    creerIndex([{ id: 1, pid: "a".repeat(26) }]);
+    const casse = new DatabaseSync(indexPath);
+    casse.exec("DROP TABLE post_text");
+    casse.close();
+    await expect(buildChunkStore({ indexPath, output: storePath })).rejects.toThrow();
+    const { existsSync } = await import("node:fs");
+    expect(existsSync(`${storePath}.partiel`)).toBe(false);
+  });
+});
+
 describe("openChunkStore", () => {
   it("accepte une reserve construite depuis cet index", async () => {
     creerIndex([{ id: 1, pid: "a".repeat(26) }]);
@@ -116,6 +171,25 @@ describe("openChunkStore", () => {
     expect(store.prepare("SELECT count(*) n FROM fragment").get()?.n).toBe(1);
     store.close();
     index.close();
+  });
+
+  it("refuse une reserve quand seuls les noms ont change", async () => {
+    creerIndex([{ id: 1, pid: "a".repeat(26) }]);
+    await buildChunkStore({ indexPath, output: storePath });
+
+    // Une pseudonymisation laisse les messages en place, donc la suite des
+    // identifiants intacte. Sans les noms dans l empreinte, la reserve passerait
+    // et restituerait les identites qu on venait d effacer.
+    const modifie = new DatabaseSync(indexPath);
+    modifie.exec("UPDATE user SET username = 'anon-1234' WHERE id = 1");
+    modifie.close();
+
+    const index = new DatabaseSync(indexPath, { readOnly: true });
+    try {
+      expect(() => openChunkStore(storePath, index)).toThrow(/autre index/);
+    } finally {
+      index.close();
+    }
   });
 
   it("refuse une reserve dont l index a change sous elle", async () => {

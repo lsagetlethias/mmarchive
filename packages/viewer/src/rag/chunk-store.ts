@@ -5,7 +5,9 @@
  * et reste utile meme si aucun fournisseur n est jamais configure. Les vecteurs
  * viendront dans une table a part, quand la dimension sera tranchee.
  */
-import { rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { rename, rm } from "node:fs/promises";
+import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { IndexReadError } from "../query/driver.js";
 import {
@@ -49,7 +51,29 @@ export interface BuildStoreOptions extends ChunkOptions {
 
 export async function buildChunkStore(options: BuildStoreOptions): Promise<StoreReport> {
   const debut = Date.now();
+
+  // Le fichier d entree et celui de sortie ne peuvent pas etre le meme. Sans ce
+  // controle, --force effacerait l index en cours de lecture, et sans --force on
+  // ecrirait le schema des fragments dedans.
+  if (resolve(options.indexPath) === resolve(options.output)) {
+    throw new IndexReadError(
+      "L index et la reserve de fragments ne peuvent pas etre le meme fichier : la construction lit l un pour ecrire l autre.",
+    );
+  }
+  // Refuser avant d ouvrir quoi que ce soit. Ouvrir d abord ferait echouer la
+  // creation des tables sur une reserve existante, et le nettoyage d erreur la
+  // supprimerait alors qu on avait justement refuse de la remplacer.
+  if (options.force !== true && existsSync(options.output)) {
+    throw new IndexReadError(
+      `${options.output} existe deja. Relancez avec --force pour le remplacer : la reserve est entierement reconstruite, jamais completee.`,
+    );
+  }
+
   const index = new DatabaseSync(options.indexPath, { readOnly: true });
+  // Ecriture dans un fichier temporaire, renomme a la fin. C est ce qui permet
+  // de ne jamais toucher a une reserve existante tant que la nouvelle n est pas
+  // complete, et de n effacer que ce que cette execution a cree.
+  const temporaire = `${options.output}.partiel`;
   let sortie: DatabaseSync | undefined;
   let echoue = false;
   try {
@@ -57,8 +81,8 @@ export async function buildChunkStore(options: BuildStoreOptions): Promise<Store
     const contexte = lisant(() => contexteDepuis(index));
     const empreinte = lisant(() => indexFingerprint(index));
 
-    if (options.force === true) await rm(options.output, { force: true });
-    sortie = new DatabaseSync(options.output);
+    await rm(temporaire, { force: true });
+    sortie = new DatabaseSync(temporaire);
     // Ces donnees sont derivees de l index, lui meme derive de l archive : les
     // perdre ne coute qu une reconstruction, pas une garantie de durabilite.
     sortie.exec("PRAGMA journal_mode = OFF");
@@ -122,6 +146,11 @@ export async function buildChunkStore(options: BuildStoreOptions): Promise<Store
       maxChars: options.maxChars ?? CHUNK_DEFAULTS.maxChars,
     });
 
+    sortie.close();
+    sortie = undefined;
+    await rm(options.output, { force: true });
+    await rename(temporaire, options.output);
+
     return {
       fragments,
       threads,
@@ -135,9 +164,11 @@ export async function buildChunkStore(options: BuildStoreOptions): Promise<Store
   } finally {
     index.close();
     sortie?.close();
-    // Une reserve a moitie ecrite est pire qu absente : elle passerait le
-    // controle de presence des tables et servirait des fragments incomplets.
-    if (echoue) await rm(options.output, { force: true });
+    // Seul le temporaire est efface. Une reserve a moitie ecrite serait pire
+    // qu absente, elle passerait le controle de presence des tables et servirait
+    // des fragments incomplets ; une reserve deja en place, elle, n a rien
+    // demande et reste intacte.
+    if (echoue) await rm(temporaire, { force: true });
   }
 }
 

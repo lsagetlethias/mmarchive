@@ -54,23 +54,40 @@ CREATE INDEX fragment_user_usr ON fragment_user(usr, fragment);
 `;
 
 /**
- * Empreinte de la numerotation de l index.
+ * Empreinte de ce dont depend le contenu des fragments.
  *
- * Les fragments designent les messages par leur rowid, et cette numerotation
- * n est stable que tant que l archive ne bouge pas : elle est calculee par
- * `ROW_NUMBER() OVER (ORDER BY create_at, pid)`, donc un message ajoute ou
- * efface decale tout ce qui le suit. Reconstruire l index apres une extraction
- * incrementale ou un `mmarchive-redact` rendrait chaque fragment faux sans que
- * rien ne le signale : le RAG citerait des messages qu il n a pas lus.
+ * Deux choses peuvent perimer une reserve, et il a fallu les deux pour que ce
+ * controle serve a quelque chose.
  *
- * L empreinte porte sur la suite des identifiants dans l ordre des rowid, ce qui
- * est exactement ce dont depend cette correspondance. Elle coute moins d une
- * seconde sur plus d un million de messages, trop peu pour s en passer.
+ * La numerotation d abord. Les fragments designent les messages par leur rowid,
+ * calcule par `ROW_NUMBER() OVER (ORDER BY create_at, pid)` : un message ajoute
+ * ou efface decale tout ce qui le suit, et chaque fragment se met a designer un
+ * autre message. L echec est muet, le RAG citerait des propos que personne n a
+ * tenus.
+ *
+ * Les noms ensuite, et c est le cas que la premiere version manquait. Un
+ * `mmarchive-redact --mode pseudonymize` laisse les messages en place, donc la
+ * suite des identifiants intacte, mais remplace les identites. Une reserve
+ * construite avant porterait encore les anciens noms dans le texte de ses
+ * fragments : le RAG restituerait exactement ce qu on avait demande d effacer.
+ * L empreinte couvre donc aussi les tables dont le rendu depend.
+ *
+ * Elle coute moins d une seconde sur plus d un million de messages, trop peu
+ * pour s en passer.
  */
 export function indexFingerprint(db: DatabaseSync): string {
   const hash = createHash("sha256");
   for (const row of db.prepare("SELECT pid FROM post ORDER BY rowid").iterate()) {
     hash.update(String(row.pid));
+    hash.update("\u0000");
+  }
+  hash.update("\u0001utilisateurs");
+  for (const row of db.prepare("SELECT id, username FROM user ORDER BY id").iterate()) {
+    hash.update(`${String(row.id)}:${String(row.username)}\u0000`);
+  }
+  hash.update("\u0001canaux");
+  for (const row of db.prepare("SELECT id, name FROM channel ORDER BY id").iterate()) {
+    hash.update(`${String(row.id)}:${String(row.name)}\u0000`);
   }
   return hash.digest("hex");
 }
