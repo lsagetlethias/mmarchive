@@ -111,9 +111,9 @@ describe("protection des fichiers", () => {
   it("refuse d ecrire la reserve dans l index lui meme", async () => {
     creerIndex([{ id: 1, pid: "a".repeat(26) }]);
     // Avec --force, cet appel effacerait l index en cours de lecture.
-    await expect(
-      buildChunkStore({ indexPath, output: indexPath, force: true }),
-    ).rejects.toThrow(/meme fichier/);
+    await expect(buildChunkStore({ indexPath, output: indexPath, force: true })).rejects.toThrow(
+      /meme fichier/,
+    );
     const { existsSync } = await import("node:fs");
     expect(existsSync(indexPath)).toBe(true);
   });
@@ -145,9 +145,7 @@ describe("protection des fichiers", () => {
     casse.exec("DROP TABLE post_text");
     casse.close();
 
-    await expect(
-      buildChunkStore({ indexPath, output: storePath, force: true }),
-    ).rejects.toThrow();
+    await expect(buildChunkStore({ indexPath, output: storePath, force: true })).rejects.toThrow();
     expect(readFileSync(storePath).equals(avant)).toBe(true);
   });
 
