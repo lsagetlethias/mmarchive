@@ -78,16 +78,26 @@ Optionnel par construction : l'outil doit rester pleinement fonctionnel sans, et
 concerne que le mode full. Le mode lite tourne dans un navigateur sans serveur, il n'a ni
 clé d'API ni moteur d'inférence, et rien ne doit l'y contraindre.
 
-Rien n'est commencé. Le cadrage ci-dessous vient du cahier des charges initial et n'a pas
-été rejoué contre les mesures réelles, ce qu'il faudra faire avant de coder, comme pour
-l'index du bloc 2.
+Rien n'est commencé, mais le cadrage est fait : mesures sur l'archive réelle et recherche
+documentaire, dans `docs/DECISION-RAG.md`. Le découpage prescrit produit 392 662 fragments
+pour 92,2 M tokens, indexés en environ 93 minutes pour 9,22 EUR, ou moitié moins en mode
+batch. Modèle recommandé `qwen3-embedding-8b`, tronqué à 1 024 dimensions et quantifié, soit
+402 Mo de vecteurs dans un fichier séparé de l'index de consultation.
+
+Trois conclusions du premier jet ont été corrigées par la recherche, et ce sont elles qu'il
+faut retenir. La médiane courte n'est pas un défaut : les encodeurs saturent dès 32
+tokens, et le vrai problème est la perte de référent, pas la longueur. Le recouvrement
+n'apporte rien de mesurable. Et la fusion par rang réciproque est battue par une combinaison
+convexe de scores normalisés quand il n'y a que deux listes à fusionner.
 
 - [ ] **Activation par configuration**, désactivé par défaut : `RAG_ENABLED`,
       `RAG_BASE_URL`, `RAG_API_KEY`, `RAG_CHAT_MODEL`, `RAG_EMBED_MODEL`, `RAG_EMBED_DIM`.
-      Client générique compatible OpenAI, ce qui laisse le choix entre un fournisseur
-      distant et un moteur local, `ollama` répondant à la même interface. Ce choix décide
-      de tout le reste : envoyer plus d'un million de messages internes à un tiers n'a pas
-      la même portée que de les traiter sur la machine qui héberge déjà l'archive.
+      Client générique compatible OpenAI. **Le calcul distant est acté**, le moteur local
+      écarté : l'interface reste générique, mais le défaut documenté vise un fournisseur.
+      Ce choix a une contrepartie à traiter avant la première indexation, puisque 89,4 M
+      tokens d'échanges internes sortiront de la machine qui les héberge : conservation,
+      exclusion de la réutilisation pour l'entraînement, région, contrat de sous-traitance.
+      Voir `docs/DECISION-RAG.md`.
 - [ ] **Découpage par fil, jamais par message.** Un « +1 » isolé est illisible hors
       contexte et pollue la recherche. Unité de base : la racine et ses réponses. Hors fil,
       fenêtre glissante coupée sur un écart de plus de trente minutes ou une quarantaine de
@@ -101,7 +111,11 @@ l'index du bloc 2.
       environ 800 Mo, l'entier 8 bits divise par quatre.
 - [ ] **Recherche hybride**, indispensable sur du dialogue plein de jargon, d'acronymes et
       de noms propres que le vectoriel rate : cinquante résultats FTS5, cinquante
-      vectoriels, fusion par rang réciproque, huit à douze fragments retenus.
+      vectoriels, puis fusion par **combinaison convexe de scores normalisés**, poids de
+      0,6 à 0,8 sur le vectoriel, et huit à douze fragments retenus. Le cahier des charges
+      initial prescrivait une fusion par rang réciproque : deux mesures indépendantes
+      montrent qu'elle est battue de 0,015 à 0,032 nDCG dès lors qu'il n'y a que deux
+      listes à fusionner. RRF ne reste qu'un repli si la simplicité prime.
 - [ ] **Génération** en flux, avec une consigne stricte : répondre uniquement à partir des
       extraits, citer les identifiants de messages, dire quand l'information est absente de
       l'archive. Les citations deviennent des pastilles cliquables vers le permalien, la
