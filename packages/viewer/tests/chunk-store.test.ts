@@ -190,6 +190,26 @@ describe("openChunkStore", () => {
     }
   });
 
+  it("refuse une reserve quand un message a ete edite", async () => {
+    creerIndex([{ id: 1, pid: "a".repeat(26), msg: "la version d origine" }]);
+    await buildChunkStore({ indexPath, output: storePath });
+
+    // Un message edite garde son identifiant et sa place : une reextraction en
+    // rapporte le nouveau texte sans que rien d autre ne bouge. La reserve
+    // servirait alors la version d avant, et l archive et le RAG raconteraient
+    // deux choses differentes.
+    const modifie = new DatabaseSync(indexPath);
+    modifie.exec("UPDATE post_text SET message = 'la version corrigee' WHERE rowid = 1");
+    modifie.close();
+
+    const index = new DatabaseSync(indexPath, { readOnly: true });
+    try {
+      expect(() => openChunkStore(storePath, index)).toThrow(/autre index/);
+    } finally {
+      index.close();
+    }
+  });
+
   it("refuse une reserve dont l index a change sous elle", async () => {
     creerIndex([{ id: 1, pid: "a".repeat(26) }]);
     await buildChunkStore({ indexPath, output: storePath });

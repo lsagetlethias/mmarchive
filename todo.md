@@ -118,9 +118,12 @@ convexe de scores normalisés quand il n'y a que deux listes à fusionner.
       ou effacé. Servir une réserve périmée ferait citer au RAG des messages que personne
       n'a écrits, sans la moindre erreur visible. L'empreinte de l'index est donc stockée
       et revérifiée à l'ouverture, pour moins d'une seconde sur 1,3 million de messages.
-      Elle couvre aussi les noms d'utilisateurs et de canaux : une pseudonymisation laisse
-      les messages en place, donc les identifiants intacts, et une réserve construite avant
-      restituerait les identités qu'on venait justement d'effacer.
+      Elle couvre tout ce dont dépend le rendu : les identifiants, mais aussi les noms
+      d'utilisateurs et de canaux, et le texte des messages. Une pseudonymisation laisse les
+      messages en place et une réserve construite avant restituerait les identités qu'on
+      venait d'effacer ; un message édité garde son identifiant et sa place, et la réserve
+      servirait la version d'avant. Coût mesuré : 2,5 s à l'ouverture, sur 1,3 million de
+      messages.
 - [ ] **Stockage vectoriel** via `sqlite-vec`, à côté des fragments dans le même fichier.
       Prévoir la quantification : 200 000 fragments en flottants sur 1024 dimensions pèsent
       environ 800 Mo, l'entier 8 bits divise par quatre.

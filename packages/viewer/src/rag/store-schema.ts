@@ -70,10 +70,15 @@ CREATE INDEX fragment_user_usr ON fragment_user(usr, fragment);
  * suite des identifiants intacte, mais remplace les identites. Une reserve
  * construite avant porterait encore les anciens noms dans le texte de ses
  * fragments : le RAG restituerait exactement ce qu on avait demande d effacer.
- * L empreinte couvre donc aussi les tables dont le rendu depend.
  *
- * Elle coute moins d une seconde sur plus d un million de messages, trop peu
- * pour s en passer.
+ * Le contenu enfin. Un message edite garde son identifiant et sa place : une
+ * reextraction rapporte le nouveau texte sans que rien d autre ne bouge. Sans
+ * les messages dans l empreinte, la reserve continuerait de servir la version
+ * d avant, et l archive et le RAG raconteraient deux choses differentes.
+ *
+ * Le tout coute environ deux secondes et demie sur plus d un million de
+ * messages, paye une fois a l ouverture. C est peu au regard de ce que couterait
+ * de servir des fragments perimes sans le savoir.
  */
 export function indexFingerprint(db: DatabaseSync): string {
   const hash = createHash("sha256");
@@ -88,6 +93,10 @@ export function indexFingerprint(db: DatabaseSync): string {
   hash.update("\u0001canaux");
   for (const row of db.prepare("SELECT id, name FROM channel ORDER BY id").iterate()) {
     hash.update(`${String(row.id)}:${String(row.name)}\u0000`);
+  }
+  hash.update("\u0001messages");
+  for (const row of db.prepare("SELECT rowid, message FROM post_text ORDER BY rowid").iterate()) {
+    hash.update(`${String(row.rowid)}:${String(row.message)}\u0000`);
   }
   return hash.digest("hex");
 }

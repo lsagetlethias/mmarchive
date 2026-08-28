@@ -76,6 +76,7 @@ export async function buildChunkStore(options: BuildStoreOptions): Promise<Store
   const temporaire = `${options.output}.partiel`;
   let sortie: DatabaseSync | undefined;
   let echoue = false;
+  let remplacement = false;
   try {
     const connues = lisant(() => racines(index));
     const contexte = lisant(() => contexteDepuis(index));
@@ -148,6 +149,12 @@ export async function buildChunkStore(options: BuildStoreOptions): Promise<Store
 
     sortie.close();
     sortie = undefined;
+
+    // A partir d ici, la reserve neuve est complete et fermee. Si le
+    // remplacement echoue a mi chemin, l effacer par nettoyage detruirait la
+    // seule copie qui reste : mieux vaut la laisser sous son nom temporaire,
+    // recuperable, que de ne rien laisser du tout.
+    remplacement = true;
     await rm(options.output, { force: true });
     await rename(temporaire, options.output);
 
@@ -168,7 +175,7 @@ export async function buildChunkStore(options: BuildStoreOptions): Promise<Store
     // qu absente, elle passerait le controle de presence des tables et servirait
     // des fragments incomplets ; une reserve deja en place, elle, n a rien
     // demande et reste intacte.
-    if (echoue) await rm(temporaire, { force: true });
+    if (echoue && !remplacement) await rm(temporaire, { force: true });
   }
 }
 
