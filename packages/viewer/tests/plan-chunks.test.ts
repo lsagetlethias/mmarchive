@@ -62,14 +62,35 @@ describe("planChunks", () => {
     expect(r.windows).toBe(0);
   });
 
-  it("attribue chaque fermeture de fenetre a sa cause", () => {
+  it("attribue chaque fermeture a la cause que le decoupage a retenue", () => {
     poster(1, { at: 0 });
     poster(2, { at: 90 * MINUTE });
     poster(3, { at: 91 * MINUTE, ch: 2 });
     const r = planChunks(db);
-    expect(r.closedByGap).toBe(1);
-    expect(r.closedByChannel).toBe(1);
-    expect(r.closedByCap).toBe(0);
+    expect(r.closedBy.silence).toBe(1);
+    expect(r.closedBy.canal).toBe(1);
+    expect(r.closedBy.plafond).toBe(0);
+  });
+
+  it("compte autant de fermetures que de fragments emis", () => {
+    // Le compte des causes servait a decider si le plafond de messages est utile.
+    // Le rejouer a cote du decoupage revenait a compter ce qu on croit qu il
+    // fait : il manquait les coupures de taille, et les causes ne totalisaient
+    // donc pas les fragments.
+    for (let i = 1; i <= 12; i += 1) {
+      poster(i, { at: i * 45 * MINUTE, message: "x".repeat(1500) });
+    }
+    poster(20, { ch: 2, at: 0 });
+    const r = planChunks(db);
+    const total = Object.values(r.closedBy).reduce((a, b) => a + b, 0);
+    expect(total).toBe(r.fragments);
+  });
+
+  it("attribue les coupures de taille, que rien ne comptait", () => {
+    poster(1, { at: 0, message: "x".repeat(2000) });
+    poster(2, { at: MINUTE, message: "x".repeat(2000) });
+    const r = planChunks(db, { maxChars: 2960 });
+    expect(r.closedBy.taille).toBeGreaterThan(0);
   });
 
   it("montre l effet de la coupure temporelle, ce pour quoi il existe", () => {

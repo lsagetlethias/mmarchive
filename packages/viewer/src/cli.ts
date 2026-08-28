@@ -22,11 +22,13 @@ function printPlan(r: PlanReport, prixParMillion: number): void {
   out.write(
     `  taille en tokens : mediane ${nb(r.median)}, moyenne ${nb(r.mean)}, p90 ${nb(r.p90)}, p99 ${nb(r.p99)}, max ${nb(r.max)}\n`,
   );
-  const total = r.closedByGap + r.closedByCap + r.closedByChannel;
+  const total = Object.values(r.closedBy).reduce((a, b) => a + b, 0);
   const part = (n: number): string => (total === 0 ? "0 %" : `${((n / total) * 100).toFixed(1)} %`);
-  out.write(
-    `  fenetres fermees par : silence ${part(r.closedByGap)}, plafond ${part(r.closedByCap)}, fin de canal ${part(r.closedByChannel)}\n`,
-  );
+  const causes = Object.entries(r.closedBy)
+    .filter(([, n]) => n > 0)
+    .sort(([, a], [, b]) => b - a)
+    .map(([nom, n]) => `${nom} ${part(n)}`);
+  out.write(`  fragments fermes par : ${causes.join(", ")}\n`);
   const cout = (r.tokens / 1e6) * prixParMillion;
   out.write(
     `  cout d une passe : ${cout.toFixed(2)} EUR, ${(cout / 2).toFixed(2)} EUR en mode batch\n`,

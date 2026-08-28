@@ -14,10 +14,10 @@
 import type { DatabaseSync } from "node:sqlite";
 import { IndexReadError } from "../query/driver.js";
 import {
-  CHUNK_DEFAULTS,
   type ChunkContext,
   type ChunkInput,
   type ChunkOptions,
+  type CloseCause,
   chunkThreads,
   chunkWindows,
 } from "./chunk.js";
@@ -41,10 +41,11 @@ export interface PlanReport {
   readonly p99: number;
   readonly max: number;
   readonly mean: number;
-  /** Fenetres fermees par chaque cause, ce qui dit laquelle pilote reellement. */
-  readonly closedByGap: number;
-  readonly closedByCap: number;
-  readonly closedByChannel: number;
+  /**
+   * Ce qui a ferme chaque fragment, tel que le decoupage l a decide. Les causes
+   * couvrent tous les fragments emis : leur somme vaut `fragments`.
+   */
+  readonly closedBy: Readonly<Record<CloseCause, number>>;
 }
 
 /**
@@ -142,57 +143,38 @@ function lisant<T>(action: () => T): T {
 export function planChunks(db: DatabaseSync, options: ChunkOptions = {}): PlanReport {
   const connues = lisant(() => racines(db));
   const contexte = lisant(() => contexteDepuis(db));
-  const gapMs = options.gapMs ?? CHUNK_DEFAULTS.gapMs;
-  const maxMessages = options.maxMessages ?? CHUNK_DEFAULTS.maxMessages;
 
   // Une seule liste de tailles est conservee, pas les fragments eux memes : ce
   // sont des nombres, la ou le texte pese l archive entiere.
   const tailles: number[] = [];
   let threads = 0;
   let windows = 0;
+  const closedBy: Record<CloseCause, number> = {
+    silence: 0,
+    plafond: 0,
+    canal: 0,
+    fil: 0,
+    taille: 0,
+    fin: 0,
+  };
+  const onClose = (cause: CloseCause): void => {
+    closedBy[cause] += 1;
+  };
 
   const fils = seulementFils(
     parcourir(db, "coalesce(p.root, p.rowid), p.create_at, p.rowid"),
     connues,
   );
   lisant(() => {
-    for (const f of chunkThreads(fils, contexte, options)) {
+    for (const f of chunkThreads(fils, contexte, { ...options, onClose })) {
       tailles.push(f.text.length);
       threads += 1;
     }
   });
 
-  let closedByGap = 0;
-  let closedByCap = 0;
-  let closedByChannel = 0;
-  let canal: number | null = null;
-  let dernier = 0;
-  let dansFenetre = 0;
-
   const isoles = seulementIsoles(parcourir(db, "p.ch, p.create_at, p.rowid"), connues);
-  const compte = function* (source: Iterable<ChunkInput>): Generator<ChunkInput> {
-    for (const m of source) {
-      if (dansFenetre > 0) {
-        if (m.ch !== canal) {
-          closedByChannel += 1;
-          dansFenetre = 0;
-        } else if (m.create_at - dernier > gapMs) {
-          closedByGap += 1;
-          dansFenetre = 0;
-        } else if (dansFenetre >= maxMessages) {
-          closedByCap += 1;
-          dansFenetre = 0;
-        }
-      }
-      canal = m.ch;
-      dernier = m.create_at;
-      dansFenetre += 1;
-      yield m;
-    }
-  };
-
   lisant(() => {
-    for (const f of chunkWindows(compte(isoles), contexte, options)) {
+    for (const f of chunkWindows(isoles, contexte, { ...options, onClose })) {
       tailles.push(f.text.length);
       windows += 1;
     }
@@ -212,8 +194,6 @@ export function planChunks(db: DatabaseSync, options: ChunkOptions = {}): PlanRe
     p99: enTokens(centile(tri, 0.99)),
     max: enTokens(tri[tri.length - 1] ?? 0),
     mean: tri.length === 0 ? 0 : enTokens(chars / tri.length),
-    closedByGap,
-    closedByCap,
-    closedByChannel,
+    closedBy,
   };
 }

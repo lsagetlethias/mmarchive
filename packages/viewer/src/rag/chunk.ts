@@ -7,9 +7,10 @@
  *
  * L ordre compte : le lien de reponse est un signal explicite laisse par les
  * participants, l horloge n est qu une approximation de ce lien pour les canaux
- * ou personne ne repond. Mesure sur l archive de reference, la coupure temporelle
- * ferme 98,6 % des fenetres et le plafond de messages 1,0 % : c est le silence
- * qui structure, pas le volume.
+ * ou personne ne repond. Mesure sur l archive de reference, les fragments se
+ * ferment sur un silence dans 48,6 % des cas et sur une fin de fil dans 43,1 % ;
+ * le plafond de messages, lui, n en ferme aucun, la coupure de taille arrivant
+ * toujours avant. C est le silence qui structure, pas le volume.
  *
  * Aucun recouvrement entre fragments. Les deux seules etudes controlees sur le
  * sujet ne lui trouvent aucun benefice mesurable, et nos frontieres sont des
@@ -43,6 +44,13 @@ export interface Fragment {
   readonly text: string;
 }
 
+/**
+ * Ce qui a ferme un fragment. Seule la simulation s en sert, mais elle doit la
+ * tenir du decoupage lui meme : rejouer les regles de rupture a cote pour les
+ * compter, c est compter ce qu on croit que le decoupage fait.
+ */
+export type CloseCause = "silence" | "plafond" | "canal" | "fil" | "taille" | "fin";
+
 export interface ChunkOptions {
   /**
    * Silence au dela duquel une fenetre se ferme. C est la seule variable qui
@@ -55,6 +63,8 @@ export interface ChunkOptions {
   readonly maxMessages?: number;
   /** Plafond de taille du texte rendu, en caracteres. */
   readonly maxChars?: number;
+  /** Appele pour chaque fragment emis, avec ce qui l a ferme. */
+  readonly onClose?: (cause: CloseCause) => void;
 }
 
 export const CHUNK_DEFAULTS = {
@@ -154,8 +164,8 @@ class Groupe {
 }
 
 interface Coupure {
-  /** Vrai quand ce message ouvre un nouveau groupe, quoi qu il arrive. */
-  rupture(m: ChunkInput, groupe: Groupe): boolean;
+  /** Ce qui ferme le groupe courant, ou null si ce message le rejoint. */
+  rupture(m: ChunkInput, groupe: Groupe): CloseCause | null;
   /** Racine du fragment que ce message rejoindrait. */
   racine(m: ChunkInput): number | null;
 }
@@ -170,6 +180,7 @@ function* decouper(
   context: ChunkContext,
   coupure: Coupure,
   maxChars: number,
+  onClose: ((cause: CloseCause) => void) | undefined,
 ): Generator<Fragment> {
   let groupe = new Groupe(context);
   let racine: number | null = null;
@@ -179,13 +190,15 @@ function* decouper(
     // Toujours evalue, y compris sur un groupe vide : c est cet appel qui tient
     // l etat du decoupage a jour, canal courant et date du dernier message.
     const rompt = coupure.rupture(m, groupe);
-    if (!groupe.vide && rompt) {
+    if (!groupe.vide && rompt !== null) {
+      onClose?.(rompt);
       yield groupe.rendre(racine, part);
       groupe = new Groupe(context);
       part = 0;
     } else if (!groupe.vide && groupe.tailleAvec(m) > maxChars) {
       // Coupure de taille : meme groupe logique, morceau suivant. Un message
       // seul plus grand que le plafond passe entier, le couper le trahirait.
+      onClose?.("taille");
       yield groupe.rendre(racine, part);
       groupe = new Groupe(context);
       part += 1;
@@ -193,7 +206,10 @@ function* decouper(
     racine = coupure.racine(m);
     groupe.ajouter(m);
   }
-  if (!groupe.vide) yield groupe.rendre(racine, part);
+  if (!groupe.vide) {
+    onClose?.("fin");
+    yield groupe.rendre(racine, part);
+  }
 }
 
 /**
@@ -214,11 +230,12 @@ export function chunkThreads(
         const sienne = m.root ?? m.rowid;
         const change = courante !== null && sienne !== courante;
         courante = sienne;
-        return change;
+        return change ? "fil" : null;
       },
       racine: (m) => m.root ?? m.rowid,
     },
     options.maxChars ?? CHUNK_DEFAULTS.maxChars,
+    options.onClose,
   );
 }
 
@@ -240,14 +257,21 @@ export function chunkWindows(
     context,
     {
       rupture: (m, groupe) => {
-        const change =
-          m.ch !== canal || m.create_at - dernier > gapMs || groupe.taille >= maxMessages;
+        const cause: CloseCause | null =
+          m.ch !== canal
+            ? "canal"
+            : m.create_at - dernier > gapMs
+              ? "silence"
+              : groupe.taille >= maxMessages
+                ? "plafond"
+                : null;
         canal = m.ch;
         dernier = m.create_at;
-        return change;
+        return cause;
       },
       racine: () => null,
     },
     options.maxChars ?? CHUNK_DEFAULTS.maxChars,
+    options.onClose,
   );
 }
