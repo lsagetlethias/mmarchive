@@ -7,6 +7,7 @@ import { type BuildProgress, type BuildReport, buildIndex } from "./index/build.
 import { IndexReadError } from "./query/driver.js";
 import { CHUNK_DEFAULTS } from "./rag/chunk.js";
 import { type PlanReport, planChunks } from "./rag/plan.js";
+import { TOOL_VERSION } from "./version.js";
 
 /** Un nombre lisible : 311407 se compare mal, 311 407 se lit. */
 const nb = (n: number): string => n.toLocaleString("fr-FR");
@@ -31,8 +32,6 @@ function printPlan(r: PlanReport, prixParMillion: number): void {
     `  cout d une passe : ${cout.toFixed(2)} EUR, ${(cout / 2).toFixed(2)} EUR en mode batch\n`,
   );
 }
-
-import { TOOL_VERSION } from "./version.js";
 
 const STEP_LABEL: Record<BuildProgress["step"], string> = {
   manifest: "Lecture du manifeste",
@@ -172,13 +171,14 @@ program
   .option("--price <eur>", "Prix au million de tokens, pour chiffrer la passe", "0.10")
   .option("--json", "Emet le rapport en JSON sur la sortie standard")
   .action((opts: Record<string, string | boolean | undefined>, commande: Command) => {
-    const nombre = (nom: string, valeur: unknown): number => {
+    const nombre = (nom: string, valeur: unknown, entier = false): number => {
       const n = Number(valeur);
-      if (!Number.isFinite(n) || n <= 0) {
+      if (!Number.isFinite(n) || n <= 0 || (entier && !Number.isInteger(n))) {
         // Code 2 : argument invalide, comme le documente le README.
-        commande.error(`--${nom} attend un nombre positif, recu "${String(valeur)}".`, {
-          exitCode: 2,
-        });
+        commande.error(
+          `--${nom} attend un ${entier ? "entier" : "nombre"} positif, recu "${String(valeur)}".`,
+          { exitCode: 2 },
+        );
       }
       return n;
     };
@@ -193,8 +193,8 @@ program
     try {
       const rapport = planChunks(db, {
         gapMs: nombre("gap", opts.gap) * 60000,
-        maxMessages: nombre("max-messages", opts.maxMessages),
-        maxChars: nombre("max-chars", opts.maxChars),
+        maxMessages: nombre("max-messages", opts.maxMessages, true),
+        maxChars: nombre("max-chars", opts.maxChars, true),
       });
       if (opts.json === true) {
         process.stdout.write(`${JSON.stringify(rapport, null, 2)}\n`);

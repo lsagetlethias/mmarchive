@@ -8,7 +8,7 @@
  * L ordre compte : le lien de reponse est un signal explicite laisse par les
  * participants, l horloge n est qu une approximation de ce lien pour les canaux
  * ou personne ne repond. Mesure sur l archive de reference, la coupure temporelle
- * ferme 98,5 % des fenetres et le plafond de messages 0,98 % : c est le silence
+ * ferme 98,6 % des fenetres et le plafond de messages 1,0 % : c est le silence
  * qui structure, pas le volume.
  *
  * Aucun recouvrement entre fragments. Les deux seules etudes controlees sur le
@@ -53,7 +53,7 @@ export interface ChunkOptions {
   readonly gapMs?: number;
   /** Garde-fou sur les canaux tres bavards, rarement atteint. */
   readonly maxMessages?: number;
-  /** Plafond de taille avant coupure, en caracteres. */
+  /** Plafond de taille du texte rendu, en caracteres. */
   readonly maxChars?: number;
 }
 
@@ -74,128 +74,180 @@ export interface ChunkContext {
   day(createAt: number): string;
 }
 
-function renderText(
-  messages: readonly ChunkInput[],
+function entete(
+  premier: ChunkInput,
+  participants: Iterable<string>,
   context: ChunkContext,
   suite: boolean,
 ): string {
-  const participants = [...new Set(messages.map((m) => context.userName(m.usr)))];
-  const first = messages[0];
-  if (first === undefined) return "";
-  const entete = `Canal #${context.channelName(first.ch)}, ${context.day(first.create_at)}, participants : ${participants.join(", ")}${suite ? " (suite)" : ""}`;
-  const corps = messages.map((m) => `${context.userName(m.usr)} : ${m.message}`);
-  return [entete, ...corps].join("\n");
+  return `Canal #${context.channelName(premier.ch)}, ${context.day(premier.create_at)}, participants : ${[...participants].join(", ")}${suite ? " (suite)" : ""}`;
 }
 
-function buildFragment(
-  messages: readonly ChunkInput[],
-  root: number | null,
-  context: ChunkContext,
-  part: number,
-): Fragment {
-  const first = messages[0];
-  const last = messages[messages.length - 1];
-  if (first === undefined || last === undefined) {
-    throw new Error("Un fragment sans message ne devrait jamais etre construit.");
-  }
-  const users: number[] = [];
-  for (const m of messages) {
-    if (m.usr !== null && !users.includes(m.usr)) users.push(m.usr);
-  }
-  return {
-    ch: first.ch,
-    root,
-    firstId: first.rowid,
-    lastId: last.rowid,
-    firstAt: first.create_at,
-    lastAt: last.create_at,
-    users,
-    messages: messages.length,
-    part,
-    text: renderText(messages, context, part > 0),
-  };
+function ligne(m: ChunkInput, context: ChunkContext): string {
+  return `${context.userName(m.usr)} : ${m.message}`;
 }
 
 /**
- * Coupe un groupe trop long en morceaux qui tiennent, sans jamais couper au
- * milieu d un message : un message tronque perd son sens et son auteur.
+ * Accumulateur qui connait a tout instant la taille du texte qu il produirait.
+ *
+ * Estimer cette taille a partir du seul message laisserait passer des fragments
+ * plus longs que le plafond : le texte rendu porte aussi un en-tete, qui grandit
+ * avec le nombre de participants, et le prefixe d auteur de chaque ligne. Le
+ * plafond doit donc porter sur ce qui sera reellement envoye.
  */
-function* split(
-  messages: readonly ChunkInput[],
-  root: number | null,
+class Groupe {
+  readonly #context: ChunkContext;
+  readonly #messages: ChunkInput[] = [];
+  readonly #noms = new Set<string>();
+  readonly #users: number[] = [];
+  #corps = 0;
+
+  constructor(context: ChunkContext) {
+    this.#context = context;
+  }
+
+  get vide(): boolean {
+    return this.#messages.length === 0;
+  }
+
+  get taille(): number {
+    return this.#messages.length;
+  }
+
+  /** Taille du texte rendu si ce message rejoignait le groupe. */
+  tailleAvec(m: ChunkInput): number {
+    const premier = this.#messages[0] ?? m;
+    const noms = new Set(this.#noms);
+    noms.add(this.#context.userName(m.usr));
+    // La marge la plus large : un morceau de rang superieur porte « (suite) ».
+    const tete = entete(premier, noms, this.#context, true).length;
+    return tete + 1 + this.#corps + ligne(m, this.#context).length + 1;
+  }
+
+  ajouter(m: ChunkInput): void {
+    this.#messages.push(m);
+    this.#noms.add(this.#context.userName(m.usr));
+    if (m.usr !== null && !this.#users.includes(m.usr)) this.#users.push(m.usr);
+    this.#corps += ligne(m, this.#context).length + 1;
+  }
+
+  rendre(root: number | null, part: number): Fragment {
+    const premier = this.#messages[0];
+    const dernier = this.#messages[this.#messages.length - 1];
+    if (premier === undefined || dernier === undefined) {
+      throw new Error("Un fragment sans message ne devrait jamais etre construit.");
+    }
+    const lignes = this.#messages.map((m) => ligne(m, this.#context));
+    return {
+      ch: premier.ch,
+      root,
+      firstId: premier.rowid,
+      lastId: dernier.rowid,
+      firstAt: premier.create_at,
+      lastAt: dernier.create_at,
+      users: [...this.#users],
+      messages: this.#messages.length,
+      part,
+      text: [entete(premier, this.#noms, this.#context, part > 0), ...lignes].join("\n"),
+    };
+  }
+}
+
+interface Coupure {
+  /** Vrai quand ce message ouvre un nouveau groupe, quoi qu il arrive. */
+  rupture(m: ChunkInput, groupe: Groupe): boolean;
+  /** Racine du fragment que ce message rejoindrait. */
+  racine(m: ChunkInput): number | null;
+}
+
+/**
+ * Boucle commune aux deux decoupages. Emet un fragment des que le plafond est
+ * atteint, sans attendre la fin du groupe : un fil de plusieurs dizaines de
+ * milliers de messages ne doit pas etre tenu en memoire pour etre coupe.
+ */
+function* decouper(
+  messages: Iterable<ChunkInput>,
   context: ChunkContext,
+  coupure: Coupure,
   maxChars: number,
 ): Generator<Fragment> {
-  let courant: ChunkInput[] = [];
-  let taille = 0;
+  let groupe = new Groupe(context);
+  let racine: number | null = null;
   let part = 0;
+
   for (const m of messages) {
-    const coutMessage = m.message.length + 40;
-    if (courant.length > 0 && taille + coutMessage > maxChars) {
-      yield buildFragment(courant, root, context, part);
+    // Toujours evalue, y compris sur un groupe vide : c est cet appel qui tient
+    // l etat du decoupage a jour, canal courant et date du dernier message.
+    const rompt = coupure.rupture(m, groupe);
+    if (!groupe.vide && rompt) {
+      yield groupe.rendre(racine, part);
+      groupe = new Groupe(context);
+      part = 0;
+    } else if (!groupe.vide && groupe.tailleAvec(m) > maxChars) {
+      // Coupure de taille : meme groupe logique, morceau suivant. Un message
+      // seul plus grand que le plafond passe entier, le couper le trahirait.
+      yield groupe.rendre(racine, part);
+      groupe = new Groupe(context);
       part += 1;
-      courant = [];
-      taille = 0;
     }
-    courant.push(m);
-    taille += coutMessage;
+    racine = coupure.racine(m);
+    groupe.ajouter(m);
   }
-  if (courant.length > 0) yield buildFragment(courant, root, context, part);
+  if (!groupe.vide) yield groupe.rendre(racine, part);
 }
 
 /**
  * Fragments des fils. Consomme un flux **trie par (racine, date)**, ce qui suffit
- * a ne jamais tenir en memoire plus d un fil a la fois.
+ * a ne jamais tenir en memoire plus d un morceau a la fois.
  */
-export function* chunkThreads(
+export function chunkThreads(
   messages: Iterable<ChunkInput>,
   context: ChunkContext,
   options: ChunkOptions = {},
 ): Generator<Fragment> {
-  const maxChars = options.maxChars ?? CHUNK_DEFAULTS.maxChars;
-  let courant: ChunkInput[] = [];
-  let racine: number | null = null;
-
-  for (const m of messages) {
-    const sien = m.root ?? m.rowid;
-    if (racine !== null && sien !== racine) {
-      yield* split(courant, racine, context, maxChars);
-      courant = [];
-    }
-    racine = sien;
-    courant.push(m);
-  }
-  if (courant.length > 0 && racine !== null) yield* split(courant, racine, context, maxChars);
+  let courante: number | null = null;
+  return decouper(
+    messages,
+    context,
+    {
+      rupture: (m) => {
+        const sienne = m.root ?? m.rowid;
+        const change = courante !== null && sienne !== courante;
+        courante = sienne;
+        return change;
+      },
+      racine: (m) => m.root ?? m.rowid,
+    },
+    options.maxChars ?? CHUNK_DEFAULTS.maxChars,
+  );
 }
 
 /**
  * Fragments des messages qui n appartiennent a aucun fil. Consomme un flux
- * **trie par (canal, date)**, et ne retient qu une fenetre a la fois.
+ * **trie par (canal, date)**, et ne retient qu un morceau a la fois.
  */
-export function* chunkWindows(
+export function chunkWindows(
   messages: Iterable<ChunkInput>,
   context: ChunkContext,
   options: ChunkOptions = {},
 ): Generator<Fragment> {
   const gapMs = options.gapMs ?? CHUNK_DEFAULTS.gapMs;
   const maxMessages = options.maxMessages ?? CHUNK_DEFAULTS.maxMessages;
-  const maxChars = options.maxChars ?? CHUNK_DEFAULTS.maxChars;
-
-  let courant: ChunkInput[] = [];
   let canal: number | null = null;
   let dernier = 0;
-
-  for (const m of messages) {
-    const rupture =
-      courant.length > 0 &&
-      (m.ch !== canal || m.create_at - dernier > gapMs || courant.length >= maxMessages);
-    if (rupture) {
-      yield* split(courant, null, context, maxChars);
-      courant = [];
-    }
-    canal = m.ch;
-    dernier = m.create_at;
-    courant.push(m);
-  }
-  if (courant.length > 0) yield* split(courant, null, context, maxChars);
+  return decouper(
+    messages,
+    context,
+    {
+      rupture: (m, groupe) => {
+        const change =
+          m.ch !== canal || m.create_at - dernier > gapMs || groupe.taille >= maxMessages;
+        canal = m.ch;
+        dernier = m.create_at;
+        return change;
+      },
+      racine: () => null,
+    },
+    options.maxChars ?? CHUNK_DEFAULTS.maxChars,
+  );
 }

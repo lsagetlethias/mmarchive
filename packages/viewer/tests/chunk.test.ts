@@ -179,3 +179,46 @@ describe("texte rendu", () => {
     expect(out[0]).toMatchObject({ firstId: 10, lastId: 11, firstAt: 5, lastAt: 9 });
   });
 });
+
+describe("le plafond porte sur le texte reellement rendu", () => {
+  const bavard: ChunkContext = {
+    channelName: () => "un-nom-de-canal-particulierement-long-comme-il-en-existe",
+    userName: (usr) =>
+      usr === null ? "inconnu" : `prenom.nom-de-famille-a-rallonge-${String(usr)}`,
+    day: () => "12 mars 2024",
+  };
+
+  it("ne produit aucun fragment plus long que le plafond", () => {
+    // L en-tete grandit avec le nombre de participants et chaque ligne porte le
+    // nom de son auteur : estimer la taille sur le seul message laisserait
+    // passer des fragments au dela du plafond.
+    const serie = Array.from({ length: 30 }, (_, i) =>
+      msg({ usr: i, create_at: i * 1000, message: "x".repeat(60) }),
+    );
+    const out = [...chunkWindows(serie, bavard, { maxChars: 600 })];
+    expect(out.length).toBeGreaterThan(1);
+    for (const f of out) expect(f.text.length).toBeLessThanOrEqual(600);
+  });
+
+  it("laisse passer le seul cas ou c est impossible, un message trop grand a lui seul", () => {
+    const out = [...chunkWindows([msg({ message: "x".repeat(5000) })], bavard, { maxChars: 600 })];
+    expect(out).toHaveLength(1);
+    expect(out[0]?.text.length).toBeGreaterThan(600);
+  });
+});
+
+describe("decoupage en flux", () => {
+  it("emet un morceau sans attendre la fin d un fil tres long", () => {
+    // Un fil de plusieurs dizaines de milliers de messages ne doit pas etre
+    // accumule en entier pour etre coupe.
+    function* fil(): Generator<ChunkInput> {
+      yield msg({ rowid: 1, root: null, message: "x".repeat(1000) });
+      for (let i = 2; i <= 100; i += 1) yield msg({ rowid: i, root: 1, message: "x".repeat(1000) });
+      throw new Error("le generateur a ete consomme au dela du premier morceau");
+    }
+    const iterateur = chunkThreads(fil(), context, { maxChars: 2960 });
+    const premier = iterateur.next();
+    expect(premier.done).toBe(false);
+    expect(premier.value?.messages).toBeLessThan(100);
+  });
+});

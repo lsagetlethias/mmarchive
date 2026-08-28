@@ -96,3 +96,32 @@ describe("planChunks", () => {
     }
   });
 });
+
+describe("lectures d index incompletes", () => {
+  it("traduit l absence d une table liee, pas seulement de post", () => {
+    // Une base qui a post mais pas channel remontait une erreur SQLite brute,
+    // sans dire au lecteur quoi faire.
+    const ampute = new DatabaseSync(":memory:");
+    ampute.exec(`
+      CREATE TABLE post (rowid INTEGER PRIMARY KEY, ch INTEGER, usr INTEGER, create_at INTEGER, root INTEGER);
+      CREATE TABLE post_text (rowid INTEGER PRIMARY KEY, message TEXT);
+    `);
+    try {
+      expect(() => planChunks(ampute)).toThrow(/mmarchive-index/);
+    } finally {
+      ampute.close();
+    }
+  });
+});
+
+describe("centiles", () => {
+  it("ne fait pas pointer le 90e centile sur le maximum", () => {
+    // Dix fragments de tailles tres differentes : si p90 vaut le maximum, le
+    // calcul est decale d un cran et la distribution rapportee est fausse.
+    for (let i = 1; i <= 9; i += 1) poster(i, { at: i * 500 * MINUTE, message: "court" });
+    poster(10, { at: 10 * 500 * MINUTE, message: "x".repeat(2000) });
+    const r = planChunks(db);
+    expect(r.fragments).toBe(10);
+    expect(r.p90).toBeLessThan(r.max);
+  });
+});

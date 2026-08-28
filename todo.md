@@ -78,11 +78,11 @@ Optionnel par construction : l'outil doit rester pleinement fonctionnel sans, et
 concerne que le mode full. Le mode lite tourne dans un navigateur sans serveur, il n'a ni
 clé d'API ni moteur d'inférence, et rien ne doit l'y contraindre.
 
-Rien n'est commencé, mais le cadrage est fait : mesures sur l'archive réelle et recherche
-documentaire, dans `docs/DECISION-RAG.md`. Le découpage prescrit produit 392 662 fragments
-pour 92,2 M tokens, indexés en environ 93 minutes pour 9,22 EUR, ou moitié moins en mode
-batch. Modèle recommandé `qwen3-embedding-8b`, tronqué à 1 024 dimensions et quantifié, soit
-402 Mo de vecteurs dans un fichier séparé de l'index de consultation.
+Le cadrage est fait et le découpage livré : mesures sur l'archive réelle et recherche
+documentaire dans `docs/DECISION-RAG.md`. Le découpage produit 297 515 fragments pour
+79,3 M tokens, indexés en environ 80 minutes pour 7,93 EUR, ou moitié moins en mode batch.
+Modèle recommandé `qwen3-embedding-8b`, tronqué à 1 024 dimensions et quantifié, soit
+305 Mo de vecteurs dans un fichier séparé de l'index de consultation.
 
 Trois conclusions du premier jet ont été corrigées par la recherche, et ce sont elles qu'il
 faut retenir. La médiane courte n'est pas un défaut : les encodeurs saturent dès 32

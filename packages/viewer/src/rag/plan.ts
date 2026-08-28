@@ -47,9 +47,14 @@ export interface PlanReport {
   readonly closedByChannel: number;
 }
 
+/**
+ * Centile par rang le plus proche. `floor(n * p)` decale d un cran vers le haut :
+ * sur dix valeurs, il fait pointer le 90e centile sur le maximum.
+ */
 function centile(tri: readonly number[], p: number): number {
   if (tri.length === 0) return 0;
-  return tri[Math.min(tri.length - 1, Math.floor(tri.length * p))] ?? 0;
+  const rang = Math.ceil(p * tri.length) - 1;
+  return tri[Math.min(tri.length - 1, Math.max(0, rang))] ?? 0;
 }
 
 function contexteDepuis(db: DatabaseSync): ChunkContext {
@@ -117,18 +122,26 @@ function* seulementIsoles(
   for (const m of source) if (m.root === null && !connues.has(m.rowid)) yield m;
 }
 
-export function planChunks(db: DatabaseSync, options: ChunkOptions = {}): PlanReport {
-  let connues: ReadonlySet<number>;
+/**
+ * Toute lecture de l index passe par ici. Ne proteger que la premiere laisserait
+ * une base amputee d une table remonter une erreur SQLite brute au lieu du
+ * message qui dit quoi faire.
+ */
+function lisant<T>(action: () => T): T {
   try {
-    connues = racines(db);
+    return action();
   } catch (cause) {
+    if (cause instanceof IndexReadError) throw cause;
     throw new IndexReadError(
       "Index illisible : construisez le avec mmarchive-index avant de planifier le decoupage.",
       { cause },
     );
   }
+}
 
-  const contexte = contexteDepuis(db);
+export function planChunks(db: DatabaseSync, options: ChunkOptions = {}): PlanReport {
+  const connues = lisant(() => racines(db));
+  const contexte = lisant(() => contexteDepuis(db));
   const gapMs = options.gapMs ?? CHUNK_DEFAULTS.gapMs;
   const maxMessages = options.maxMessages ?? CHUNK_DEFAULTS.maxMessages;
 
@@ -142,10 +155,12 @@ export function planChunks(db: DatabaseSync, options: ChunkOptions = {}): PlanRe
     parcourir(db, "coalesce(p.root, p.rowid), p.create_at, p.rowid"),
     connues,
   );
-  for (const f of chunkThreads(fils, contexte, options)) {
-    tailles.push(f.text.length);
-    threads += 1;
-  }
+  lisant(() => {
+    for (const f of chunkThreads(fils, contexte, options)) {
+      tailles.push(f.text.length);
+      threads += 1;
+    }
+  });
 
   let closedByGap = 0;
   let closedByCap = 0;
@@ -176,10 +191,12 @@ export function planChunks(db: DatabaseSync, options: ChunkOptions = {}): PlanRe
     }
   };
 
-  for (const f of chunkWindows(compte(isoles), contexte, options)) {
-    tailles.push(f.text.length);
-    windows += 1;
-  }
+  lisant(() => {
+    for (const f of chunkWindows(compte(isoles), contexte, options)) {
+      tailles.push(f.text.length);
+      windows += 1;
+    }
+  });
 
   const tri = tailles.sort((a, b) => a - b);
   const chars = tri.reduce((a, b) => a + b, 0);
