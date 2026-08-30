@@ -43,7 +43,7 @@ que le résultat ne tient pas.
 | Messages contenant une adresse électronique           | 41 960, soit 3,2 %                  |
 | Messages ressemblant à un numéro de téléphone         | 2 903, soit 0,2 %                   |
 | Pièces jointes dont le nom porte un nom de personne   | 2 452 sur 46 756                    |
-| Canaux dont le nom porte un nom de personne           | 181 sur 758                         |
+| Canaux dont le nom porte un identifiant rare          | 57 sur 758                          |
 | Avatars stockés                                       | 3 277                               |
 
 Le chiffre qui commande tout est le premier. **Les noms écrits en clair sont vingt fois plus
@@ -86,6 +86,23 @@ une identité, et une photo de visage plus sûrement encore.
 **Les canaux personnels ne sont pas concernés** : ils sont privés, donc absents d'une archive
 qui ne prend que des canaux publics.
 
+**Les canaux publics dont le nom porte une identité ne sont pas renommés.** Ils existent, et
+ce ne sont pas des canaux personnels : 57 sur 758 contiennent un identifiant porté par un ou
+deux comptes seulement, dont 3 dont le nom se réduit à cela. Le premier comptage en trouvait
+181, mais il attrapait des prénoms répandus employés comme mots ordinaires ; ne retenir que
+les identifiants rares donne une mesure défendable.
+
+Renommer coûterait plus que cela ne rapporte : les permaliens cassent, et l'archive cesse de
+correspondre aux souvenirs de ceux qui l'ont vécue. Ces 57 canaux sont donc un **résidu
+assumé**, et le rapport les nomme un par un.
+
+C'est le cas qu'il faut connaître avant de diffuser, parce que le nom d'un canal ne se cache
+nulle part : il figure dans la barre latérale, dans chaque permalien, et en tête de chaque
+fragment produit par le RAG. Sur ces canaux, l'identité serait donc répétée dans tous leurs
+fragments alors que tout le reste aurait été pseudonymisé. Les voir listés permet d'en
+exclure ou d'en renommer quelques uns à la main, ce qui coûte moins qu'une règle
+automatique.
+
 ## Le remplacement des noms en clair, et son revers
 
 C'est la partie qui décide de la valeur du résultat, et la seule qui ne peut pas être exacte.
@@ -120,7 +137,8 @@ doute** :
 - les motifs qui ressemblent à une identité sans correspondre à un compte : adresses,
   numéros, majuscules isolées suivant un mot comme « merci » ou « cc » ;
 - les remplacements ambigus, ceux portant sur un mot également courant, pour qu'une
-  relecture puisse les infirmer.
+  relecture puisse les infirmer ;
+- les canaux dont le nom porte une identité, qui ne sont pas renommés.
 
 Ce rapport n'est pas un accessoire. Il est ce qui permet de dire à un juriste ce qui est
 garanti et ce qui ne l'est pas, et il doit être lu avant diffusion, jamais archivé avec elle
@@ -132,8 +150,9 @@ Est garanti : aucun identifiant, nom de compte, adresse électronique, mention r
 avatar ni pièce jointe ne subsiste, et la correspondance vers les identités d'origine
 n'existe plus nulle part.
 
-N'est pas garanti : qu'aucun nom ne subsiste dans le corps des messages. Une personne
-désignée par un surnom, une initiale ou une orthographe approximative passera au travers.
+N'est pas garanti : qu'aucun nom ne subsiste dans le corps des messages, ni dans le nom des
+canaux. Une personne désignée par un surnom, une initiale ou une orthographe approximative
+passera au travers, et les canaux nommés d'après quelqu'un gardent leur nom.
 
 C'est cette phrase, et non la commande, qu'il faut soumettre au juridique.
 
@@ -152,9 +171,6 @@ C'est cette phrase, et non la commande, qu'il faut soumettre au juridique.
 - **Le nom de la commande.** Un mode d'archive complète et une demande d'effacement
   individuelle sont deux opérations différentes ; les loger sous le même verbe avec un
   drapeau invite à lancer la mauvaise.
-- **Le sort des 181 canaux dont le nom porte une identité.** Le renommer casse les
-  permaliens et la lisibilité ; le garder laisse une identité dans l'en-tête de chaque
-  fragment de ce canal.
 - **Les numéros de téléphone**, 2 903 messages : mêmes deux modes que les adresses, ou
   suppression pure.
 - **La réversibilité par recoupement.** Même sans noms, un fil daté, situé dans un canal

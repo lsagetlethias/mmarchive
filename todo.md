@@ -210,6 +210,10 @@ authentification. Cadré dans `docs/DECISION-ANONYMISATION.md`.
 - [ ] **Rapport des occurrences résiduelles**, à construire avant le point précédent pour
       que ses effets soient observables. Il dit ce qui est garanti et ce qui ne l'est pas,
       et ne doit jamais être diffusé avec l'archive puisqu'il désigne ce qu'on a caché.
+      Il liste notamment les 57 canaux publics dont le nom porte une identité : ils ne sont
+      pas renommés, parce que cela casserait les permaliens, mais leur nom apparaît dans la
+      barre latérale, dans chaque permalien et en tête de chaque fragment du RAG. Les voir
+      listés permet d'en traiter quelques uns à la main avant diffusion.
 
 ## Dette identifiée
 
