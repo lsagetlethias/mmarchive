@@ -74,6 +74,13 @@ pour qu'ils ne reviennent pas.
 
 ## Bloc 3, RAG
 
+Cinq morceaux livrés, tous ceux qui ne dépendent pas du modèle : découpage, simulation,
+réserve de fragments, recherche lexicale et fusion. La suite attend deux décisions qui
+appartiennent à l'exploitant, la dimension des vecteurs et une clé d'API. La marche à
+suivre pour trancher la dimension est écrite dans `docs/DECISION-RAG.md`, section « Choisir
+la dimension sans payer plusieurs fois » : elle tient en une passe d'embedding sur un
+échantillon, le modèle retenu se laissant tronquer sans recalcul.
+
 Optionnel par construction : l'outil doit rester pleinement fonctionnel sans, et le RAG ne
 concerne que le mode full. Le mode lite tourne dans un navigateur sans serveur, il n'a ni
 clé d'API ni moteur d'inférence, et rien ne doit l'y contraindre.
