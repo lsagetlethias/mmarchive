@@ -133,7 +133,11 @@ convexe de scores normalisés quand il n'y a que deux listes à fusionner.
       liste de mots vides, ce qui divise par trois la durée d'une question ordinaire sans
       déplacer les premiers résultats. Reste la moitié vectorielle et la fusion.
       Indispensable sur du dialogue plein de jargon, d'acronymes et de noms propres que le
-      vectoriel rate : cinquante résultats FTS5, cinquante vectoriels, puis fusion par
+      vectoriel rate. La fusion est livrée aussi : `rag/fusion.ts`, fonction pure, met les
+      deux moitiés sur la même échelle avant de les mélanger et garde ce qu'une seule
+      d'entre elles a trouvé, au lieu de ne retenir que l'intersection. Reste la moitié
+      vectorielle, qui attend le choix de dimension.
+      Cinquante résultats FTS5, cinquante vectoriels, puis fusion par
       **combinaison convexe de scores normalisés**, poids de
       0,6 à 0,8 sur le vectoriel, et huit à douze fragments retenus. Le cahier des charges
       initial prescrivait une fusion par rang réciproque : deux mesures indépendantes
