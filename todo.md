@@ -188,6 +188,29 @@ méritent d'être vus plutôt que découverts.
 - Livré en plus du cadrage initial : le mode lite dans ses deux transports, la commande
   `verify`, les codes d'erreur traçables, et le process de release.
 
+## Anonymisation d'archive
+
+Besoin distinct de `redact`, qui répond aux demandes d'effacement individuelles : rendre une
+archive entière diffusable, ce que le juridique peut exiger même derrière une
+authentification. Cadré dans `docs/DECISION-ANONYMISATION.md`.
+
+- [x] **Pseudonymes** lisibles et manifestement artificiels, `redact/pseudonym.ts`. Nom de
+      chose plus adjectif accordé, distribués depuis un hachage salé, sel jeté après usage.
+      Un générateur de noms réalistes a été écarté sur mesure : trente prénoms français très
+      courants sont tous déjà portés par un compte de l'archive, donc il aurait attribué les
+      propos de quelqu'un au nom d'une personne réelle.
+- [ ] **Mode d'archive complète** : pseudonymiser tous les comptes, supprimer pièces jointes
+      et avatars.
+- [ ] **Réécriture du texte** : mentions résolues vers le pseudonyme pour garder les fils
+      lisibles, mentions orphelines neutralisées, adresses remplacées par `<redacted>`.
+- [ ] **Noms en clair**, la partie risquée. 39,7 % des messages en contiennent, vingt fois
+      plus que les mentions, et treize mots courants du français sont aussi des noms de
+      comptes ici. L'arbitrage est de privilégier l'anonymat : un texte abîmé reste
+      exploitable, une identité qui fuit ne se rattrape pas.
+- [ ] **Rapport des occurrences résiduelles**, à construire avant le point précédent pour
+      que ses effets soient observables. Il dit ce qui est garanti et ce qui ne l'est pas,
+      et ne doit jamais être diffusé avec l'archive puisqu'il désigne ce qu'on a caché.
+
 ## Dette identifiée
 
 - [x] **Codes d'erreur traçables** (§6.1 du guide CLI). Les 25 classes d'erreur portent un
