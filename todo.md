@@ -127,9 +127,14 @@ convexe de scores normalisés quand il n'y a que deux listes à fusionner.
 - [ ] **Stockage vectoriel** via `sqlite-vec`, à côté des fragments dans le même fichier.
       Prévoir la quantification : 200 000 fragments en flottants sur 1024 dimensions pèsent
       environ 800 Mo, l'entier 8 bits divise par quatre.
-- [ ] **Recherche hybride**, indispensable sur du dialogue plein de jargon, d'acronymes et
-      de noms propres que le vectoriel rate : cinquante résultats FTS5, cinquante
-      vectoriels, puis fusion par **combinaison convexe de scores normalisés**, poids de
+- [ ] **Recherche hybride.** La moitié lexicale est livrée : `rag/lexical.ts` cherche dans
+      les fragments par FTS5, classe par pertinence et rend un score utilisable par la
+      fusion. Elle écarte les mots trop répandus en mesurant le corpus plutôt qu'avec une
+      liste de mots vides, ce qui divise par trois la durée d'une question ordinaire sans
+      déplacer les premiers résultats. Reste la moitié vectorielle et la fusion.
+      Indispensable sur du dialogue plein de jargon, d'acronymes et de noms propres que le
+      vectoriel rate : cinquante résultats FTS5, cinquante vectoriels, puis fusion par
+      **combinaison convexe de scores normalisés**, poids de
       0,6 à 0,8 sur le vectoriel, et huit à douze fragments retenus. Le cahier des charges
       initial prescrivait une fusion par rang réciproque : deux mesures indépendantes
       montrent qu'elle est battue de 0,015 à 0,032 nDCG dès lors qu'il n'y a que deux

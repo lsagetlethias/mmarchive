@@ -10,7 +10,7 @@
 import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
-export const STORE_TABLES = ["meta", "fragment", "fragment_user"] as const;
+export const STORE_TABLES = ["meta", "fragment", "fragment_user", "fragment_fts"] as const;
 
 /** Ce qui manque a un fichier pour servir de reserve de fragments. */
 export function missingStoreTables(present: Iterable<string>): string[] {
@@ -44,6 +44,32 @@ CREATE TABLE fragment_user (
   fragment INTEGER NOT NULL,
   usr      INTEGER NOT NULL
 );
+`;
+
+/**
+ * Recherche lexicale sur le texte des fragments.
+ *
+ * Le meme decoupeur de mots que l index de consultation, pour qu une recherche
+ * et l autre repondent pareil : `remove_diacritics 2` traite les lettres
+ * accentuees hors du plan latin de base, ce qui compte sur du francais.
+ *
+ * Le texte n est pas duplique : `content='fragment'` fait de cette table un index
+ * a contenu externe, qui pointe vers la colonne au lieu d en garder une copie.
+ * C est possible ici parce qu une reserve ne se modifie jamais apres sa
+ * construction, et cela ne coute rien a l usage : `snippet()` sait lire la table
+ * source pour rendre un extrait, contrairement a une table sans contenu du tout
+ * comme celle de l index de consultation. Sur l archive de reference, l index
+ * inverse ajoute 117 Mo la ou une copie du texte en aurait ajoute 293.
+ */
+export const STORE_FTS = `
+CREATE VIRTUAL TABLE fragment_fts USING fts5(
+  text,
+  content='fragment',
+  content_rowid='rowid',
+  tokenize="unicode61 remove_diacritics 2"
+);
+INSERT INTO fragment_fts(rowid, text) SELECT rowid, text FROM fragment;
+INSERT INTO fragment_fts(fragment_fts) VALUES ('optimize');
 `;
 
 export const STORE_INDEXES = `
