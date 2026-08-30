@@ -59,11 +59,21 @@ export const DEFAULT_FUSION_LIMIT = 12;
  * consequence sur une cinquantaine de candidats ou l ecart se repartit ; c est
  * le champ `alone` qui distingue « vu et mal classe » de « pas vu ».
  */
-function normaliser(hits: readonly ScoredHit[]): Map<number, number> {
+function normaliser(cote: string, hits: readonly ScoredHit[]): Map<number, number> {
   if (hits.length === 0) return new Map();
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
   for (const h of hits) {
+    // Un score qui n est pas un nombre fini ne se classe pas. Le laisser passer
+    // le rendrait invisible : NaN echappe aux comparaisons, donc il traverserait
+    // le calcul des bornes sans rien declencher pour ressortir en score fusionne
+    // NaN, et le tri renverrait alors les candidats dans leur ordre d arrivee.
+    // Il vaut mieux nommer le fragment fautif que de classer au hasard.
+    if (!Number.isFinite(h.score)) {
+      throw new RangeError(
+        `Score ${cote} non exploitable pour le fragment ${String(h.fragment)} : ${String(h.score)}.`,
+      );
+    }
     if (h.score < min) min = h.score;
     if (h.score > max) max = h.score;
   }
@@ -91,9 +101,17 @@ export function fuse(
     throw new RangeError(`Le poids du vectoriel doit tenir entre 0 et 1, recu ${String(poids)}.`);
   }
   const limit = options.limit ?? DEFAULT_FUSION_LIMIT;
+  // Sans ce controle, une limite negative rendrait « tout sauf les derniers »
+  // par le comportement de slice, et une limite fractionnaire serait arrondie
+  // en silence. Refuser vaut mieux que de rendre autre chose que demande.
+  if (!Number.isInteger(limit) || limit < 0) {
+    throw new RangeError(
+      `Le nombre de fragments doit etre un entier positif, recu ${String(limit)}.`,
+    );
+  }
 
-  const lex = normaliser(lexical);
-  const vec = normaliser(vector);
+  const lex = normaliser("lexical", lexical);
+  const vec = normaliser("vectoriel", vector);
 
   const fusionnes: FusedHit[] = [];
   for (const fragment of new Set([...lex.keys(), ...vec.keys()])) {

@@ -110,3 +110,30 @@ describe("fuse", () => {
     expect(out[0]).toMatchObject({ fragment: 1, lexical: 1, vector: 1, alone: false });
   });
 });
+
+describe("entrees invalides", () => {
+  it("refuse un score qui n est pas un nombre fini", () => {
+    // NaN echappe aux comparaisons : il traverserait le calcul des bornes sans
+    // rien declencher, pour ressortir en score fusionne NaN et faire rendre au
+    // tri l ordre d arrivee.
+    expect(() => fuse([hit(1, Number.NaN)], [])).toThrow(/fragment 1/);
+    expect(() => fuse([], [hit(4, Number.POSITIVE_INFINITY)])).toThrow(/fragment 4/);
+  });
+
+  it("nomme la moitie fautive", () => {
+    expect(() => fuse([hit(1, Number.NaN)], [])).toThrow(/lexical/);
+    expect(() => fuse([], [hit(1, Number.NaN)])).toThrow(/vectoriel/);
+  });
+
+  it("refuse une limite qui n est pas un entier positif", () => {
+    // slice(0, -1) rendrait « tout sauf le dernier », ce que personne n a
+    // demande.
+    expect(() => fuse([], [], { limit: -1 })).toThrow(/entier positif/);
+    expect(() => fuse([], [], { limit: 2.5 })).toThrow(/entier positif/);
+    expect(() => fuse([], [], { limit: Number.NaN })).toThrow(/entier positif/);
+  });
+
+  it("accepte une limite nulle, qui veut dire zero fragment", () => {
+    expect(fuse([hit(1, 5)], [], { limit: 0 })).toEqual([]);
+  });
+});
