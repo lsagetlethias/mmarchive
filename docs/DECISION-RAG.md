@@ -280,6 +280,17 @@ exhaustivement sans dépendre d'un fournisseur.
 
 ### Le RAG ne s'installe que s'il est demandé
 
+Cette propriété est vérifiée, pas seulement voulue. `tests/rag-inactif.test.ts` interdit à
+tout code du serveur, de la couche de requêtes et du frontend d'importer quoi que ce soit
+du répertoire `rag/`, et n'autorise cette dépendance que depuis la ligne de commande qui
+construit l'index.
+
+Le contrôle porte sur les imports plutôt que sur un drapeau, parce que c'est là que se joue
+réellement la question : un seul import ferait entrer le découpage et le schéma de la
+réserve dans le binaire que le déploiement exécute, sans que personne s'en aperçoive avant
+que la copie autonome grossisse ou qu'une route apparaisse. Mesuré à ce jour, `dist/serve.js`
+ne contient aucun symbole du RAG.
+
 Les routes ne sont montées que si la configuration l'active, et `/api/meta` expose un
 drapeau que le frontend lit pour afficher ou non l'entrée « Assistant ». Sans configuration,
 rien n'est chargé, rien n'est servi, et l'absence du fichier de vecteurs n'est pas une
