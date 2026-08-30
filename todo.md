@@ -199,8 +199,10 @@ authentification. Cadré dans `docs/DECISION-ANONYMISATION.md`.
       Un générateur de noms réalistes a été écarté sur mesure : trente prénoms français très
       courants sont tous déjà portés par un compte de l'archive, donc il aurait attribué les
       propos de quelqu'un au nom d'une personne réelle.
-- [ ] **Mode d'archive complète** : pseudonymiser tous les comptes, supprimer pièces jointes
-      et avatars.
+- [ ] **`mmarchive-anonymize`**, commande distincte et non un drapeau de `redact` : les deux
+      opérations n'ont en commun que leur mécanique, et un drapeau oublié transformerait un
+      effacement ciblé en réécriture complète, irréversible puisque la correspondance est
+      jetée. Pseudonymise tous les comptes, supprime pièces jointes et avatars.
 - [ ] **Réécriture du texte** : mentions résolues vers le pseudonyme pour garder les fils
       lisibles, mentions orphelines neutralisées, adresses remplacées par `<redacted>`.
 - [ ] **Noms en clair**, la partie risquée. 39,7 % des messages en contiennent, vingt fois

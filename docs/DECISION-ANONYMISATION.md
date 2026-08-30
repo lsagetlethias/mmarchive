@@ -156,11 +156,24 @@ passera au travers, et les canaux nommés d'après quelqu'un gardent leur nom.
 
 C'est cette phrase, et non la commande, qu'il faut soumettre au juridique.
 
+## Une commande distincte, pas un drapeau
+
+L'anonymisation d'archive vit dans **`mmarchive-anonymize`**, à côté de `mmarchive-redact`,
+et non derrière un `--all` ajouté à ce dernier.
+
+Ce sont deux opérations que rien ne rapproche sinon leur mécanique. L'une honore la demande
+d'une personne et laisse l'archive par ailleurs intacte ; l'autre réécrit tout, ne se défait
+pas, et prépare une diffusion. Les loger sous le même verbe ferait qu'un drapeau oublié, ou
+ajouté par erreur, transforme une opération ciblée en réécriture complète. Le jour où cela
+arrive, la correspondance a déjà été jetée.
+
+Deux noms distincts rendent la confusion impossible à commettre plutôt que rare.
+
 ## Ordre de construction
 
 1. Les pseudonymes, distribués et salés. **Livré.**
-2. Le mode d'archive complète, qui applique la pseudonymisation à tous les comptes plutôt
-   qu'à un seul, avec suppression des pièces jointes et des avatars.
+2. `mmarchive-anonymize`, qui applique la pseudonymisation à tous les comptes, supprime les
+   pièces jointes et les avatars.
 3. La réécriture du texte : mentions résolues, mentions orphelines, adresses, numéros.
 4. Le remplacement des noms en clair, la partie risquée, à mesurer sur un échantillon avant
    de l'appliquer à l'archive entière.
@@ -168,9 +181,6 @@ C'est cette phrase, et non la commande, qu'il faut soumettre au juridique.
 
 ## Ce qui reste à trancher
 
-- **Le nom de la commande.** Un mode d'archive complète et une demande d'effacement
-  individuelle sont deux opérations différentes ; les loger sous le même verbe avec un
-  drapeau invite à lancer la mauvaise.
 - **Les numéros de téléphone**, 2 903 messages : mêmes deux modes que les adresses, ou
   suppression pure.
 - **La réversibilité par recoupement.** Même sans noms, un fil daté, situé dans un canal
