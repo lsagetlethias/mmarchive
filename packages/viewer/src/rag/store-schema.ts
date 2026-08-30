@@ -53,10 +53,13 @@ CREATE TABLE fragment_user (
  * et l autre repondent pareil : `remove_diacritics 2` traite les lettres
  * accentuees hors du plan latin de base, ce qui compte sur du francais.
  *
- * Contrairement a l index, le contenu est duplique plutot que reference. Une
- * table sans contenu ne sait pas restituer le texte, et la recherche hybride a
- * besoin de comparer des extraits ; le surcout est celui du texte des fragments,
- * deja present dans ce fichier.
+ * Le texte n est pas duplique : `content='fragment'` fait de cette table un index
+ * a contenu externe, qui pointe vers la colonne au lieu d en garder une copie.
+ * C est possible ici parce qu une reserve ne se modifie jamais apres sa
+ * construction, et cela ne coute rien a l usage : `snippet()` sait lire la table
+ * source pour rendre un extrait, contrairement a une table sans contenu du tout
+ * comme celle de l index de consultation. Sur l archive de reference, l index
+ * inverse ajoute 117 Mo la ou une copie du texte en aurait ajoute 293.
  */
 export const STORE_FTS = `
 CREATE VIRTUAL TABLE fragment_fts USING fts5(

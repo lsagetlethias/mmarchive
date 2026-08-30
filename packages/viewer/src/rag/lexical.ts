@@ -25,16 +25,37 @@ export interface LexicalHit {
   readonly score: number;
 }
 
-/** Mots d une question, normalises, sans doublon ni monosyllabe d une lettre. */
+/**
+ * Mots d une question, ramenes a la forme sous laquelle l index les connait.
+ *
+ * Les accents tombent, comme le fait `remove_diacritics 2` du cote de FTS5. Ce
+ * n est pas cosmetique : le vocabulaire de l index ne contient que des formes
+ * sans accent, donc chercher la frequence de « ete » y repond et celle de
+ * « ete » accentue n y repond pas. Sans cette normalisation, aucun mot accentue
+ * n est jamais reconnu comme repandu, ce qui vide le filtrage de son sens sur
+ * une archive francaise.
+ */
 export function questionWords(question: string): string[] {
   return [
     ...new Set(
       question
         .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
         .split(/[^\p{L}\p{N}_-]+/u)
         .filter((mot) => mot.length > 1),
     ),
   ];
+}
+
+/** Neutralise un mot pour FTS5, ou les operateurs deviennent litteraux. */
+function quote(mot: string): string {
+  return `"${mot.replace(/"/g, '""')}"`;
+}
+
+/** Expression FTS5 pour une liste de mots deja normalisee. */
+export function wordsToMatch(mots: readonly string[]): string {
+  return mots.map(quote).join(" OR ");
 }
 
 /**
@@ -50,9 +71,7 @@ export function questionWords(question: string): string[] {
  * le sens de la requete, voire la rendrait invalide.
  */
 export function questionToMatch(question: string): string {
-  return questionWords(question)
-    .map((mot) => `"${mot.replace(/"/g, '""')}"`)
-    .join(" OR ");
+  return wordsToMatch(questionWords(question));
 }
 
 /**
@@ -120,8 +139,7 @@ export function searchLexical(
   question: string,
   options: LexicalOptions = {},
 ): LexicalHit[] {
-  const mots = pruneCommonWords(store, questionWords(question));
-  const match = mots.map((mot) => `"${mot.replace(/"/g, '""')}"`).join(" OR ");
+  const match = wordsToMatch(pruneCommonWords(store, questionWords(question)));
   if (match === "") return [];
 
   const limit = options.limit ?? LEXICAL_DEFAULT_LIMIT;

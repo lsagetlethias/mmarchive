@@ -7,6 +7,7 @@ import {
   LEXICAL_DEFAULT_LIMIT,
   pruneCommonWords,
   questionToMatch,
+  questionWords,
   searchLexical,
 } from "../src/rag/lexical.js";
 import { STORE_DDL, STORE_FTS, STORE_INDEXES } from "../src/rag/store-schema.js";
@@ -188,5 +189,35 @@ describe("mots trop repandus", () => {
     } finally {
       sansFts.close();
     }
+  });
+});
+
+describe("accents et vocabulaire", () => {
+  it("ramene les mots a la forme que l index connait", () => {
+    // FTS5 tokenise sans accent : le vocabulaire ne contient que « decision ».
+    expect(questionToMatch("décision prisé")).toBe('"decision" OR "prise"');
+  });
+
+  it("reconnait un mot repandu meme accentue", () => {
+    // Sans normalisation, la recherche de frequence sur « eté » accentue ne
+    // trouve rien, le mot passe pour rare et le filtrage devient inoperant sur
+    // tout le francais accentue.
+    for (let i = 0; i < 20; i += 1) fragment("le sujet a ete traite");
+    fragment("le sujet a ete traite avec le format");
+    indexer();
+    expect(pruneCommonWords(store, questionWords("été format"))).toEqual(["format"]);
+  });
+
+  it("rend un extrait, ce dont la fusion aura besoin", () => {
+    // Un index a contenu externe sait relire la table source, contrairement a
+    // une table sans contenu du tout.
+    fragment("une longue discussion sur le format d archive et ses consequences");
+    indexer();
+    const r = store
+      .prepare(
+        "SELECT snippet(fragment_fts, 0, '[', ']', '...', 6) AS x FROM fragment_fts WHERE fragment_fts MATCH ?",
+      )
+      .get('"format"');
+    expect(String(r?.x)).toContain("[format]");
   });
 });
