@@ -302,6 +302,27 @@ dans Node et dans le worker du navigateur. Le RAG y échappe : il est asynchrone
 et ne tourne que côté serveur. Le faire passer par `SqlDriver` contaminerait la couche
 isomorphe avec de l'asynchrone dont le mode lite n'a que faire.
 
+### Où en est le code
+
+Cinq morceaux sont livrés, tous ceux qui ne dépendaient d'aucun choix de modèle.
+
+| Étape                  | Fichier                    | État                                      |
+| ---------------------- | -------------------------- | ----------------------------------------- |
+| Découpage              | `rag/chunk.ts`             | livré, fonction pure                      |
+| Simulation             | `rag/plan.ts`              | livré, `mmarchive-index plan-chunks`      |
+| Réserve de fragments   | `rag/chunk-store.ts`       | livré, `mmarchive-index chunks`           |
+| Recherche lexicale     | `rag/lexical.ts`           | livré                                     |
+| Fusion                 | `rag/fusion.ts`            | livré, fonction pure                      |
+| Configuration          | `rag/config.ts`            | reste à faire                             |
+| Client d'embeddings    | `rag/embed.ts`             | reste à faire, attend la dimension        |
+| Stockage vectoriel     | `rag/vectors.ts`           | reste à faire, attend la dimension        |
+| Orchestration          | `rag/retrieve.ts`          | reste à faire                             |
+| Génération             | `rag/generate.ts`          | reste à faire                             |
+| Route SSE              | `server/rag-routes.ts`     | reste à faire                             |
+
+La fusion attend une moitié vectorielle qui n'existe pas encore : elle est écrite,
+testée et utilisable dès qu'on lui passe deux listes.
+
 ### Ordre de construction
 
 1. `chunk.ts` et une commande de simulation qui compte fragments, tokens et coût sans rien
@@ -314,16 +335,86 @@ isomorphe avec de l'asynchrone dont le mode lite n'a que faire.
 
 Les quatre premières étapes ne dépendent d'aucun choix de modèle.
 
+## Le jeu de questions de référence, premier livrable de la suite
+
+Aucune des questions ouvertes ne se tranche par la lecture. Toutes demandent le même
+préalable, et c'est le seul travail que personne ne peut faire à la place de qui connaît
+l'instance : **une vingtaine de questions dont la réponse est connue**.
+
+Chaque question retient **les identifiants des messages qui y répondent**, pas un numéro de
+fragment. La distinction est essentielle : un fil se découpe en plusieurs fragments, et le
+découpage change dès qu'on touche à la coupure temporelle, ce qu'on va justement faire. Des
+numéros de fragment seraient périmés à la première comparaison. Les identifiants de messages
+sont ceux de l'archive, et ne bougent pas.
+
+La règle de succès en découle : **une question est satisfaite si l'un des `k` premiers
+fragments rendus couvre au moins un de ses messages de référence**, ce qu'on lit dans les
+bornes `first_id` et `last_id` du fragment. C'est mesurable quel que soit le découpage, ce
+qui est la seule façon de comparer deux réglages entre eux.
+
+Vingt suffisent pour départager des configurations. Ce n'est pas une évaluation
+scientifique, c'est un instrument de décision : on compare deux réglages sur les mêmes
+questions, et l'écart se voit. Mieux vaut vingt questions réelles que deux cents fabriquées.
+
+Il faut y mêler les deux natures de questions, parce qu'elles ne se comportent pas pareil :
+les questions factuelles, du type « qui a décidé de tel point » ou « quelle valeur avait été
+retenue », que les petits fragments servent bien, et les questions de synthèse, du type « de
+quoi parlait ce canal », pour lesquelles la littérature montre que les fragments courts sont
+sous-optimaux. Un jeu qui n'aurait que les premières validerait un réglage qui échoue sur
+les secondes.
+
+## Choisir la dimension sans payer plusieurs fois
+
+Le modèle retenu est entraîné en matryoshka : ses dimensions sont triées par importance
+décroissante, donc **tronquer un vecteur revient à en garder les premières composantes,
+puis à renormaliser**. Une seule passe d'embedding permet donc de comparer toutes les
+dimensions, sans jamais rappeler le service.
+
+La procédure tient en quatre temps :
+
+1. Composer l'échantillon, vingt à trente mille fragments, **en y forçant d'abord tous les
+   fragments attendus par le jeu de questions**, le reste tiré au hasard. Sans cette
+   précaution, un fragment de référence absent de l'échantillon compte comme un échec à
+   toutes les dimensions : la mesure est alors identique partout, l'écart réel disparaît
+   dans le bruit, et on choisit la mauvaise dimension en croyant l'avoir mesurée. La
+   couverture se vérifie avant de commencer, pas après.
+2. Embarquer cet échantillon à la dimension maximale. Quelques dizaines de centimes et
+   quelques minutes ; la passe complète attendra que le choix soit fait.
+3. Mesurer le rappel **à la dimension maximale d'abord**, puis à 2 000, 1 024, 768 et 256 en
+   tronquant localement. La mesure à pleine dimension est la référence sans laquelle la
+   courbe n'a pas d'origine : c'est elle qui dit si le rappel progressait encore au-dessus
+   de 2 000, ou s'il avait déjà cessé.
+4. Lire la courbe et appliquer une règle écrite d'avance, plutôt que de l'interpréter après
+   coup : **retenir la plus petite dimension dont le rappel reste à moins d'un point de la
+   référence à pleine dimension.** Sur une vingtaine de questions, une question qui bascule
+   vaut cinq points, donc une baisse d'un seul point est du bruit et non un décrochage. Si
+   le rappel tient jusqu'à 256, c'est 256 qui gagne, et il n'y a pas de décrochage à
+   chercher : les travaux publiés situent le seuil autour de 80 % de troncature, mais ils
+   portent sur des corpus anglais et rien n'oblige cette archive à s'y conformer.
+
+La quantification ne se décide pas après, mais **avec** la dimension. Réduire à huit bits
+déplace les classements, et l'ampleur de ce déplacement dépend de la largeur du vecteur :
+mesurer les deux séparément reviendrait à retenir un couple dont le rappel commun n'a jamais
+été observé. Chaque dimension candidate se mesure donc **après la troncature, la
+renormalisation et la quantification exactes que l'index vectoriel appliquera**, et non sur
+des vecteurs en flottants qui ne seront jamais servis.
+
+Les tailles en jeu, sur 297 515 fragments et en entiers 8 bits : 1 219 Mo en 4 096
+dimensions, 595 Mo en 2 000, 305 Mo en 1 024, 228 Mo en 768. L'index de consultation pèse
+656 Mo, ce qui donne l'échelle : entre 1 024 et 2 000, l'écart de 290 Mo ne change rien à un
+déploiement mais double presque la part du RAG dans l'ensemble.
+
+Une contradiction reste à lever au premier appel réel : la FAQ du fournisseur recommande
+d'utiliser ce modèle en 2 000 dimensions, tandis que la page de référence de son API liste
+`dimensions` parmi les paramètres non supportés. Si le paramètre est refusé, la troncature
+reste faisable côté client, mais on paie et on transfère 4 096 flottants par fragment.
+
 ## Ce qui reste à trancher, et comment
 
-Aucune des questions ouvertes ne se tranche par la lecture. Toutes demandent un jeu de
-requêtes de référence construit sur cette archive, ce qui est le vrai premier livrable de la
-phase de mesure.
-
 - **La coupure temporelle**, seule variable qui pilote réellement le découpage.
-- **La dimension retenue**, entre 1 024 et 2 000, et la quantification, à mesurer sur le
-  rappel plutôt qu'à décider sur principe.
-- **Le paramètre `dimensions` de l'API**, dont la documentation se contredit.
+  `mmarchive-index plan-chunks --gap <minutes>` existe pour cela : il montre la
+  distribution bouger sans rien envoyer nulle part.
+- **La dimension retenue** et la quantification, selon la procédure ci-dessus.
 - **La méthode de fusion et son poids**, sachant que l'hybride peut dégrader les requêtes
   conceptuelles.
 - **L'écartement des messages système et de bots.** Aucune étude ne mesure cet effet : c'est
