@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.0](https://github.com/lsagetlethias/mmarchive/compare/v1.0.0...v1.1.0) (2026-08-30)
+
+
+### Features
+
+* **viewer:** add the lexical half of hybrid retrieval ([#15](https://github.com/lsagetlethias/mmarchive/issues/15)) ([8850533](https://github.com/lsagetlethias/mmarchive/commit/88505339cd1e8092aa4b7d13afd4a91f780da504))
+* **viewer:** chunk the archive for retrieval, and measure it before sending anything ([#13](https://github.com/lsagetlethias/mmarchive/issues/13)) ([6d1ea16](https://github.com/lsagetlethias/mmarchive/commit/6d1ea16e290e204c147b3524f702216ba086653a))
+* **viewer:** fuse the two halves of hybrid retrieval ([#16](https://github.com/lsagetlethias/mmarchive/issues/16)) ([cb4d058](https://github.com/lsagetlethias/mmarchive/commit/cb4d058232e6ae7cb8efca9ad8fb7f14f0ebad13))
+* **viewer:** store the fragments, and refuse to serve stale ones ([#14](https://github.com/lsagetlethias/mmarchive/issues/14)) ([f353c66](https://github.com/lsagetlethias/mmarchive/commit/f353c668358b5cadadcafaa4bb1df74b6a592a89))
+
+
+### Documentation
+
+* scope the RAG against the real archive ([#11](https://github.com/lsagetlethias/mmarchive/issues/11)) ([8caf516](https://github.com/lsagetlethias/mmarchive/commit/8caf5167a01cbc205a5213432a416f2f45f466ba))
+* write down how to decide, not just what remains undecided ([#17](https://github.com/lsagetlethias/mmarchive/issues/17)) ([cf60b90](https://github.com/lsagetlethias/mmarchive/commit/cf60b906292e2c8ff35385a663949ccb877fad6d))
+
 ## [1.0.0](https://github.com/lsagetlethias/mmarchive/compare/v0.2.1...v1.0.0) (2026-08-27)
 
 
