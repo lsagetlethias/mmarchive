@@ -542,3 +542,31 @@ describe("redact face a un avatar illisible", () => {
     expect(await empreinteArchive()).toEqual(avant);
   });
 });
+
+describe("codes de sortie", () => {
+  // Un script de conformite lit le code de sortie pour savoir s il doit
+  // recommencer ou alerter. Commander sort en 0 quand une option requise
+  // manque, ce qui ferait passer un refus pour un succes.
+  const lancer = async (args: string[]): Promise<number> => {
+    const { spawnSync } = await import("node:child_process");
+    const cli = new URL("../src/redact.ts", import.meta.url).pathname;
+    const out = spawnSync(process.execPath, ["--import", "tsx", cli, ...args], {
+      encoding: "utf8",
+    });
+    return out.status ?? -1;
+  };
+
+  it("rend 2 quand une option requise manque", async () => {
+    expect(await lancer(["--archive", workDir, "--mode", "remove"])).toBe(2);
+  });
+
+  it("rend 2 sur un identifiant malforme, comme sur toute saisie fautive", async () => {
+    expect(
+      await lancer(["--archive", workDir, "--user", "zz", "--mode", "remove", "--dry-run"]),
+    ).toBe(2);
+  });
+
+  it("rend 0 sur une aide demandee", async () => {
+    expect(await lancer(["--help"])).toBe(0);
+  });
+});
