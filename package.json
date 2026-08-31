@@ -29,6 +29,7 @@
     "mm:doctor": "node --env-file-if-exists=.env --import tsx packages/extractor/src/cli.ts doctor",
     "mm:verify": "node --env-file-if-exists=.env --import tsx packages/extractor/src/cli.ts verify",
     "mm:redact": "node --env-file-if-exists=.env --import tsx packages/extractor/src/redact.ts",
+    "mm:anonymize": "node --import tsx packages/extractor/src/anonymize.ts",
     "mm:index": "node --import tsx packages/viewer/src/cli.ts",
     "mm:serve": "node --import tsx packages/viewer/src/serve.ts"
   },

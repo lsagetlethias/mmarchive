@@ -46,6 +46,22 @@ que le résultat ne tient pas.
 | Pièces jointes dont le nom porte un nom de personne   | 2 452 sur 46 756                    |
 | Canaux dont le nom porte un identifiant rare          | 57 sur 758                          |
 | Avatars stockés                                       | 3 277                               |
+| Emojis personnalisés, souvent des visages             | 762                                 |
+| Messages portant des métadonnées `props`              | 1 185 241, soit 62,6 %              |
+| dont identifiants de comptes en clair dans `props`    | 24 151 sur six clés                 |
+| dont noms de comptes en clair dans `props`            | 76 830                              |
+| Messages dont le corps entier vit dans `props`        | 312 183, soit 16,5 %                |
+
+Les cinq dernières lignes ne figuraient pas au premier cadrage, et elles changent la mesure
+du travail. Les pourcentages du haut du tableau portent sur les 1 311 424 messages écrits par
+des humains, alors que l'archive en compte 1 892 791. Les 581 367 qui manquent sont les
+messages système et ceux déposés par des intégrations, c'est-à-dire précisément ceux dont
+l'identité ne vit pas dans le champ `message`.
+
+**`props` est une surface textuelle du même ordre que le corps des messages**, et rien dans
+le schéma ne la contraint : c'est un `z.record(z.unknown())` recopié tel quel depuis l'API.
+On y compte 969 296 champs de texte et 857 938 paires libellé/valeur, contre 1 892 791
+messages.
 
 Le chiffre qui commande tout est le premier. **Les messages citant un nom en clair sont deux
 fois et demie plus nombreux que ceux qui portent une mention**, et c'est là que se joue la
@@ -113,6 +129,74 @@ fragments alors que tout le reste aurait été pseudonymisé. Les voir listés p
 exclure ou d'en renommer quelques uns à la main, ce qui coûte moins qu'une règle
 automatique.
 
+**L'archive source n'est jamais modifiée.** `--out` est obligatoire. Ce n'est pas un
+confort : le sel est jeté, donc une passe interrompue en place laisserait une archive dont
+les binaires ont disparu, dont les identités sont intactes, et qu'aucun contrôle ne
+distinguerait d'un résultat abouti. Avec une sortie séparée, un échec se solde en jetant la
+sortie. La copie coûte peu, mesurée : 27 Go en entrée, 1,1 Go en sortie, puisque ce sont
+précisément les binaires qui ne sont pas repris.
+
+**Les identifiants de comptes sont tirés au hasard, pas dérivés.** Une dérivation, même
+salée, laisserait une correspondance reconstituable par qui retrouverait le sel ; un tirage
+n'a rien à retrouver. Ils gardent la forme d'un identifiant Mattermost, 26 caractères
+`[a-z0-9]`, parce que le format l'impose et qu'un identifiant lisible ferait échouer toute
+relecture. Le pseudonyme lisible va dans `first_name`, sa forme minuscule dans `username`,
+puisque la colonne correspondante de l'index n'a pas de `COLLATE` et que la recherche
+`from:` y est sensible à la casse.
+
+**`props` est réduit par liste blanche, et non nettoyé par liste noire.** Deux mesures
+l'imposent. La clé `attendents`, mal orthographiée par un plugin de réunion, porte seize
+noms de comptes : aucune liste noire écrite à l'avance ne l'aurait attrapée. Et `ended_by`
+est polymorphe, elle porte un identifiant dans trois cas et un nom dans sept, donc le
+traitement doit regarder la valeur et pas seulement la clé.
+
+**Le texte des blocs `attachments` est conservé.** Le vider aurait été plus simple, et
+invisible, puisque le viewer ne rend jamais `props`. Mais 312 183 messages ont un champ
+`message` vide et tout leur corps là : les vider effacerait 16,5 % du corpus au motif que
+le viewer d'aujourd'hui ne les affiche pas, ce qui inverse le rapport entre l'archive, qui
+est la donnée durable, et le viewer, qui est jetable. Ce texte porte encore des noms et
+rejoint donc le lot de la réécriture. Ce qui désigne, en revanche, part tout de suite :
+`author_name` et les champs en `_link`, `_url` et `_icon`.
+
+**Une référence qui ne résout vers aucun compte est retirée, jamais conservée.** Sur
+l'archive de référence, 156 identifiants portés par des messages système et par des emojis
+ne correspondent à aucune fiche, parce que le compte a été supprimé de l'instance ou que sa
+récupération a échoué. Un repli du type `table.get(x) ?? x` les laisserait intacts.
+
+**Le manifeste perd l'URL de l'instance, l'identité de l'opérateur et le détail des
+avertissements.** `extracted_by` nomme en clair celui qui a lancé l'extraction, dans le
+document que tout lecteur ouvre en premier ; `warnings[].detail` est de la prose d'erreur
+interpolée avec des noms de comptes et de fichiers, qu'on ne réécrit pas sainement, alors
+que le code et le décompte suffisent à auditer ce qui manque. Le nom de la team reste : on
+ne prétend pas cacher l'organisation, et le rapport le nomme comme principal facteur de
+recoupement restant.
+
+**`.extract-state.json` n'est pas repris.** Son champ `fetched_user_ids` porte la liste
+exhaustive des comptes rencontrés, soit exactement ce que l'anonymisation vient de
+remplacer partout ailleurs.
+
+**Les emojis personnalisés perdent leur image.** Le cadrage ne les mentionnait pas, alors
+que l'argument qui a fait supprimer les avatars, une photo de visage identifie plus sûrement
+qu'un nom, s'y applique mot pour mot. Les 762 lignes sont conservées, seule l'image est
+annulée : en retirer ferait diverger `counts.emojis`, que la vérification compare.
+
+## Le contrôle des identités résiduelles
+
+`mmarchive-verify` **ne vérifie rien de l'anonymat**, et le croire est le risque principal.
+Il ne confronte jamais `reactions[].user_id`, `files.user_id` ni `emojis.creator_id` à
+l'annuaire, il ne regarde jamais `props`, et son contrôle des binaires ne parcourt que
+`files.ndjson`, donc ignore les avatars. Une archive dont les 433 442 réactions auraient
+gardé leurs identifiants réels passerait la vérification sans un seul avertissement.
+
+D'où un contrôle dédié, qui relit l'archive produite et fait échouer la commande. Il est
+**positif** sur les références : une valeur en position de référence doit appartenir à
+l'ensemble des identifiants de substitution. Le formuler en négatif, en cherchant les
+identifiants d'origine, laisserait passer les 156 qui ne résolvaient vers aucun compte,
+c'est-à-dire exactement les plus faciles à oublier.
+
+Il énumère aussi ce qu'il ne couvre pas, et la commande l'affiche. Un contrôle qui tairait
+ses limites serait pire que pas de contrôle, puisqu'il ferait croire l'archive diffusable.
+
 ## Le remplacement des noms en clair, et son revers
 
 C'est la partie qui décide de la valeur du résultat, et la seule qui ne peut pas être exacte.
@@ -156,15 +240,30 @@ puisqu'il désigne précisément ce qu'on a cherché à cacher.
 
 ## Ce que cela garantit, et ce que cela ne garantit pas
 
-Est garanti : aucun identifiant, nom de compte, adresse électronique, mention résolue,
-avatar ni pièce jointe ne subsiste, et la correspondance vers les identités d'origine
-n'existe plus nulle part.
+**À l'issue de l'étape 2, seule livrée à ce jour, l'archive n'est pas diffusable.** Le
+manifeste le dit lui-même par `anonymized.message_text_rewritten` à `false`, et la commande
+le répète en clair à chaque exécution.
 
-N'est pas garanti : qu'aucun nom ne subsiste dans le corps des messages, ni dans le nom des
-canaux. Une personne désignée par un surnom, une initiale ou une orthographe approximative
-passera au travers, et les canaux nommés d'après quelqu'un gardent leur nom.
+Est garanti dès maintenant : plus aucun identifiant ni nom de compte dans les champs qui les
+portaient, ni dans les métadonnées `props`, ni dans les réactions ; plus aucune adresse
+électronique de compte, plus aucun avatar, aucune pièce jointe, aucune image d'emoji, plus
+d'URL d'instance, plus d'identité d'opérateur ; et la correspondance vers les identités
+d'origine n'existe nulle part, puisque les nouveaux identifiants sont tirés au hasard.
 
-C'est cette phrase, et non la commande, qu'il faut soumettre au juridique.
+N'est pas garanti, et le contrôle l'énumère à chaque exécution plutôt que de le taire : le
+corps des messages, qui porte encore mentions, noms écrits en clair et adresses ; le texte
+des blocs `attachments`, conservé pour ne pas vider 312 183 messages ; le nom et l'objet des
+canaux ; le nom des emojis personnalisés, souvent formé sur un prénom ; le nom et la
+description de la team, qui désignent l'organisation.
+
+Deux résidus méritent d'être nommés parce qu'ils ont été mesurés sur l'archive produite.
+Onze identifiants de comptes réels sont **collés dans le corps de sept messages**, sous
+forme de permalien ou d'identifiant brut : la réécriture du texte devra donc traiter les
+identifiants de 26 caractères, et pas seulement les mentions et les noms. Et une personne
+désignée par un surnom, une initiale ou une orthographe approximative passera au travers,
+ce qu'aucune règle automatique ne rattrapera.
+
+C'est cette section, et non la commande, qu'il faut soumettre au juridique.
 
 ## Une commande distincte, pas un drapeau
 
@@ -182,12 +281,17 @@ Deux noms distincts rendent la confusion impossible à commettre plutôt que rar
 ## Ordre de construction
 
 1. Les pseudonymes, distribués et salés. **Livré.**
-2. `mmarchive-anonymize`, qui applique la pseudonymisation à tous les comptes, supprime les
-   pièces jointes et les avatars.
-3. La réécriture du texte : mentions résolues, mentions orphelines, adresses, numéros.
-4. Le remplacement des noms en clair, la partie risquée, à mesurer sur un échantillon avant
-   de l'appliquer à l'archive entière.
-5. Le rapport, qui doit exister avant l'étape 4 pour que ses effets soient observables.
+2. `mmarchive-anonymize` : pseudonymisation de tous les comptes, réduction de `props`,
+   binaires non repris, manifeste réécrit, contrôle des identités résiduelles. **Livré.**
+   Mesuré sur l'archive de référence : 3 277 comptes, 1 892 791 messages, 2 373 746
+   références réécrites et 2 494 retirées faute de compte correspondant, en 35 secondes.
+3. Le rapport, remonté avant la réécriture du texte pour que ses effets soient observables
+   quand elle arrivera.
+4. La réécriture du texte : mentions résolues, mentions orphelines, adresses, numéros, et
+   les identifiants bruts collés dans le corps.
+5. Le remplacement des noms en clair, la partie risquée, à mesurer sur un échantillon avant
+   de l'appliquer à l'archive entière. Elle porte désormais sur deux surfaces, le corps des
+   messages et le texte des blocs `attachments`.
 
 ## Ce qui reste à trancher
 

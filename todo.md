@@ -201,23 +201,34 @@ authentification. Cadré dans `docs/DECISION-ANONYMISATION.md`.
       Un générateur de noms réalistes a été écarté sur mesure : trente prénoms français très
       courants sont tous déjà portés par un compte de l'archive, donc il aurait attribué les
       propos de quelqu'un au nom d'une personne réelle.
-- [ ] **`mmarchive-anonymize`**, commande distincte et non un drapeau de `redact` : les deux
+- [x] **`mmarchive-anonymize`**, commande distincte et non un drapeau de `redact` : les deux
       opérations n'ont en commun que leur mécanique, et un drapeau oublié transformerait un
       effacement ciblé en réécriture complète, irréversible puisque la correspondance est
-      jetée. Pseudonymise tous les comptes, supprime pièces jointes et avatars.
+      jetée. `--out` est obligatoire, l'archive source n'est jamais modifiée : le sel étant
+      jeté, une passe interrompue en place laisserait une archive mutilée que rien ne
+      distinguerait d'un résultat abouti. Mesuré : 27 Go en entrée, 1,1 Go en sortie,
+      2 373 746 références réécrites en 35 secondes.
+- [x] **Contrôle des identités résiduelles**, qui fait échouer la commande. C'est la seule
+      vraie sécurité : `verify` ne confronte jamais les réactions, `files.user_id` ni
+      `emojis.creator_id` à l'annuaire, ne regarde jamais `props`, et ignore les avatars.
+      Formulé en positif, sans quoi il serait aveugle aux 156 identifiants qui ne résolvent
+      vers aucun compte. Il énumère ce qu'il ne couvre pas, plutôt que de le taire.
+- [ ] **Rapport des occurrences résiduelles**, remonté avant la réécriture du texte pour que
+      ses effets soient observables quand elle arrivera. Il dit ce qui est garanti et ce qui
+      ne l'est pas, et ne doit jamais être diffusé avec l'archive puisqu'il désigne ce qu'on
+      a caché. Il liste notamment les 57 canaux publics dont le nom porte une identité : ils
+      ne sont pas renommés, parce que cela casserait les permaliens, mais leur nom apparaît
+      dans la barre latérale, dans chaque permalien et en tête de chaque fragment du RAG.
+      Les voir listés permet d'en traiter quelques uns à la main avant diffusion.
 - [ ] **Réécriture du texte** : mentions résolues vers le pseudonyme pour garder les fils
       lisibles, mentions orphelines neutralisées, adresses remplacées par `<redacted>`.
+      Deux surfaces et non une : le corps des messages, et le texte des blocs `attachments`
+      où vit le corps entier de 312 183 messages. Traiter aussi les identifiants bruts de
+      26 caractères collés dans le corps, mesurés à onze occurrences sur sept messages.
 - [ ] **Noms en clair**, la partie risquée. 39,7 % des messages en contiennent, deux fois et
       demie plus que ceux qui portent une mention, et treize mots courants du français sont
       aussi des noms de comptes ici. L'arbitrage est de privilégier l'anonymat : un texte
       abîmé reste exploitable, une identité qui fuit ne se rattrape pas.
-- [ ] **Rapport des occurrences résiduelles**, à construire avant le point précédent pour
-      que ses effets soient observables. Il dit ce qui est garanti et ce qui ne l'est pas,
-      et ne doit jamais être diffusé avec l'archive puisqu'il désigne ce qu'on a caché.
-      Il liste notamment les 57 canaux publics dont le nom porte une identité : ils ne sont
-      pas renommés, parce que cela casserait les permaliens, mais leur nom apparaît dans la
-      barre latérale, dans chaque permalien et en tête de chaque fragment du RAG. Les voir
-      listés permet d'en traiter quelques uns à la main avant diffusion.
 
 ## Dette identifiée
 

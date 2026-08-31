@@ -6,7 +6,7 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 };
 
 export default defineConfig({
-  entry: ["src/cli.ts", "src/redact.ts"],
+  entry: ["src/cli.ts", "src/redact.ts", "src/anonymize.ts"],
   format: ["esm"],
   target: "node22",
   platform: "node",

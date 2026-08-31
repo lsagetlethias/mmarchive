@@ -178,6 +178,34 @@ l'instance, pour qu'un tiers puisse en rendre compte.
 
 Un lecteur qui rencontre un code inconnu doit l'ignorer, pas échouer.
 
+### `anonymized` : présent seulement après anonymisation
+
+Champ optionnel, absent d'une archive d'extraction. Il est posé par
+`mmarchive-anonymize` et dit jusqu'où l'anonymisation est allée :
+
+```json
+{
+  "at": "2026-08-31T12:00:00.000Z",
+  "tool_version": "1.1.0",
+  "binaries_removed": true,
+  "message_text_rewritten": false
+}
+```
+
+`binaries_removed` dit une fois, ici, que les pièces jointes, avatars et emojis
+personnalisés ne sont pas repris. Le répéter sur chaque ligne de `files.ndjson` par une
+valeur de `skip_reason` aurait exigé d'étendre un enum fermé, donc de faire échouer la
+lecture chez tout lecteur existant.
+
+`message_text_rewritten` à `false` signale que le corps des messages porte encore des
+mentions, des noms écrits en clair et des adresses. **Une archive dans cet état n'est
+pas diffusable**, et c'est ce champ qui permet à un lecteur de le savoir sans avoir à
+faire confiance au nom du répertoire.
+
+Un lecteur qui trouve ce champ doit aussi savoir que les identifiants de comptes y sont
+**tirés au hasard** : ils ont la forme d'un identifiant Mattermost mais ne désignent
+plus rien sur l'instance d'origine, et aucune correspondance n'existe nulle part.
+
 ---
 
 ## 5. `posts/<channel_id>.ndjson`
@@ -377,6 +405,12 @@ téléchargés, canaux et teams rejoints, warnings accumulés.
 **Il n'est pas normatif** et n'est pas destiné aux lecteurs d'archive. Il est conservé
 dans l'archive parce qu'il est la trace la plus fiable de ce qui a été rejoint, y
 compris après un crash. Un lecteur doit l'ignorer.
+
+Une archive passée par `mmarchive-anonymize` **ne le contient pas**. Son champ
+`fetched_user_ids` est la liste exhaustive des comptes rencontrés, soit exactement ce
+qu'une anonymisation vient de remplacer ailleurs ; le laisser annulerait tout le reste.
+Son absence est aussi ce qui rend une archive anonymisée non reprenable contre
+l'instance d'origine, ce qui est souhaitable.
 
 ---
 

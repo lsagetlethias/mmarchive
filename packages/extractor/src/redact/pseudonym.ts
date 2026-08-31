@@ -208,6 +208,21 @@ export const PREFIXE = "Anon-";
 /** Combinaisons distinctes que ce vocabulaire peut former. */
 export const CAPACITE = NOMS.length * ADJECTIFS.length;
 
+/**
+ * Forme exacte d un pseudonyme emis.
+ *
+ * Le controle residuel s en sert plutot que de chercher un nom d etat civil dans
+ * la valeur, et la raison est mesuree : trois mots de ce vocabulaire,
+ * « Claire », « Guillemot » et « Leger », sont aussi des noms portes par des
+ * comptes de l archive de reference. Deux pour cent du vocabulaire suffisaient a
+ * faire signaler 101 comptes sur 3 277 comme portant une identite survivante,
+ * alors qu ils portaient leur propre pseudonyme.
+ *
+ * C est le meme fait qui justifie le prefixe : « Guillemot Adroit » se lirait
+ * comme un nom de personne, et se trouve en etre un.
+ */
+export const FORME_PSEUDONYME = /^Anon-[A-Z][a-z]+-[A-Z][a-z]+(?:-\d+)?$/;
+
 function combinaison(rang: number): string {
   // Les deux axes avancent ensemble, et leurs tailles sont premieres entre elles
   // pour que le cycle couvre bien toutes les combinaisons. Faire avancer

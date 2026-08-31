@@ -396,6 +396,35 @@ d'effacement et conserver une archive cohérente.
 
 L'opération modifie l'archive **en place, sans retour possible**. Sauvegardez avant.
 
+### Rendre une archive entière diffusable
+
+`redact` répond à la demande d'une personne. Quand c'est l'archive entière qui doit être
+diffusée, l'exigence n'est plus la même et la commande non plus :
+
+```bash
+mmarchive-anonymize --archive ./archive --out ./archive-anonyme
+```
+
+Tous les comptes sont pseudonymisés, sous une forme manifestement artificielle du type
+`Anon-Obsidienne-Discrete`. Les identifiants de substitution sont **tirés au hasard** : ils
+gardent la forme d'un identifiant Mattermost mais ne désignent plus rien, et aucune
+correspondance n'est conservée nulle part. Les pièces jointes, les avatars et les images
+d'emoji ne sont pas repris, les métadonnées `props` sont réduites à ce qui se justifie, et
+le manifeste perd l'URL de l'instance comme l'identité de l'opérateur.
+
+`--out` est obligatoire et l'archive source n'est jamais modifiée. La sortie est bien plus
+petite que l'entrée puisque les binaires n'y sont pas repris, et un échec en cours de route
+se règle en jetant la sortie.
+
+La commande se termine par un contrôle des identités résiduelles qui la fait échouer si une
+seule survit, puis énumère ce que ce contrôle **ne couvre pas**.
+
+> À l'issue de cette étape, l'archive n'est **pas encore diffusable** : le corps des messages
+> porte toujours mentions, noms écrits en clair et adresses. Le manifeste le dit lui-même par
+> `anonymized.message_text_rewritten` à `false`. Lisez
+> [`docs/DECISION-ANONYMISATION.md`](docs/DECISION-ANONYMISATION.md), et en particulier la
+> section « ce que cela garantit, et ce que cela ne garantit pas », avant toute diffusion.
+
 ---
 
 ## Sécurité
@@ -404,7 +433,8 @@ L'opération modifie l'archive **en place, sans retour possible**. Sauvegardez a
   le champ `email` de l'API. Les champs de profil libres (`nickname`, `position`) et le
   corps des messages contiennent fréquemment des adresses, des numéros de téléphone ou
   d'autres données personnelles. Traitez toute archive comme contenant des données
-  personnelles. Pour honorer une demande d'effacement, voir `mmarchive-redact`.
+  personnelles. Pour honorer une demande d'effacement, voir `mmarchive-redact` ; pour
+  préparer une diffusion, voir `mmarchive-anonymize`, en lisant ce qu'il ne garantit pas.
 - **Le token donne un accès en écriture à toute l'instance.** Ne le committez jamais.
   Le `.gitignore` couvre `.env`, les archives, les fichiers de sélection et les index.
 - Une archive contient des échanges internes. Même publics au sein d'une organisation,

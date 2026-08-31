@@ -40,6 +40,8 @@ export const ERROR_CODES = {
   ArchivePathError: "E3005",
   UnsafeArchivePathError: "E3006",
   ReverseFileError: "E3007",
+  AnonymizeError: "E3008",
+  ResidualIdentityError: "E3009",
 
   StateCorruptedError: "E4001",
   StateMismatchError: "E4002",

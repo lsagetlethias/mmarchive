@@ -6,7 +6,8 @@
   "description": "CLI d extraction des canaux publics Mattermost vers une archive NDJSON.",
   "bin": {
     "mmarchive-extract": "./dist/cli.js",
-    "mmarchive-redact": "./dist/redact.js"
+    "mmarchive-redact": "./dist/redact.js",
+    "mmarchive-anonymize": "./dist/anonymize.js"
   },
   "scripts": {
     "build": "tsup",
