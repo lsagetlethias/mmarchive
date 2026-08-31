@@ -47,9 +47,10 @@ que le résultat ne tient pas.
 | Canaux dont le nom porte un identifiant rare          | 57 sur 758                          |
 | Avatars stockés                                       | 3 277                               |
 
-Le chiffre qui commande tout est le premier. **Les noms écrits en clair sont vingt fois plus
-nombreux que les mentions**, et c'est là que se joue la réussite ou l'échec. Il est
-d'ailleurs surestimé : le comptage attrape des mots courants qui sont aussi des identités.
+Le chiffre qui commande tout est le premier. **Les messages citant un nom en clair sont deux
+fois et demie plus nombreux que ceux qui portent une mention**, et c'est là que se joue la
+réussite ou l'échec. Il est d'ailleurs surestimé : le comptage attrape des mots courants qui
+sont aussi des identités.
 
 ## Les décisions
 
