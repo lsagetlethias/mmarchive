@@ -1,12 +1,21 @@
+import { writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { type ArchiveUser, describeError } from "@mmarchive/shared";
 import { readNdjson } from "@mmarchive/shared/ndjson";
 import { Command } from "commander";
 import { ArchivePathError, createArchivePaths } from "./archive/paths.js";
-import { AnonymizeError, anonymizeArchive } from "./redact/anonymize-archive.js";
+import {
+  AnonymizeError,
+  type AnonymizeResult,
+  anonymizeArchive,
+  refuserCheminInterne,
+} from "./redact/anonymize-archive.js";
+import { type ContexteRapport, rendreReleve, rendreSynthese } from "./redact/report-render.js";
 import {
   checkResidualIdentities,
   collecterIdentitesOrigine,
   ResidualIdentityError,
+  type ResidualReport,
 } from "./redact/residual-check.js";
 import { Logger } from "./ui/logger.js";
 import { TOOL_VERSION } from "./version.js";
@@ -31,6 +40,14 @@ program.exitOverride((erreur) => {
   process.exit(SORTIES_NORMALES.has(erreur.code) ? 0 : 2);
 });
 
+interface Options {
+  archive: string;
+  out: string;
+  force?: boolean;
+  rapport?: string;
+  releve?: string;
+}
+
 program
   .name("mmarchive-anonymize")
   .description(
@@ -43,42 +60,107 @@ program
     "--force",
     "Remplace une sortie qui porte deja une archive anonymisee. Refuse tout autre repertoire non vide.",
   )
-  .action(async (opts: { archive: string; out: string; force?: boolean }) => {
+  .option("--rapport <fichier>", "Ou ecrire la synthese. Par defaut, a cote de la sortie.")
+  .option(
+    "--releve <fichier>",
+    "Ecrit le releve detaille des residus. Il ne se diffuse pas : il porte les formes que l anonymisation n a pas traitees.",
+  )
+  .action(async (opts: Options) => {
     const logger = new Logger();
+    const horodatage = new Date().toISOString();
+    // Les deux-points d une date ISO sont interdits dans un nom de fichier sous
+    // Windows, ou l ecriture echouerait. L horodatage complet reste dans le
+    // contenu du rapport, ou il ne gene personne.
+    const pourNomDeFichier = horodatage.replace(/[:.]/g, "-");
+    const voisin = (nom: string): string => join(dirname(resolve(opts.out)), nom);
+    const cheminSynthese = resolve(
+      opts.rapport ?? voisin(`rapport-anonymisation-${pourNomDeFichier}.md`),
+    );
+    const cheminReleve =
+      opts.releve === undefined
+        ? voisin(`releve-ne-pas-diffuser-${pourNomDeFichier}.ndjson`)
+        : resolve(opts.releve);
 
-    const result = await anonymizeArchive({
+    // Avant la passe et non apres : un chemin fautif doit echouer en une
+    // seconde plutot qu au bout d une demi-minute de travail.
+    await refuserCheminInterne(cheminSynthese, opts.archive, opts.out);
+    await refuserCheminInterne(cheminReleve, opts.archive, opts.out);
+
+    const resultat = await anonymizeArchive({
       archiveDir: opts.archive,
       outDir: opts.out,
       force: opts.force ?? false,
       logger,
     });
+    resumer(resultat, logger);
+
+    logger.info("Controle des identites residuelles.");
+    const controle = await controler(opts.archive, opts.out);
+
+    // Le releve s ecrit d office quand le controle a trouve quelque chose : il
+    // n y a alors rien a diffuser, et le detail est ce qu on cherche.
+    const veutReleve = opts.releve !== undefined || controle.manquements.length > 0;
+    const contexte: ContexteRapport = {
+      resultat,
+      controle,
+      versionOutil: TOOL_VERSION,
+      horodatage,
+      releveProduit: veutReleve,
+    };
+
+    // Le rapport s ecrit AVANT de lever. Sans cela, la seule execution ou il
+    // est indispensable serait precisement celle qui n en produirait aucun.
+    await writeFile(cheminSynthese, rendreSynthese(contexte), "utf8");
+    logger.info(`Synthese : ${cheminSynthese}`);
+    if (veutReleve) {
+      await writeFile(cheminReleve, rendreReleve(contexte), "utf8");
+      logger.warn(`Releve : ${cheminReleve}`);
+      logger.warn("  Il porte les formes residuelles. Ne pas le diffuser, le detruire ensuite.");
+    }
+
+    if (controle.manquements.length > 0) {
+      for (const manquement of controle.manquements.slice(0, 20)) {
+        logger.error(
+          `${manquement.emplacement} ${manquement.champ} [${manquement.genre}] : ${manquement.extrait}`,
+        );
+      }
+      const reste = controle.manquements.length - 20;
+      if (reste > 0) logger.error(`et ${String(reste)} autre(s), tous au releve.`);
+      throw new ResidualIdentityError(
+        `${String(controle.manquements.length)} identite(s) ont survecu a l anonymisation. ` +
+          "L archive produite ne doit pas etre diffusee.",
+      );
+    }
 
     logger.info(
-      `${String(result.referencesReecrites)} references d identite reecrites, ` +
-        `${String(result.props.referencesReecrites)} dans props, ` +
-        `${String(result.props.referencesOrphelines)} retirees faute de compte correspondant.`,
+      `Controle passe : ${String(controle.referencesVerifiees)} references et ` +
+        `${String(controle.valeursVerifiees)} valeurs verifiees.`,
     );
-    logger.info(
-      `props : ${String(result.props.clesRetirees)} cles retirees, ` +
-        `${String(result.props.attachmentsReduits)} blocs attachments reduits a leur texte.`,
-    );
-
-    // Le controle ne se saute pas. Il n existe aucun drapeau pour l eviter, et
-    // c est deliberé : il coute dix secondes sur deux millions de messages, et
-    // la seule raison de vouloir l eviter serait un faux positif, qui se corrige
-    // dans le controle et non en le contournant. Une commande capable de rendre
-    // une archive non verifiee finirait par en produire une, et par la diffuser.
-    await controler(opts.archive, opts.out, logger);
-
-    // Le dire a la fin, apres les chiffres, parce que c est ce qu on retient.
-    logger.warn(
-      "Cette passe n a pas touche au corps des messages : mentions, noms en clair et adresses y survivent.",
-    );
-    logger.warn("L archive produite n est pas encore diffusable.");
+    logger.warn("Ce controle ne couvre pas :");
+    for (const limite of controle.horsControle) logger.warn(`  - ${limite}`);
+    logger.warn("L archive produite n est pas encore diffusable. Lisez la synthese.");
   });
 
-async function controler(archiveDir: string, outDir: string, logger: Logger): Promise<void> {
-  logger.info("Controle des identites residuelles.");
+function resumer(resultat: AnonymizeResult, logger: Logger): void {
+  const total = Object.values(resultat.references).reduce(
+    (acc, categorie) => ({
+      reecrites: acc.reecrites + categorie.reecrites,
+      orphelines: acc.orphelines + categorie.orphelines,
+    }),
+    { reecrites: 0, orphelines: 0 },
+  );
+  logger.info(
+    `${String(total.reecrites + resultat.props.referencesReecrites)} references d identite reecrites, ` +
+      `${String(total.orphelines + resultat.props.referencesOrphelines)} retirees faute de compte correspondant.`,
+  );
+  logger.info(
+    `props : ${String(resultat.props.clesRetirees)} cles retirees, ` +
+      `${String(resultat.props.attachmentsReduits)} blocs attachments reduits a leur texte, ` +
+      `${String(resultat.nomsSubstitues)} noms substitues dans le texte des messages systeme.`,
+  );
+}
+
+async function controler(archiveDir: string, outDir: string): Promise<ResidualReport> {
   const source = createArchivePaths(archiveDir);
   const sortie = createArchivePaths(outDir);
 
@@ -93,32 +175,7 @@ async function controler(archiveDir: string, outDir: string, logger: Logger): Pr
     usernames.add(user.username);
   }
 
-  const rapport = await checkResidualIdentities({
-    outDir,
-    origine,
-    substitution: { uids, usernames },
-  });
-
-  if (rapport.manquements.length > 0) {
-    for (const manquement of rapport.manquements.slice(0, 20)) {
-      logger.error(
-        `${manquement.emplacement} ${manquement.champ} [${manquement.genre}] : ${manquement.extrait}`,
-      );
-    }
-    const reste = rapport.manquements.length - 20;
-    if (reste > 0) logger.error(`et ${String(reste)} autre(s).`);
-    throw new ResidualIdentityError(
-      `${String(rapport.manquements.length)} identite(s) ont survecu a l anonymisation. ` +
-        "L archive produite ne doit pas etre diffusee.",
-    );
-  }
-
-  logger.info(
-    `Controle passe : ${String(rapport.referencesVerifiees)} references et ` +
-      `${String(rapport.valeursVerifiees)} valeurs verifiees.`,
-  );
-  logger.warn("Ce controle ne couvre pas :");
-  for (const limite of rapport.horsControle) logger.warn(`  - ${limite}`);
+  return checkResidualIdentities({ outDir, origine, substitution: { uids, usernames } });
 }
 
 try {

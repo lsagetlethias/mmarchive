@@ -44,7 +44,7 @@ que le résultat ne tient pas.
 | Messages contenant une adresse électronique           | 41 960, soit 3,2 %                  |
 | Messages ressemblant à un numéro de téléphone         | 2 903, soit 0,2 %                   |
 | Pièces jointes dont le nom porte un nom de personne   | 2 452 sur 46 756                    |
-| Canaux dont le nom porte un identifiant rare          | 57 sur 758                          |
+| Canaux dont le nom porte un identifiant rare          | 23 sur 758                          |
 | Avatars stockés                                       | 3 277                               |
 | Emojis personnalisés, souvent des visages             | 762                                 |
 | Messages portant des métadonnées `props`              | 1 185 241, soit 62,6 %              |
@@ -113,13 +113,20 @@ une identité, et une photo de visage plus sûrement encore.
 qui ne prend que des canaux publics.
 
 **Les canaux publics dont le nom porte une identité ne sont pas renommés.** Ils existent, et
-ce ne sont pas des canaux personnels : 57 sur 758 contiennent un identifiant porté par un ou
-deux comptes seulement, dont 3 dont le nom se réduit à cela. Le premier comptage en trouvait
-181, mais il attrapait des prénoms répandus employés comme mots ordinaires ; ne retenir que
-les identifiants rares donne une mesure défendable.
+ce ne sont pas des canaux personnels : **23 sur 758** portent, dans leur `name` ou leur
+`display_name`, un jeton d'au moins quatre caractères qui est le nom d'utilisateur, le
+prénom, le nom ou le surnom d'un ou deux comptes seulement.
+
+Ce chiffre en remplace deux autres, et la correction vaut d'être écrite puisque c'est cette
+section qu'un juriste lit. Le premier comptage en trouvait 181, mais attrapait des prénoms
+répandus employés comme mots ordinaires. Le second annonçait 57, et **n'est pas
+reproductible** : avec la définition ci-dessus, aucun réglage du seuil de rareté ni de la
+longueur minimale du jeton ne dépasse 44, et 23 avec les valeurs retenues. C'est l'outil qui
+produit désormais ce chiffre, à chaque exécution, plutôt qu'une mesure faite une fois à la
+main.
 
 Renommer coûterait plus que cela ne rapporte : les permaliens cassent, et l'archive cesse de
-correspondre aux souvenirs de ceux qui l'ont vécue. Ces 57 canaux sont donc un **résidu
+correspondre aux souvenirs de ceux qui l'ont vécue. Ces 23 canaux sont donc un **résidu
 assumé**, et le rapport les nomme un par un.
 
 C'est le cas qu'il faut connaître avant de diffuser, parce que le nom d'un canal ne se cache
@@ -274,6 +281,39 @@ Ce rapport n'est pas un accessoire. Il est ce qui permet de dire à un juriste c
 garanti et ce qui ne l'est pas, et il doit être lu avant diffusion, jamais archivé avec elle
 puisqu'il désigne précisément ce qu'on a cherché à cacher.
 
+## Ce que le rapport ne dira jamais
+
+Le rapport est produit, en deux documents qui ne s'adressent pas au même lecteur. La
+**synthèse** circule ; le **relevé** ne circule pas et doit être détruit.
+
+Le piège de conception était que le rapport redevienne la table de correspondance qu'on vient
+de jeter. Il ne suffit pas de s'interdire d'écrire les paires : plusieurs formes anodines la
+restituent, et la signature du producteur est ce qui les rend impossibles plutôt
+qu'improbables. Il reçoit des ensembles, jamais l'association.
+
+Ce que la synthèse s'interdit, et pourquoi :
+
+- **Aucune ligne par compte**, quel que soit le chiffre porté. Les volumes se recomptent
+  depuis l'archive diffusée : deux listes se trient et s'apparient rang par rang.
+- **Aucun décompte clé par une chaîne d'origine**, même sans imprimer la chaîne. Après la
+  réécriture du texte, un pseudonyme apparaîtra dans l'archive autant de fois que la forme
+  qu'il remplace ; compter les occurrences et lire la valeur en face suffirait.
+- **Aucune date par compte**, à aucune granularité. Une date d'arrivée et une date de départ
+  figurent dans un annuaire interne, et le lecteur lit le pseudonyme en face.
+- **Aucun identifiant d'emplacement**, ni de message ni de canal : ils sont recopiés à
+  l'identique dans l'archive diffusée, donc ce serait une clé de jointure exacte.
+- **Aucune classe d'effectif inférieur à cinq**, fondue dans une classe plus large. Un
+  décompte à un n'est pas un décompte, c'est une désignation.
+- **Aucun tri par volume, par date ou par ordre d'origine.** L'ordre est un canal à part
+  entière : un tri par volume est la fuite du volume sous forme ordinale.
+
+Et **jamais de verdict positif**. Le verdict a deux valeurs, `non_diffusable` avec sa cause,
+ou `sans_avis`. La raison n'est pas la prudence mais l'asymétrie de la preuve : une identité
+trouvée est une preuve, aucune identité trouvée n'en est pas une, puisque le corps des
+messages et les noms de canaux restent hors du périmètre vérifiable. Le vrai coût d'un
+verdict positif est d'ailleurs pratique : il termine la revue, et personne ne lit les limites
+d'un document qui s'ouvre sur « diffusable ».
+
 ## Ce que cela garantit, et ce que cela ne garantit pas
 
 **À l'issue de l'étape 2, seule livrée à ce jour, l'archive n'est pas diffusable.** Le
@@ -285,8 +325,14 @@ identifiant ni nom de compte parmi les auteurs de messages, les réactions, les 
 pièces jointes, les créateurs d'emoji, les fiches de comptes et les clés de référence de
 `props` ; plus aucune adresse électronique de compte, plus aucun avatar, aucune pièce
 jointe, aucune image d'emoji, plus d'URL d'instance, plus d'identité d'opérateur ; et la
-correspondance vers les identités d'origine n'existe nulle part, puisque les nouveaux
-identifiants sont tirés au hasard.
+correspondance vers les identités d'origine n'existe nulle part **pour qui ne détient pas
+l'archive source**.
+
+Cette dernière réserve est nécessaire et ne doit pas être retirée. Les identifiants de
+messages, de canaux et de pièces jointes sont conservés délibérément, parce que la
+vérification les exige et que les permaliens en dépendent : qui possède l'archive d'origine
+peut donc apparier ligne à ligne, quel que soit le soin apporté au reste. La forme absolue
+serait plus belle et un juriste la prendrait au mot.
 
 Le **texte** conservé dans `props`, celui des blocs `attachments`, n'entre pas dans cette
 garantie. `props` reste une structure ouverte, et ce texte est traité exactement comme le
@@ -331,8 +377,10 @@ Deux noms distincts rendent la confusion impossible à commettre plutôt que rar
    binaires non repris, manifeste réécrit, contrôle des identités résiduelles. **Livré.**
    Mesuré sur l'archive de référence : 3 277 comptes, 1 892 791 messages, 2 373 746
    références réécrites et 2 494 retirées faute de compte correspondant, en 35 secondes.
-3. Le rapport, remonté avant la réécriture du texte pour que ses effets soient observables
-   quand elle arrivera.
+3. Le rapport, en deux documents. **Livré.** La synthèse circule et ne porte aucune chaîne
+   d'origine ; le relevé porte le détail et se détruit. Le rapport s'écrit avant que le
+   contrôle ne lève, sans quoi la seule exécution où il est indispensable serait précisément
+   celle qui n'en produirait aucun.
 4. La réécriture du texte : mentions résolues, mentions orphelines, adresses, numéros, et
    les identifiants bruts collés dans le corps.
 5. Le remplacement des noms en clair, la partie risquée, à mesurer sur un échantillon avant

@@ -419,6 +419,17 @@ Un échec en cours de route laisse une sortie partielle, **à supprimer vous-mê
 commande ne l'efface pas, et `--force` refuse de la remplacer. `--force` ne réécrit qu'une
 sortie portant déjà une archive anonymisée complète, jamais un répertoire quelconque.
 
+La commande produit une **synthèse** à côté de la sortie, jamais dedans. C'est le document
+à faire lire avant toute diffusion : il donne un verdict, le périmètre de ce qui est garanti,
+et surtout ce qui ne l'est pas, en faits chiffrés. Il ne contient aucun nom, aucune forme
+résiduelle et aucun emplacement, parce qu'il circule.
+
+`--releve <fichier>` produit en plus le détail : les canaux à relire à la main, les formes de
+mention non résolues, les identifiants collés dans le corps. **Celui-là ne se diffuse pas** et
+doit être détruit une fois les corrections faites, puisqu'il désigne précisément ce que
+l'anonymisation a cherché à cacher. Il est écrit d'office quand le contrôle trouve quelque
+chose, l'archive n'étant alors de toute façon pas diffusable.
+
 La commande se termine par un contrôle des identités résiduelles. Il ne peut pas être sauté,
 il n'existe aucun drapeau pour l'éviter. S'il trouve une seule identité survivante, la
 commande échoue et l'archive produite ne doit pas être diffusée. S'il passe, il énumère ce

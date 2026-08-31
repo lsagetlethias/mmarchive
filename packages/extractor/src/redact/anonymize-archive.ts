@@ -19,8 +19,8 @@
  * clair et les adresses y survivent. A l issue de cette passe l archive n est
  * pas diffusable. Voir docs/DECISION-ANONYMISATION.md.
  */
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   ARCHIVE_LAYOUT,
   type ArchiveChannel,
@@ -47,6 +47,11 @@ import {
   type ResolveurIdentite,
   reduireProps,
 } from "./props-filter.js";
+import {
+  type CategorieReference,
+  type CompteursReferences,
+  compteursReferencesVides,
+} from "./report-data.js";
 import { reecrireNomsDesignes } from "./system-message.js";
 
 export class AnonymizeError extends Error {
@@ -97,8 +102,8 @@ export interface AnonymizeResult {
   readonly emojis: number;
   readonly fichiers: number;
   readonly reactions: number;
-  /** References d identite reecrites hors de props (auteurs, reactions, depots). */
-  readonly referencesReecrites: number;
+  /** References d identite hors de props, ventilees par categorie de champ. */
+  readonly references: CompteursReferences;
   readonly props: CompteursProps;
   /** Noms substitues dans le texte parce que props les designait nommement. */
   readonly nomsSubstitues: number;
@@ -230,6 +235,80 @@ async function porteUneArchiveAnonymisee(racine: string): Promise<boolean> {
   }
 }
 
+/**
+ * Refuse d ecrire un fichier a l interieur de l archive source ou de la sortie.
+ *
+ * Un rapport pose dans la sortie voyagerait avec chaque copie diffusee, alors
+ * qu il designe precisement ce qu on a cherche a cacher ; et `--force` le
+ * ferait disparaitre en silence a la passe suivante. Le controle vient avant la
+ * passe, pour echouer en une seconde plutot qu apres une demi-minute de travail.
+ */
+export async function refuserCheminInterne(
+  chemin: string,
+  source: string,
+  sortie: string,
+): Promise<void> {
+  // `resolve` ne fait que du calcul de chaine : un lien symbolique pose en
+  // dehors et pointant vers la sortie passerait le controle, et l ecriture
+  // suivrait le lien. On resout donc le parent existant le plus proche, le
+  // fichier lui-meme n existant pas encore.
+  // Deux formes de la cible, et il faut les deux. La forme lexicale attrape le
+  // cas ordinaire ; celle qui suit les liens attrape le contournement, un lien
+  // pose en dehors et pointant vers la sortie passant sinon le controle avant
+  // que l ecriture ne le suive.
+  const cibles = [resolve(chemin), join(await realParent(chemin), basename(chemin))];
+  for (const [racine, quoi] of [
+    [await realOuResolu(source), "l archive source"],
+    [await realOuResolu(sortie), "l archive produite"],
+  ] as const) {
+    const dehors = cibles.every((cible) => {
+      const versLaCible = relative(racine, cible);
+      return versLaCible === ".." || versLaCible.startsWith(`..${sep}`) || isAbsolute(versLaCible);
+    });
+    if (!dehors) {
+      throw new AnonymizeError(
+        `${resolve(chemin)} est a l interieur de ${quoi}. Le rapport designe ce que l anonymisation a ` +
+          "cherche a cacher : il ne doit ni voyager avec l archive, ni etre efface avec elle.",
+      );
+    }
+  }
+}
+
+/** Chemin reel s il existe, sinon le chemin resolu lexicalement. */
+async function realOuResolu(chemin: string): Promise<string> {
+  try {
+    return await realpath(chemin);
+  } catch (cause) {
+    if (systemErrorCode(cause) !== "ENOENT") throw cause;
+    return resolve(chemin);
+  }
+}
+
+/**
+ * Chemin reel du repertoire qui contiendra ce fichier, liens suivis.
+ *
+ * Le fichier n existe pas encore, donc il n a pas de `realpath` : on remonte
+ * jusqu au premier ancetre existant, ce qui suit un lien pose sur le chemin.
+ *
+ * La remontee ne vaut que pour la CIBLE. L appliquer aux racines les
+ * elargirait : une sortie qui n existe pas encore verrait sa racine remonter au
+ * repertoire parent, et tout voisin y serait declare interieur.
+ */
+async function realParent(chemin: string): Promise<string> {
+  let candidat = dirname(resolve(chemin));
+  for (;;) {
+    try {
+      return await realpath(candidat);
+    } catch (cause) {
+      if (systemErrorCode(cause) !== "ENOENT") throw cause;
+      const parent = dirname(candidat);
+      // La racine est son propre parent : sans cette sortie, la boucle tourne.
+      if (parent === candidat) return candidat;
+      candidat = parent;
+    }
+  }
+}
+
 /** Copie a l identique une liste de champs, en n en laissant passer aucun autre. */
 function anonymiserUser(user: ArchiveUser, identite: Identite): ArchiveUser {
   // Enumerer ce qu on garde plutot que retirer ce qui gene : un champ ajoute au
@@ -297,7 +376,7 @@ export async function anonymizeArchive(options: {
   };
 
   const props = compteursPropsVides();
-  let referencesReecrites = 0;
+  const references = compteursReferencesVides();
   let nomsSubstitues = 0;
   let nomsNonTrouves = 0;
 
@@ -311,10 +390,16 @@ export async function anonymizeArchive(options: {
    * laisserait intacts, et le controle residuel ne pourrait pas les voir
    * puisqu il ne connait que les comptes presents.
    */
-  const substituer = (id: string): string | null => {
+  const substituer = (id: string, categorie: CategorieReference): string | null => {
     const identite = table.get(id);
-    if (identite === undefined) return null;
-    referencesReecrites += 1;
+    if (identite === undefined) {
+      // Compte par categorie, et pas seulement dans props : une reaction dont le
+      // compte ne resout pas disparaissait de l archive sans qu aucun compteur
+      // ne le dise, donc sans que le rapport puisse le rapporter.
+      references[categorie].orphelines += 1;
+      return null;
+    }
+    references[categorie].reecrites += 1;
     return identite.uid;
   };
 
@@ -360,7 +445,7 @@ export async function anonymizeArchive(options: {
       const anonyme: ArchiveEmoji = {
         id: emoji.id,
         name: emoji.name,
-        creator_id: substituer(emoji.creator_id) ?? "",
+        creator_id: substituer(emoji.creator_id, "emojis") ?? "",
         create_at: emoji.create_at,
         update_at: emoji.update_at,
         delete_at: emoji.delete_at,
@@ -389,7 +474,7 @@ export async function anonymizeArchive(options: {
         id: fichier.id,
         post_id: fichier.post_id,
         channel_id: fichier.channel_id,
-        user_id: substituer(fichier.user_id) ?? "",
+        user_id: substituer(fichier.user_id, "fichiers") ?? "",
         name: libelleNeutre(fichier, fichiers),
         extension: fichier.extension,
         size: fichier.size,
@@ -444,9 +529,9 @@ export async function anonymizeArchive(options: {
     const flux = await NdjsonWriter.open(join(sortie.root, ARCHIVE_LAYOUT.postsDir, nom));
     try {
       for await (const post of readNdjson<ArchivePost>(entree)) {
-        const auteur = substituer(post.user_id);
+        const auteur = substituer(post.user_id, "auteurs");
         const reactionsAnonymes = post.reactions.flatMap((reaction) => {
-          const uid = substituer(reaction.user_id);
+          const uid = substituer(reaction.user_id, "reactions");
           if (uid === null) return [];
           reactions += 1;
           return [{ ...reaction, user_id: uid }];
@@ -512,7 +597,7 @@ export async function anonymizeArchive(options: {
     emojis,
     fichiers,
     reactions,
-    referencesReecrites,
+    references,
     props,
     nomsSubstitues,
     nomsNonTrouves,
