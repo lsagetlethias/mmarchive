@@ -345,7 +345,7 @@ export async function checkResidualIdentities(options: {
     horsControle: [
       "le corps des messages, qui porte encore mentions, noms en clair et adresses",
       "le texte des blocs attachments, conserve pour ne pas vider 312 183 messages",
-      "le nom et l objet des canaux, residu assume et liste au rapport",
+      "le nom et l objet des canaux, conserves pour ne pas casser les permaliens",
       "le nom des emojis personnalises, souvent forme sur un prenom",
       "le nom et la description de la team, qui designent l organisation",
     ],

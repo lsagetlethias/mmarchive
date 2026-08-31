@@ -39,9 +39,11 @@ program
   .version(TOOL_VERSION, "-V, --version", "Affiche la version et quitte")
   .requiredOption("--archive <dir>", "Repertoire de l archive a lire")
   .requiredOption("--out <dir>", "Repertoire de l archive anonymisee a produire")
-  .option("--force", "Ecrit dans un repertoire de sortie qui n est pas vide")
-  .option("--skip-check", "Saute le controle des identites residuelles. Deconseille.")
-  .action(async (opts: { archive: string; out: string; force?: boolean; skipCheck?: boolean }) => {
+  .option(
+    "--force",
+    "Remplace une sortie qui porte deja une archive anonymisee. Refuse tout autre repertoire non vide.",
+  )
+  .action(async (opts: { archive: string; out: string; force?: boolean }) => {
     const logger = new Logger();
 
     const result = await anonymizeArchive({
@@ -61,13 +63,12 @@ program
         `${String(result.props.attachmentsReduits)} blocs attachments reduits a leur texte.`,
     );
 
-    if (opts.skipCheck === true) {
-      logger.warn(
-        "Controle des identites residuelles saute. Rien ne garantit ce que l archive contient encore.",
-      );
-    } else {
-      await controler(opts.archive, opts.out, logger);
-    }
+    // Le controle ne se saute pas. Il n existe aucun drapeau pour l eviter, et
+    // c est deliberé : il coute dix secondes sur deux millions de messages, et
+    // la seule raison de vouloir l eviter serait un faux positif, qui se corrige
+    // dans le controle et non en le contournant. Une commande capable de rendre
+    // une archive non verifiee finirait par en produire une, et par la diffuser.
+    await controler(opts.archive, opts.out, logger);
 
     // Le dire a la fin, apres les chiffres, parce que c est ce qu on retient.
     logger.warn(

@@ -549,15 +549,46 @@ describe("les refus", () => {
     ).rejects.toThrow(/a l interieur de l archive source/);
   });
 
-  it("refuse une sortie deja occupee, sauf --force", async () => {
+  it("refuse une sortie deja occupee", async () => {
     await mkdir(sortie, { recursive: true });
     await writeFile(join(sortie, "quelque-chose"), "x", "utf8");
     await expect(
       anonymizeArchive({ archiveDir: source, outDir: sortie, logger: silent }),
     ).rejects.toThrow(/n est pas vide/);
+  });
+
+  it("refuse --force sur un repertoire qui n est pas une archive anonymisee", async () => {
+    // --force ne doit pas devenir une suppression aveugle : pointe sur un
+    // repertoire de travail, il en effacerait le contenu sans rien demander.
+    await mkdir(sortie, { recursive: true });
+    await writeFile(join(sortie, "notes-importantes.txt"), "x", "utf8");
     await expect(
       anonymizeArchive({ archiveDir: source, outDir: sortie, force: true, logger: silent }),
-    ).resolves.toBeDefined();
+    ).rejects.toThrow(/ne porte pas d archive anonymisee complete/);
+    // Le contenu est intact : la commande a refuse avant d ecrire.
+    expect(await readdir(sortie)).toEqual(["notes-importantes.txt"]);
+  });
+
+  it("refuse --force sur une sortie laissee par une passe interrompue", async () => {
+    // Le marqueur du manifeste n est ecrit qu en toute fin : une sortie
+    // partielle ne le porte pas, et se supprime a la main apres examen.
+    await anonymiser();
+    await rm(join(sortie, "manifest.json"));
+    await expect(
+      anonymizeArchive({ archiveDir: source, outDir: sortie, force: true, logger: silent }),
+    ).rejects.toThrow(/ne porte pas d archive anonymisee complete/);
+  });
+
+  it("remplace une archive anonymisee complete sans en laisser de reste", async () => {
+    await anonymiser();
+    // Les fichiers de messages portent le nom de leur canal d origine : sans
+    // effacement, une passe depuis une autre archive laisserait ceux de la
+    // premiere dans la sortie, hors des compteurs du manifeste.
+    const perime = join(sortie, "posts", `${"x".repeat(26)}.ndjson`);
+    await writeFile(perime, `${JSON.stringify(post())}\n`, "utf8");
+    await anonymizeArchive({ archiveDir: source, outDir: sortie, force: true, logger: silent });
+    await expect(readFile(perime, "utf8")).rejects.toThrow();
+    expect((await readdir(join(sortie, "posts"))).sort()).toEqual([`${CHANNEL}.ndjson`]);
   });
 
   it("refuse un fichier de travail, signe d une extraction interrompue", async () => {

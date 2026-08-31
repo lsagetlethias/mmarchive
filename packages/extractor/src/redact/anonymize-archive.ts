@@ -19,7 +19,7 @@
  * clair et les adresses y survivent. A l issue de cette passe l archive n est
  * pas diffusable. Voir docs/DECISION-ANONYMISATION.md.
  */
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   ARCHIVE_LAYOUT,
@@ -182,12 +182,46 @@ async function refuserSortieOccupee(sortie: string, source: string, force: boole
     if (systemErrorCode(cause) === "ENOENT") return;
     throw cause;
   }
-  if (contenu.length > 0 && !force) {
+  if (contenu.length === 0) return;
+
+  if (!force) {
     throw new AnonymizeError(
       `${cheminSortie} n est pas vide. Une anonymisation ne se rejoue pas par dessus une ` +
         "precedente : les identifiants de substitution seraient tires a neuf et ne " +
         "correspondraient plus. Videz le repertoire, ou passez --force.",
     );
+  }
+
+  // --force ne peut pas se contenter de passer outre : les fichiers de messages
+  // portent le nom de leur canal d origine, donc une seconde passe depuis une
+  // autre archive laisserait ceux de la premiere en place. Ils feraient partie
+  // de l archive produite sans figurer aux compteurs du manifeste, et le
+  // controle residuel ne parcourt pas les repertoires binaires qu une copie
+  // anterieure aurait pu y deposer.
+  if (!(await porteUneArchiveAnonymisee(cheminSortie))) {
+    throw new AnonymizeError(
+      `${cheminSortie} n est pas vide et ne porte pas d archive anonymisee complete. --force ` +
+        "ne remplace qu une sortie produite par cette commande, jamais un repertoire " +
+        "quelconque ni une sortie laissee par une passe interrompue. Videz-le vous meme, " +
+        "apres avoir verifie ce qu il contient.",
+    );
+  }
+  await rm(cheminSortie, { recursive: true, force: true });
+}
+
+/**
+ * Vrai si ce repertoire porte le manifeste d une archive deja anonymisee.
+ *
+ * Sert de garde-fou a --force : c est la seule marque qui distingue une sortie
+ * de cette commande d un repertoire de travail quelconque, et elle n est ecrite
+ * qu en toute fin de passe, donc une sortie interrompue ne la porte pas.
+ */
+async function porteUneArchiveAnonymisee(racine: string): Promise<boolean> {
+  try {
+    const brut: unknown = JSON.parse(await readFile(join(racine, ARCHIVE_LAYOUT.manifest), "utf8"));
+    return manifestSchema.safeParse(brut).data?.anonymized !== undefined;
+  } catch {
+    return false;
   }
 }
 

@@ -136,6 +136,14 @@ distinguerait d'un résultat abouti. Avec une sortie séparée, un échec se sol
 sortie. La copie coûte peu, mesurée : 27 Go en entrée, 1,1 Go en sortie, puisque ce sont
 précisément les binaires qui ne sont pas repris.
 
+La contrepartie est qu'une passe interrompue laisse une sortie partielle, et que **c'est à
+l'opérateur de la supprimer**. La commande ne la nettoie pas d'elle-même : un processus tué
+ne nettoie rien de toute façon, et effacer un répertoire au premier échec ferait disparaître
+ce qu'il faut regarder pour comprendre. Le marqueur `anonymized` du manifeste n'étant écrit
+qu'en toute fin de passe, une sortie partielle ne le porte pas, et `--force` refuse alors de
+la remplacer : il ne réécrit qu'une archive anonymisée complète, jamais un répertoire
+quelconque ni le reliquat d'une passe interrompue.
+
 **Les identifiants de comptes sont tirés au hasard, pas dérivés.** Une dérivation, même
 salée, laisserait une correspondance reconstituable par qui retrouverait le sel ; un tirage
 n'a rien à retrouver. Ils gardent la forme d'un identifiant Mattermost, 26 caractères
@@ -244,11 +252,18 @@ puisqu'il désigne précisément ce qu'on a cherché à cacher.
 manifeste le dit lui-même par `anonymized.message_text_rewritten` à `false`, et la commande
 le répète en clair à chaque exécution.
 
-Est garanti dès maintenant : plus aucun identifiant ni nom de compte dans les champs qui les
-portaient, ni dans les métadonnées `props`, ni dans les réactions ; plus aucune adresse
-électronique de compte, plus aucun avatar, aucune pièce jointe, aucune image d'emoji, plus
-d'URL d'instance, plus d'identité d'opérateur ; et la correspondance vers les identités
-d'origine n'existe nulle part, puisque les nouveaux identifiants sont tirés au hasard.
+Est garanti dès maintenant, et uniquement sur les champs **structurés** : plus aucun
+identifiant ni nom de compte parmi les auteurs de messages, les réactions, les déposants de
+pièces jointes, les créateurs d'emoji, les fiches de comptes et les clés de référence de
+`props` ; plus aucune adresse électronique de compte, plus aucun avatar, aucune pièce
+jointe, aucune image d'emoji, plus d'URL d'instance, plus d'identité d'opérateur ; et la
+correspondance vers les identités d'origine n'existe nulle part, puisque les nouveaux
+identifiants sont tirés au hasard.
+
+Le **texte** conservé dans `props`, celui des blocs `attachments`, n'entre pas dans cette
+garantie. `props` reste une structure ouverte, et ce texte est traité exactement comme le
+corps des messages, c'est-à-dire pas encore : mesuré sur l'archive de référence, il porte
+13 054 valeurs de `fields` et 1 896 champs de texte contenant un nom de compte.
 
 N'est pas garanti, et le contrôle l'énumère à chaque exécution plutôt que de le taire : le
 corps des messages, qui porte encore mentions, noms écrits en clair et adresses ; le texte

@@ -413,11 +413,16 @@ d'emoji ne sont pas repris, les métadonnées `props` sont réduites à ce qui s
 le manifeste perd l'URL de l'instance comme l'identité de l'opérateur.
 
 `--out` est obligatoire et l'archive source n'est jamais modifiée. La sortie est bien plus
-petite que l'entrée puisque les binaires n'y sont pas repris, et un échec en cours de route
-se règle en jetant la sortie.
+petite que l'entrée puisque les binaires n'y sont pas repris.
 
-La commande se termine par un contrôle des identités résiduelles qui la fait échouer si une
-seule survit, puis énumère ce que ce contrôle **ne couvre pas**.
+Un échec en cours de route laisse une sortie partielle, **à supprimer vous-même** : la
+commande ne l'efface pas, et `--force` refuse de la remplacer. `--force` ne réécrit qu'une
+sortie portant déjà une archive anonymisée complète, jamais un répertoire quelconque.
+
+La commande se termine par un contrôle des identités résiduelles. Il ne peut pas être sauté,
+il n'existe aucun drapeau pour l'éviter. S'il trouve une seule identité survivante, la
+commande échoue et l'archive produite ne doit pas être diffusée. S'il passe, il énumère ce
+qu'il **ne couvre pas**, et cette liste vaut d'être lue.
 
 > À l'issue de cette étape, l'archive n'est **pas encore diffusable** : le corps des messages
 > porte toujours mentions, noms écrits en clair et adresses. Le manifeste le dit lui-même par
