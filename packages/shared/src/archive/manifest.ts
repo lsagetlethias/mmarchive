@@ -64,6 +64,25 @@ export const joinedTeamRecordSchema = z.object({
 
 export type JoinedTeamRecord = z.infer<typeof joinedTeamRecordSchema>;
 
+/**
+ * Trace d un passage par `mmarchive-anonymize`. Absent d une archive d origine.
+ *
+ * Elle dit une fois, en un endroit, ce qu il faudrait autrement repeter sur
+ * chaque ligne de `files.ndjson` au prix d une valeur ajoutee a un enum ferme.
+ * Elle dit aussi jusqu ou l anonymisation est allee : un lecteur qui trouve
+ * `message_text_rewritten` a faux sait que le corps des messages porte encore
+ * des noms, et qu il ne tient donc pas une archive diffusable.
+ */
+export const anonymizationRecordSchema = z.object({
+  at: isoDate,
+  tool_version: z.string(),
+  /** Pieces jointes, avatars et emojis personnalises non repris. */
+  binaries_removed: z.boolean(),
+  message_text_rewritten: z.boolean(),
+});
+
+export type AnonymizationRecord = z.infer<typeof anonymizationRecordSchema>;
+
 /** "file" = selection issue d un YAML, "accessible" = mode sur par defaut. */
 export const selectionModeSchema = z.enum(["file", "accessible"]);
 
@@ -124,6 +143,7 @@ export const manifestSchema = z.object({
     })
     .optional(),
   warnings: z.array(archiveWarningSchema),
+  anonymized: anonymizationRecordSchema.optional(),
 });
 
 export type Manifest = z.infer<typeof manifestSchema>;

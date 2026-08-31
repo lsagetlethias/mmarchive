@@ -65,6 +65,8 @@ travail avant l'effet de bord, jamais après.
 | `E3005` | Un chemin d'archive est invalide                                    | Vérifier `--out`, le message nomme la contrainte violée                     |
 | `E3006` | Un chemin sort du répertoire de l'archive                           | Le viewer refuse de servir ce fichier. Archive corrompue ou fabriquée       |
 | `E3007` | Le fichier de relecture inversée est inutilisable                   | Supprimer le fichier temporaire signalé et relancer                         |
+| `E3008` | L'anonymisation refuse de commencer                                 | Le message nomme la cause : sortie occupée, sortie confondue avec la source, ou fichier de travail signalant une extraction interrompue |
+| `E3009` | Une identité a survécu à l'anonymisation                            | **Ne pas diffuser l'archive produite.** Anomalie interne, merci de la signaler avec les emplacements listés |
 
 ## E40xx, la reprise
 
