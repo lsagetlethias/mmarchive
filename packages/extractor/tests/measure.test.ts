@@ -29,6 +29,17 @@ describe("adressesDe", () => {
   });
 });
 
+describe("mentions et adresses ne se recouvrent pas", () => {
+  it("ne voit pas de mention dans une partie locale d adresse", () => {
+    // L ancrage doit couvrir toute la classe admise avant l arobase, `%` et `+`
+    // compris : six adresses de l archive de reference produisaient sinon une
+    // mention, qui aurait ete remplacee au milieu de l adresse.
+    for (const adresse of ["a+b@ex.org", "a%b@ex.org", "a.b@ex.org", "a-b@ex.org"]) {
+      expect(mentionsDe(adresse).formes, adresse).toEqual([]);
+    }
+  });
+});
+
 describe("telephonesDe", () => {
   it("reconnait les formes francaises courantes", () => {
     expect(telephonesDe("06 12 34 56 78")).toBe(1);
@@ -37,6 +48,14 @@ describe("telephonesDe", () => {
   });
   it("ne ramasse pas un fragment d identifiant numerique", () => {
     expect(telephonesDe("reference 0612345678901234")).toBe(0);
+  });
+
+  it("exige un separateur coherent, les formes hybrides n existant pas", () => {
+    // 5 994 des 7 812 detections de l archive de reference etaient des
+    // identifiants de ce type dans des offres d emploi.
+    expect(telephonesDe("poste def_01-23456789")).toBe(0);
+    expect(telephonesDe("uuid b2d-b0e3-4048-bb02-1234")).toBe(0);
+    expect(telephonesDe("06 12.34-56 78")).toBe(0);
   });
 });
 

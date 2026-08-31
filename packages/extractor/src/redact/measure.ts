@@ -10,11 +10,13 @@
  * Mention Mattermost.
  *
  * Ancree sur un caractere qui ne fait pas partie d un nom, sans quoi une adresse
- * electronique produirait une mention a chaque arobase. Le nom ne peut pas finir
+ * electronique produirait une mention a chaque arobase. L ancrage couvre toute
+ * la classe admise dans une partie locale d adresse, `%` et `+` compris : sans
+ * eux, six adresses de l archive de reference produisaient une mention. Le nom ne peut pas finir
  * par un point : Mattermost lui-meme retire la ponctuation finale avant de
  * resoudre, et « @alice. » en fin de phrase designe bien « alice ».
  */
-const MENTION = /(?<![A-Za-z0-9._@-])@([A-Za-z0-9_-][A-Za-z0-9._-]*[A-Za-z0-9_-]|[A-Za-z0-9_-])/g;
+const MENTION = /(?<![A-Za-z0-9._%+@-])@([A-Za-z0-9_-][A-Za-z0-9._-]*[A-Za-z0-9_-]|[A-Za-z0-9_-])/g;
 
 /** Mentions qui ne designent personne en particulier. */
 const MENTIONS_COLLECTIVES = new Set(["all", "channel", "here"]);
@@ -32,12 +34,19 @@ const ADRESSE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 /**
  * Numero de telephone francais.
  *
- * Ancre des deux cotes pour ne pas ramasser un fragment d identifiant numerique.
+ * Ancre des deux cotes, et surtout **le separateur doit etre le meme partout**,
+ * ce que la reference arriere impose. Le rendre optionnel a chaque groupe
+ * acceptait des formes hybrides qui n existent pas : sur l archive de reference,
+ * 5 994 des 7 812 detections etaient des identifiants du type `01-23456789` dans
+ * des offres d emploi, plus des fragments d UUID et des couleurs hexadecimales.
+ * Quatre detections sur cinq etaient fausses, et le rapport les annoncait comme
+ * des numeros de telephone.
+ *
  * Ce qu il rate, et qui doit figurer au rapport a cote du chiffre : les formats
  * etrangers, les numeros ecrits en toutes lettres, et ceux coupes par un retour
  * a la ligne.
  */
-const TELEPHONE = /(?<![0-9])(?:\+33|0)\s?[1-9](?:[\s.-]?[0-9]{2}){4}(?![0-9])/g;
+const TELEPHONE = /(?<![0-9])(?:\+33\s?|0)[1-9](?:([\s.-]?)[0-9]{2}(?:\1[0-9]{2}){3})(?![0-9])/g;
 
 /** Identifiant Mattermost isole dans du texte. */
 const IDENTIFIANT = /(?<![A-Za-z0-9])[a-z0-9]{26}(?![A-Za-z0-9])/g;
