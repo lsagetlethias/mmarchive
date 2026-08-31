@@ -54,6 +54,22 @@ async function lire(fichier: string, racine = sortie): Promise<Record<string, un
     .map((l) => JSON.parse(l) as Record<string, unknown>);
 }
 
+/**
+ * Retrouve une fiche anonymisee par un champ que la passe ne touche pas.
+ *
+ * Les fiches sortent dans l ordre de leur identifiant de substitution, tire au
+ * hasard : les designer par leur rang reviendrait a supposer l ordre de la
+ * source, c est a dire la fuite que ce tri ferme.
+ */
+async function fiche(roles: string): Promise<Record<string, unknown>> {
+  const trouvee = (await lire("users.ndjson")).find((u) => u.roles === roles);
+  if (trouvee === undefined) throw new Error(`aucune fiche avec roles=${roles}`);
+  return trouvee;
+}
+
+const ALICE_ROLES = "system_user system_admin";
+const BOB_ROLES = "system_user";
+
 async function manifeste(racine = sortie): Promise<Manifest> {
   const brut: unknown = JSON.parse(await readFile(join(racine, "manifest.json"), "utf8"));
   return manifestSchema.parse(brut);
@@ -89,6 +105,24 @@ async function buildArchive(): Promise<void> {
       type: "system_add_to_channel",
       message: "",
       props: { addedUserId: ORPHELIN, addedUsername: "compte-disparu" },
+    }),
+    post({
+      id: "w".repeat(26),
+      type: "system_add_to_channel",
+      user_id: BOB,
+      // Un nom court designe par props ne doit pas etre remplace a l interieur
+      // d un mot plus long : « bob » ne transforme pas « bobsleigh ».
+      message: "bobsleigh et bob.martin ont ete evoques par bob, avec bob_.",
+      props: { username: "bob" },
+    }),
+    post({
+      id: "v".repeat(26),
+      type: "system_add_to_channel",
+      user_id: BOB,
+      // Le gabarit reel de Mattermost : le texte nomme les deux personnes que
+      // props designe par ailleurs.
+      message: "alice.martin a ete ajoute au canal par bob.",
+      props: { addedUsername: "alice.martin", username: "bob" },
     }),
     post({
       id: "s".repeat(26),
@@ -204,10 +238,10 @@ async function buildArchive(): Promise<void> {
       purpose: "Objet du canal",
       create_at: 1,
       delete_at: 0,
-      total_msg_count: 6,
+      total_msg_count: 8,
       last_post_at: 1_700_000_000_000,
       was_joined_by_tool: false,
-      archived_post_count: 6,
+      archived_post_count: 8,
     },
   ]);
 
@@ -262,7 +296,7 @@ async function buildArchive(): Promise<void> {
       counts: {
         teams: 1,
         channels: 1,
-        posts: 6,
+        posts: 8,
         users: 2,
         emojis: 2,
         attachments: 1,
@@ -313,13 +347,13 @@ describe("l archive source", () => {
 describe("les comptes", () => {
   it("recoivent trois formes, une par lecteur", async () => {
     await anonymiser();
-    const [alice] = await lire("users.ndjson");
+    const alice = await fiche(ALICE_ROLES);
     // L identifiant garde la forme du format, sans quoi toute relecture echoue.
-    expect(isMattermostId(alice?.id as string)).toBe(true);
+    expect(isMattermostId(alice.id as string)).toBe(true);
     // La colonne username de l index n a pas de COLLATE : une forme capitalisee
     // ferait echouer la recherche from: en silence.
-    expect(alice?.username).toMatch(/^anon-[a-z]+-[a-z]+(-\d+)?$/);
-    expect(alice?.first_name).toMatch(/^Anon-[A-Z][a-z]+-[A-Z][a-z]+(-\d+)?$/);
+    expect(alice.username).toMatch(/^anon-[a-z]+-[a-z]+(-\d+)?$/);
+    expect(alice.first_name).toMatch(/^Anon-[A-Z][a-z]+-[A-Z][a-z]+(-\d+)?$/);
   });
 
   it("perdent tout ce qui les designait", async () => {
@@ -337,24 +371,24 @@ describe("les comptes", () => {
 
   it("gardent ce qui ne designe personne", async () => {
     await anonymiser();
-    const [alice] = await lire("users.ndjson");
-    expect(alice?.roles).toBe("system_user system_admin");
-    expect(alice?.is_bot).toBe(false);
+    const alice = await fiche(ALICE_ROLES);
+    expect(alice.roles).toBe("system_user system_admin");
+    expect(alice.is_bot).toBe(false);
   });
 });
 
 describe("les references d identite", () => {
   it("suivent la meme table dans tous les fichiers", async () => {
     await anonymiser();
-    const [alice] = await lire("users.ndjson");
+    const alice = await fiche(ALICE_ROLES);
     const posts = await lire(`posts/${CHANNEL}.ndjson`);
     const [fichier] = await lire("files.ndjson");
     const [emoji] = await lire("emojis.ndjson");
     // Un identifiant reecrit d un cote et pas de l autre ne leve rien : il
     // produit un auteur non resolu que le viewer fusionne avec les autres.
-    expect(posts[0]?.user_id).toBe(alice?.id);
-    expect(fichier?.user_id).toBe(alice?.id);
-    expect(emoji?.creator_id).toBe(alice?.id);
+    expect(posts[0]?.user_id).toBe(alice.id);
+    expect(fichier?.user_id).toBe(alice.id);
+    expect(emoji?.creator_id).toBe(alice.id);
   });
 
   it("valent aussi pour les reactions, que verify ne regarde jamais", async () => {
@@ -384,24 +418,26 @@ describe("les references d identite", () => {
 describe("props", () => {
   it("reecrit les references, par identifiant comme par nom", async () => {
     await anonymiser();
-    const [alice, bob] = await lire("users.ndjson");
+    const alice = await fiche(ALICE_ROLES);
+    const bob = await fiche(BOB_ROLES);
     const posts = await lire(`posts/${CHANNEL}.ndjson`);
     const props = posts.find((p) => p.id === "q".repeat(26))?.props as Record<string, unknown>;
-    expect(props.userId).toBe(bob?.id);
-    expect(props.addedUserId).toBe(alice?.id);
+    expect(props.userId).toBe(bob.id);
+    expect(props.addedUserId).toBe(alice.id);
     // Sur un system_add_to_channel, le nom de la personne ajoutee vit ici et
     // nulle part ailleurs : une reecriture du seul champ message le raterait.
-    expect(props.addedUsername).toBe(alice?.username);
+    expect(props.addedUsername).toBe(alice.username);
   });
 
   it("resout une cle polymorphe sur sa valeur, pas sur son nom", async () => {
     await anonymiser();
-    const [alice, bob] = await lire("users.ndjson");
+    const alice = await fiche(ALICE_ROLES);
+    const bob = await fiche(BOB_ROLES);
     const posts = await lire(`posts/${CHANNEL}.ndjson`);
     const props = posts.find((p) => p.id === "t".repeat(26))?.props as Record<string, unknown>;
     // ended_by porte tantot un identifiant, tantot un nom.
-    expect(props.ended_by).toBe(alice?.username);
-    expect(props.participants).toEqual([bob?.id]);
+    expect(props.ended_by).toBe(alice.username);
+    expect(props.participants).toEqual([bob.id]);
   });
 
   it("laisse tomber toute cle qu elle ne sait pas justifier", async () => {
@@ -428,6 +464,57 @@ describe("props", () => {
     expect("author_name" in (bloc ?? {})).toBe(false);
     expect("author_link" in (bloc ?? {})).toBe(false);
     expect("title_link" in (bloc ?? {})).toBe(false);
+  });
+});
+
+describe("la table de correspondance", () => {
+  it("ne se lit pas dans le texte d un message systeme", async () => {
+    // Le defaut le plus grave trouve sur cette commande : « alice a ete ajoute
+    // par bob » reste intact a cote d un props reecrit en anon-..., donc une
+    // seule ligne apparie l identite reelle et son substitut. Mesure sur
+    // l archive de reference : 65 577 messages appariant 3 237 comptes sur
+    // 3 277. Le sel jete ne protege de rien quand la reponse est ecrite a cote
+    // de la question.
+    await anonymiser();
+    const alice = await fiche(ALICE_ROLES);
+    const bob = await fiche(BOB_ROLES);
+    const posts = await lire(`posts/${CHANNEL}.ndjson`);
+    const systeme = posts.find((p) => p.id === "v".repeat(26));
+    expect(systeme?.message).not.toContain("alice.martin");
+    expect(systeme?.message).not.toContain("bob");
+    // Le fil reste lisible : le texte nomme les memes personnes que props.
+    const props = systeme?.props as Record<string, unknown>;
+    expect(systeme?.message).toContain(props.addedUsername as string);
+    expect(systeme?.message).toContain(props.username as string);
+    expect([alice.username, bob.username]).toContain(props.addedUsername);
+  });
+
+  it("ne substitue un nom qu en jeton entier, jamais dans un mot", async () => {
+    // Un remplacement brut de la valeur de props atteindrait l interieur des
+    // mots : un compte nomme « bob » transformerait « bobsleigh ».
+    await anonymiser();
+    const bob = await fiche(BOB_ROLES);
+    const posts = await lire(`posts/${CHANNEL}.ndjson`);
+    const message = posts.find((p) => p.id === "w".repeat(26))?.message as string;
+    expect(message).toContain("bobsleigh");
+    expect(message).toContain("bob.martin");
+    // Un tiret bas final appartient au nom, il n est pas de la ponctuation :
+    // « bob_ » est un autre compte que « bob », et ne doit pas etre substitue.
+    expect(message).toContain("bob_");
+    expect(message).toContain(bob.username as string);
+    expect(message.startsWith("bobsleigh")).toBe(true);
+  });
+
+  it("ne se lit pas dans l ordre des fiches de comptes", async () => {
+    // Ecrire les comptes dans l ordre de la source rendait la table complete a
+    // qui detient l archive d origine, par un simple paste ligne a ligne.
+    await anonymiser();
+    const source_ = (await lire("users.ndjson", source)).map((u) => u.id as string);
+    const sortie_ = (await lire("users.ndjson")).map((u) => u.id as string);
+    expect(sortie_).toHaveLength(source_.length);
+    // Les fiches sortent dans l ordre de leur identifiant de substitution, qui
+    // est tire au hasard : il ne dit rien de l ordre d entree.
+    expect([...sortie_].sort()).toEqual(sortie_);
   });
 });
 
@@ -497,7 +584,7 @@ describe("le manifeste", () => {
     expect(manifest.counts).toMatchObject({
       teams: 1,
       channels: 1,
-      posts: 6,
+      posts: 8,
       users: 2,
       emojis: 2,
       attachments: 0,
@@ -532,7 +619,7 @@ describe("les champs de texte", () => {
     const survivant = posts.find((p) => p.id === "u".repeat(26));
     expect(survivant?.message).toBe("avant\u2028apres\u2029suite");
     expect(posts[0]?.message).toBe("bonjour");
-    expect(posts).toHaveLength(6);
+    expect(posts).toHaveLength(8);
   });
 });
 

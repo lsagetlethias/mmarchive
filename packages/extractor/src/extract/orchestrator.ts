@@ -4,8 +4,10 @@ import {
   type ArchiveTeam,
   type ArchiveWarning,
   CHANNEL_TYPE,
+  describeError,
   type JoinedChannelRecord,
   type Manifest,
+  NonPublicChannelError,
   SCHEMA_VERSION,
   type SelectionFile,
   type SelectionMode,
@@ -17,7 +19,7 @@ import type { RunOptions } from "../config/options.js";
 import type { MattermostApi } from "../mattermost/api.js";
 import type { MattermostClient } from "../mattermost/http-client.js";
 import { grantConsent, MutationGate, noConsent } from "../mattermost/mutation-gate.js";
-import type { MmFileInfo, MmUser } from "../mattermost/types.js";
+import type { MmChannel, MmFileInfo, MmTeam, MmUser } from "../mattermost/types.js";
 import type { Logger } from "../ui/logger.js";
 import { RunReporter } from "../ui/run-reporter.js";
 import { TOOL_VERSION } from "../version.js";
@@ -95,15 +97,19 @@ async function mapWithConcurrency<T>(
   await Promise.all(runners);
 }
 
-function toArchiveTeam(team: SelectionFile["teams"][number], joinedByTool: boolean): ArchiveTeam {
+function toArchiveTeam(
+  team: SelectionFile["teams"][number],
+  fiche: MmTeam | undefined,
+  joinedByTool: boolean,
+): ArchiveTeam {
   return {
     id: team.id,
     name: team.name,
     display_name: team.display_name,
-    description: "",
-    type: "",
-    create_at: 0,
-    delete_at: 0,
+    description: fiche?.description ?? "",
+    type: fiche?.type ?? "",
+    create_at: fiche?.create_at ?? 0,
+    delete_at: fiche?.delete_at ?? 0,
     was_joined_by_tool: joinedByTool,
   };
 }
@@ -256,7 +262,56 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     reporter.note(`Emojis personnalises : ${String(result.count)}`);
   }
 
-  reporter.phase("Canaux", plan.channels.length, { estimate: true });
+  /**
+   * Fiches completes des canaux, relues avant de lire le moindre message.
+   *
+   * Deux roles, et l ordre importe pour le second.
+   *
+   * Le premier est de recuperer ce que le catalogue de selection ne transporte
+   * pas : `header`, `purpose` et `create_at`. Ce fichier ne porte que ce qui sert
+   * a choisir, et il est editable a la main, donc le contenu de l archive ne doit
+   * pas en venir.
+   *
+   * Le second est d etre le dernier filtre defensif, celui que le YAML ne peut
+   * pas tromper. `buildPlan` verifie deja le type, mais il ne verifie que ce que
+   * le fichier declare : un `type: "O"` ecrit a la main sur un canal prive passe.
+   * Seule l instance sait. C est pour cela que cette passe precede l extraction
+   * plutot que de la suivre : un canal refuse ici ne voit aucun de ses messages
+   * lu, la ou un controle en fin de course arriverait apres l ecriture.
+   */
+  const fiches = new Map<string, MmChannel>();
+  const refuses = new Set<string>();
+  reporter.phase("Fiches des canaux", plan.channels.length);
+  await mapWithConcurrency(plan.channels, runOptions.concurrency, async (planned, index) => {
+    try {
+      fiches.set(planned.channel.id, await api.getChannel(planned.channel.id));
+    } catch (error) {
+      if (error instanceof NonPublicChannelError) {
+        refuses.add(planned.channel.id);
+        warnings.push({
+          code: "NON_PUBLIC_CHANNEL_REJECTED",
+          channel_id: planned.channel.id,
+          detail: `Le canal "${planned.channel.name}" est declare public par la selection mais ne l est pas sur l instance. Aucun de ses messages n a ete lu.`,
+        });
+        logger.warn(
+          `Canal "${planned.channel.name}" refuse : l instance ne le donne pas pour public.`,
+        );
+      } else {
+        // Une panne de lecture ne vaut pas la perte de l extraction : le canal
+        // reste archive, sans son objet ni sa date.
+        warnings.push({
+          code: "METADATA_FETCH_FAILED",
+          channel_id: planned.channel.id,
+          detail: `Fiche du canal "${planned.channel.name}" illisible : ${describeError(error)}`,
+        });
+      }
+    }
+    reporter.phaseProgress(index + 1);
+  });
+
+  const canauxRetenus = plan.channels.filter((planned) => !refuses.has(planned.channel.id));
+
+  reporter.phase("Canaux", canauxRetenus.length, { estimate: true });
 
   // Construit une seule fois : le reconstruire a chaque canal devenait
   // quadratique a mesure que la liste des pieces jointes grossissait.
@@ -275,7 +330,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
   let attachments = 0;
   let attachmentBytes = state.state.attachments_bytes;
 
-  await mapWithConcurrency(plan.channels, runOptions.concurrency, async (planned) => {
+  await mapWithConcurrency(canauxRetenus, runOptions.concurrency, async (planned) => {
     const channelId = planned.channel.id;
     const progress = state.progressFor(channelId);
     if (progress.status === "complete") {
@@ -560,20 +615,27 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
    * correspondant ne soit decrit. Constate sur une archive reelle, 758 fichiers
    * de posts pour 120 canaux decrits.
    */
+  const complets = canauxRetenus.filter(
+    (planned) => state.progressFor(planned.channel.id).status === "complete",
+  );
+
   const archivedChannels: ArchiveChannel[] = [];
-  for (const planned of plan.channels) {
+  for (const planned of complets) {
     const progress = state.progressFor(planned.channel.id);
-    if (progress.status !== "complete") continue;
+    const fiche = fiches.get(planned.channel.id);
     archivedChannels.push({
       id: planned.channel.id,
       team_id: planned.teamId,
       name: planned.channel.name,
       display_name: planned.channel.display_name,
       type: CHANNEL_TYPE.PUBLIC,
-      header: "",
-      purpose: "",
-      create_at: 0,
-      delete_at: planned.channel.archived ? 1 : 0,
+      header: fiche?.header ?? "",
+      purpose: fiche?.purpose ?? "",
+      create_at: fiche?.create_at ?? 0,
+      // La fiche fait foi quand on l a : un canal archive entre l inventaire et
+      // le run porte la date de son archivage, la selection ne connait qu un
+      // booleen.
+      delete_at: fiche?.delete_at ?? (planned.channel.archived ? 1 : 0),
       total_msg_count: planned.channel.message_count,
       last_post_at: progress.newest_create_at ?? 0,
       was_joined_by_tool: joinedByTool.has(planned.channel.id),
@@ -586,9 +648,20 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     const usedTeamIds = new Set(archivedChannels.map((c) => c.team_id));
     for (const team of options.selection.teams) {
       if (!usedTeamIds.has(team.id)) continue;
+      let fiche: MmTeam | undefined;
+      try {
+        fiche = await api.getTeam(team.id);
+      } catch (error) {
+        warnings.push({
+          code: "METADATA_FETCH_FAILED",
+          team_id: team.id,
+          detail: `Fiche de la team "${team.name}" illisible : ${describeError(error)}`,
+        });
+      }
       await teamsWriter.write(
         toArchiveTeam(
           team,
+          fiche,
           state.state.joined_teams.some((t) => t.id === team.id),
         ),
       );
