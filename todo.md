@@ -188,6 +188,37 @@ méritent d'être vus plutôt que découverts.
 - Livré en plus du cadrage initial : le mode lite dans ses deux transports, la commande
   `verify`, les codes d'erreur traçables, et le process de release.
 
+## Anonymisation d'archive
+
+Besoin distinct de `redact`, qui répond aux demandes d'effacement individuelles : rendre une
+archive entière diffusable, ce que le juridique peut exiger même derrière une
+authentification. Cadré dans `docs/DECISION-ANONYMISATION.md`.
+
+- [x] **Pseudonymes** lisibles et manifestement artificiels, dans
+      `packages/extractor/src/redact/pseudonym.ts`. Forme `Anon-Obsidienne-Discrete`,
+      distribués depuis un hachage salé, sel jeté après usage. Le préfixe n'est pas
+      décoratif : sans lui, une combinaison sur six se lisait comme une identité.
+      Un générateur de noms réalistes a été écarté sur mesure : trente prénoms français très
+      courants sont tous déjà portés par un compte de l'archive, donc il aurait attribué les
+      propos de quelqu'un au nom d'une personne réelle.
+- [ ] **`mmarchive-anonymize`**, commande distincte et non un drapeau de `redact` : les deux
+      opérations n'ont en commun que leur mécanique, et un drapeau oublié transformerait un
+      effacement ciblé en réécriture complète, irréversible puisque la correspondance est
+      jetée. Pseudonymise tous les comptes, supprime pièces jointes et avatars.
+- [ ] **Réécriture du texte** : mentions résolues vers le pseudonyme pour garder les fils
+      lisibles, mentions orphelines neutralisées, adresses remplacées par `<redacted>`.
+- [ ] **Noms en clair**, la partie risquée. 39,7 % des messages en contiennent, deux fois et
+      demie plus que ceux qui portent une mention, et treize mots courants du français sont
+      aussi des noms de comptes ici. L'arbitrage est de privilégier l'anonymat : un texte
+      abîmé reste exploitable, une identité qui fuit ne se rattrape pas.
+- [ ] **Rapport des occurrences résiduelles**, à construire avant le point précédent pour
+      que ses effets soient observables. Il dit ce qui est garanti et ce qui ne l'est pas,
+      et ne doit jamais être diffusé avec l'archive puisqu'il désigne ce qu'on a caché.
+      Il liste notamment les 57 canaux publics dont le nom porte une identité : ils ne sont
+      pas renommés, parce que cela casserait les permaliens, mais leur nom apparaît dans la
+      barre latérale, dans chaque permalien et en tête de chaque fragment du RAG. Les voir
+      listés permet d'en traiter quelques uns à la main avant diffusion.
+
 ## Dette identifiée
 
 - [x] **Codes d'erreur traçables** (§6.1 du guide CLI). Les 25 classes d'erreur portent un

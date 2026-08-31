@@ -1,5 +1,6 @@
 import { describeError } from "@mmarchive/shared";
 import { Command } from "commander";
+import { ArchivePathError } from "./archive/paths.js";
 import { type RedactMode, redactArchive } from "./redact/redact-archive.js";
 import { Logger } from "./ui/logger.js";
 import { TOOL_VERSION } from "./version.js";
@@ -10,6 +11,23 @@ import { TOOL_VERSION } from "./version.js";
  * impossible a tester, l import suffisant a terminer le processus.
  */
 const program = new Command();
+// Commander sort en 0 quand une option requise manque, ce qui ferait croire a un
+// script que la commande a fait son travail. Le README documente 2 pour un
+// argument invalide, et c est ce que rendent les autres commandes.
+//
+// Toute erreur signalee par commander est une erreur de saisie : option inconnue,
+// argument manquant, valeur absente. Les enumerer une par une laisserait passer
+// celles qu une version ulterieure ajoutera, alors que le code 1 doit rester
+// reserve a ce qui echoue pendant l effacement lui meme. Commander a deja ecrit
+// le message, le repeter le ferait paraitre deux fois.
+const SORTIES_NORMALES = new Set([
+  "commander.help",
+  "commander.helpDisplayed",
+  "commander.version",
+]);
+program.exitOverride((erreur) => {
+  process.exit(SORTIES_NORMALES.has(erreur.code) ? 0 : 2);
+});
 program
   .name("mmarchive-redact")
   .description("Honore une demande d effacement sur une archive deja produite.")
@@ -46,5 +64,9 @@ try {
   await program.parseAsync(process.argv);
 } catch (error) {
   new Logger().error(describeError(error));
-  process.exitCode = 1;
+  // Une saisie fautive et une panne ne se traitent pas pareil dans un script :
+  // la premiere se corrige et se relance, la seconde s enquete. Le README
+  // documente 2 pour un argument invalide, ce qu est un identifiant malforme
+  // comme un chemin qui ne designe pas une archive.
+  process.exitCode = error instanceof ArchivePathError ? 2 : 1;
 }
