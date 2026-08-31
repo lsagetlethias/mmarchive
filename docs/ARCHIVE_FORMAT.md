@@ -171,6 +171,7 @@ l'instance, pour qu'un tiers puisse en rendre compte.
 | `AVATAR_DOWNLOAD_FAILED`      | Échec du téléchargement d'un avatar.                               |
 | `EMOJI_DOWNLOAD_FAILED`       | Échec du téléchargement d'une image d'emoji.                       |
 | `USER_FETCH_FAILED`           | Un `user_id` référencé n'a pas pu être résolu.                     |
+| `METADATA_FETCH_FAILED`       | Fiche d'un canal ou d'une team illisible : son objet et sa date manquent. |
 | `POST_METADATA_MISSING`       | Serveur ancien sans `post.metadata`.                               |
 | `NON_PUBLIC_CHANNEL_REJECTED` | Le filtre défensif a rejeté une entrée non publique.               |
 | `CHANNEL_INCOMPLETE`          | L'extraction d'un canal s'est arrêtée avant la fin.                |
@@ -277,6 +278,12 @@ signale une extraction partielle ou un décompte serveur approximatif, et se rec
 avec les warnings.
 
 `delete_at != 0` signifie que le canal est archivé côté Mattermost.
+
+`header`, `purpose` et `create_at` sont relus sur la fiche du canal **au moment d'écrire
+l'archive**, et non repris du fichier de sélection : celui-ci ne transporte que ce qui sert
+à choisir, et il est éditable à la main. Un `METADATA_FETCH_FAILED` signale que la fiche n'a
+pas pu être lue ; ces trois champs valent alors la chaîne vide et zéro, le reste de
+l'enregistrement restant complet.
 
 ---
 

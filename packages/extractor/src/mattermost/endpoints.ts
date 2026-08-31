@@ -102,6 +102,11 @@ export const MM = {
     return read("/teams", "/teams", { page, per_page: perPage });
   },
 
+  /** Fiche complete d une team, avec sa description et sa date de creation. */
+  getTeam(teamId: string): EndpointCall {
+    return read("/teams/{team_id}", `/teams/${seg(teamId)}`);
+  },
+
   /** Canaux de la team dont le compte est deja membre. Non pagine. */
   getMyChannelsForTeam(teamId: string): EndpointCall {
     return read("/users/me/teams/{team_id}/channels", `/users/me/teams/${seg(teamId)}/channels`);

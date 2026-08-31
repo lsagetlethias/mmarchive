@@ -23,6 +23,11 @@ export const warningCodeSchema = z.enum([
   "AVATAR_DOWNLOAD_FAILED",
   "EMOJI_DOWNLOAD_FAILED",
   "USER_FETCH_FAILED",
+  /**
+   * Fiche d un canal ou d une team illisible. Son objet, son en-tete et sa date
+   * de creation manquent, le reste de l enregistrement est complet.
+   */
+  "METADATA_FETCH_FAILED",
   /** Serveur ancien sans post.metadata : reactions recuperees separement. */
   "POST_METADATA_MISSING",
   /** Une entree non publique a ete rejetee par le filtre defensif. */

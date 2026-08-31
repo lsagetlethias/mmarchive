@@ -4,6 +4,7 @@ import {
   type ArchiveTeam,
   type ArchiveWarning,
   CHANNEL_TYPE,
+  describeError,
   type JoinedChannelRecord,
   type Manifest,
   SCHEMA_VERSION,
@@ -17,7 +18,7 @@ import type { RunOptions } from "../config/options.js";
 import type { MattermostApi } from "../mattermost/api.js";
 import type { MattermostClient } from "../mattermost/http-client.js";
 import { grantConsent, MutationGate, noConsent } from "../mattermost/mutation-gate.js";
-import type { MmFileInfo, MmUser } from "../mattermost/types.js";
+import type { MmChannel, MmFileInfo, MmTeam, MmUser } from "../mattermost/types.js";
 import type { Logger } from "../ui/logger.js";
 import { RunReporter } from "../ui/run-reporter.js";
 import { TOOL_VERSION } from "../version.js";
@@ -95,15 +96,19 @@ async function mapWithConcurrency<T>(
   await Promise.all(runners);
 }
 
-function toArchiveTeam(team: SelectionFile["teams"][number], joinedByTool: boolean): ArchiveTeam {
+function toArchiveTeam(
+  team: SelectionFile["teams"][number],
+  fiche: MmTeam | undefined,
+  joinedByTool: boolean,
+): ArchiveTeam {
   return {
     id: team.id,
     name: team.name,
     display_name: team.display_name,
-    description: "",
-    type: "",
-    create_at: 0,
-    delete_at: 0,
+    description: fiche?.description ?? "",
+    type: fiche?.type ?? "",
+    create_at: fiche?.create_at ?? 0,
+    delete_at: fiche?.delete_at ?? 0,
     was_joined_by_tool: joinedByTool,
   };
 }
@@ -560,20 +565,53 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
    * correspondant ne soit decrit. Constate sur une archive reelle, 758 fichiers
    * de posts pour 120 canaux decrits.
    */
+  const complets = plan.channels.filter(
+    (planned) => state.progressFor(planned.channel.id).status === "complete",
+  );
+
+  /**
+   * Fiches completes des canaux, relues juste avant d ecrire.
+   *
+   * Le catalogue de selection ne transporte que ce qui sert a choisir : l objet,
+   * l en-tete et la date de creation n y figurent pas. Les relire ici plutot que
+   * de les faire transiter par le YAML garde ce fichier lisible, et surtout
+   * empeche qu un YAML edite a la main dicte le contenu de l archive.
+   *
+   * Un echec ne fait pas echouer l extraction : une metadonnee manquante ne vaut
+   * pas la perte de plusieurs heures de messages deja ecrits. Elle est consignee
+   * en avertissement, et le champ reste vide comme avant.
+   */
+  const fiches = new Map<string, MmChannel>();
+  reporter.phase("Metadonnees des canaux");
+  await mapWithConcurrency(complets, runOptions.concurrency, async (planned) => {
+    try {
+      fiches.set(planned.channel.id, await api.getChannel(planned.channel.id));
+    } catch (error) {
+      warnings.push({
+        code: "METADATA_FETCH_FAILED",
+        channel_id: planned.channel.id,
+        detail: `Fiche du canal "${planned.channel.name}" illisible : ${describeError(error)}`,
+      });
+    }
+  });
+
   const archivedChannels: ArchiveChannel[] = [];
-  for (const planned of plan.channels) {
+  for (const planned of complets) {
     const progress = state.progressFor(planned.channel.id);
-    if (progress.status !== "complete") continue;
+    const fiche = fiches.get(planned.channel.id);
     archivedChannels.push({
       id: planned.channel.id,
       team_id: planned.teamId,
       name: planned.channel.name,
       display_name: planned.channel.display_name,
       type: CHANNEL_TYPE.PUBLIC,
-      header: "",
-      purpose: "",
-      create_at: 0,
-      delete_at: planned.channel.archived ? 1 : 0,
+      header: fiche?.header ?? "",
+      purpose: fiche?.purpose ?? "",
+      create_at: fiche?.create_at ?? 0,
+      // La fiche fait foi quand on l a : un canal archive entre l inventaire et
+      // le run porte la date de son archivage, la selection ne connait qu un
+      // booleen.
+      delete_at: fiche?.delete_at ?? (planned.channel.archived ? 1 : 0),
       total_msg_count: planned.channel.message_count,
       last_post_at: progress.newest_create_at ?? 0,
       was_joined_by_tool: joinedByTool.has(planned.channel.id),
@@ -586,9 +624,20 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     const usedTeamIds = new Set(archivedChannels.map((c) => c.team_id));
     for (const team of options.selection.teams) {
       if (!usedTeamIds.has(team.id)) continue;
+      let fiche: MmTeam | undefined;
+      try {
+        fiche = await api.getTeam(team.id);
+      } catch (error) {
+        warnings.push({
+          code: "METADATA_FETCH_FAILED",
+          team_id: team.id,
+          detail: `Fiche de la team "${team.name}" illisible : ${describeError(error)}`,
+        });
+      }
       await teamsWriter.write(
         toArchiveTeam(
           team,
+          fiche,
           state.state.joined_teams.some((t) => t.id === team.id),
         ),
       );

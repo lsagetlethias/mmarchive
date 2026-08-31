@@ -1,4 +1,4 @@
-import { isPublicChannel } from "@mmarchive/shared";
+import { assertPublicChannel, isPublicChannel } from "@mmarchive/shared";
 import { z } from "zod";
 import { MM } from "./endpoints.js";
 import { MattermostForbiddenError, MattermostNotFoundError } from "./errors.js";
@@ -11,10 +11,12 @@ import {
   type MmTeam,
   type MmUser,
   mmChannelListSchema,
+  mmChannelSchema,
   mmEmojiListSchema,
   mmFileInfoSchema,
   mmPostListSchema,
   mmTeamListSchema,
+  mmTeamSchema,
   mmUserListSchema,
   mmUserSchema,
 } from "./types.js";
@@ -104,6 +106,27 @@ export class MattermostApi {
         .json(MM.getAllTeams(page, LIST_PAGE_SIZE), z.unknown())
         .then((raw) => unwrapList(raw, "teams", mmTeamListSchema)),
     );
+  }
+
+  /**
+   * Fiche complete d un canal.
+   *
+   * Le catalogue de selection ne transporte que ce qui sert a choisir : l objet,
+   * l en-tete et la date de creation d un canal n y figurent pas. Ils se relisent
+   * ici au moment d ecrire l archive, plutot que de transiter par un fichier que
+   * l utilisateur edite a la main.
+   */
+  async getChannel(channelId: string): Promise<MmChannel> {
+    const channel = await this.client.json(MM.getChannel(channelId), mmChannelSchema);
+    // Filtre defensif a chaque etage : un identifiant venu d un YAML edite ne
+    // doit pas pouvoir faire entrer un canal prive dans l archive.
+    assertPublicChannel(channel);
+    return channel;
+  }
+
+  /** Fiche complete d une team, avec sa description et sa date de creation. */
+  async getTeam(teamId: string): Promise<MmTeam> {
+    return this.client.json(MM.getTeam(teamId), mmTeamSchema);
   }
 
   /** Canaux de la team dont le compte est deja membre. Cet endpoint n est pas pagine. */

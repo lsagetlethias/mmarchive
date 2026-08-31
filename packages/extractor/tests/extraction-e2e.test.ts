@@ -99,6 +99,31 @@ function makeServer(): { fetchImpl: typeof fetch; requests: Recorded[] } {
     if (path === "/users/me") return json({ id: SELF_ID, username: "alice", roles: "system_user" });
     if (path === "/system/ping") return json({ status: "OK" });
     if (path === `/channels/${CHANNEL_ID}/pinned`) return json({ order: [], posts: {} });
+    // Fiches relues au moment d ecrire : l objet, l en-tete et la date de
+    // creation ne transitent pas par le fichier de selection.
+    if (path === `/channels/${CHANNEL_ID}`) {
+      return json({
+        id: CHANNEL_ID,
+        type: "O",
+        name: "town-square",
+        display_name: "Town Square",
+        header: "Contact : equipe produit",
+        purpose: "Discussions generales de l equipe",
+        create_at: 1_600_000_000_000,
+        delete_at: 0,
+      });
+    }
+    if (path === `/teams/${TEAM_ID}`) {
+      return json({
+        id: TEAM_ID,
+        name: "produit",
+        display_name: "Produit",
+        description: "L equipe produit",
+        type: "O",
+        create_at: 1_500_000_000_000,
+        delete_at: 0,
+      });
+    }
     if (path === "/emoji") {
       return json(
         url.searchParams.get("page") === "0"
@@ -251,6 +276,14 @@ async function readPosts(): Promise<Record<string, unknown>[]> {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
+async function readNdjson(fichier: string): Promise<Record<string, unknown>[]> {
+  const text = await readFile(join(workDir, fichier), "utf8");
+  return text
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
 /** Reporter muet : les tests ne doivent rien ecrire sur la sortie standard. */
 function silentReporter(): RunReporter {
   return new RunReporter({
@@ -272,6 +305,29 @@ describe("extraction de bout en bout", () => {
       (request) => request.method !== "GET" && request.path !== "/users/ids",
     );
     expect(writes).toEqual([]);
+  });
+
+  it("decrit le canal avec son objet, son en-tete et sa date de creation", async () => {
+    // Ces trois champs etaient ecrits en dur a la chaine vide et a zero : ils
+    // sont relus au moment d ecrire, et perdus pour toujours une fois l instance
+    // eteinte si personne ne les demande.
+    await extract();
+    const [canal] = await readNdjson("channels.ndjson");
+    expect(canal).toMatchObject({
+      header: "Contact : equipe produit",
+      purpose: "Discussions generales de l equipe",
+      create_at: 1_600_000_000_000,
+    });
+  });
+
+  it("decrit la team avec sa description et sa date de creation", async () => {
+    await extract();
+    const [team] = await readNdjson("teams.ndjson");
+    expect(team).toMatchObject({
+      description: "L equipe produit",
+      type: "O",
+      create_at: 1_500_000_000_000,
+    });
   });
 
   it("ecrit tous les messages, sans doublon malgre un pivot inclusif", async () => {
