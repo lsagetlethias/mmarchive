@@ -47,6 +47,7 @@ import {
   type ResolveurIdentite,
   reduireProps,
 } from "./props-filter.js";
+import { reecrireNomsDesignes } from "./system-message.js";
 
 export class AnonymizeError extends Error {
   readonly code: ErrorCode = ERROR_CODES.AnonymizeError;
@@ -99,6 +100,10 @@ export interface AnonymizeResult {
   /** References d identite reecrites hors de props (auteurs, reactions, depots). */
   readonly referencesReecrites: number;
   readonly props: CompteursProps;
+  /** Noms substitues dans le texte parce que props les designait nommement. */
+  readonly nomsSubstitues: number;
+  /** Noms designes par props mais absents du texte. Sans consequence. */
+  readonly nomsNonTrouves: number;
   /** Pieces jointes dont la metadonnee est conservee mais le binaire non repris. */
   readonly binairesNonRepris: number;
 }
@@ -293,6 +298,8 @@ export async function anonymizeArchive(options: {
 
   const props = compteursPropsVides();
   let referencesReecrites = 0;
+  let nomsSubstitues = 0;
+  let nomsNonTrouves = 0;
 
   /**
    * Une reference qui ne resout vers aucun compte est retiree, jamais conservee.
@@ -311,13 +318,32 @@ export async function anonymizeArchive(options: {
     return identite.uid;
   };
 
+  /**
+   * Les comptes sortent dans l ordre de leur identifiant de substitution, pas
+   * dans celui de la source.
+   *
+   * Ecrire ligne pour ligne dans l ordre lu rendait la correspondance complete a
+   * qui detient l archive d origine : un `paste` entre les deux fichiers suffit,
+   * puisque la n-ieme fiche anonyme est la n-ieme fiche reelle. La promesse est
+   * que la correspondance n existe nulle part, pas qu elle soit penible a
+   * reconstituer.
+   *
+   * Le tri tient en memoire, borne par le nombre de comptes et non par celui des
+   * messages : 3 277 fiches sur l archive de reference.
+   */
+  const anonymes: ArchiveUser[] = [];
+  for await (const user of readNdjson<ArchiveUser>(source.users)) {
+    const identite = table.get(user.id);
+    if (identite === undefined) continue;
+    anonymes.push(anonymiserUser(user, identite));
+  }
+  anonymes.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
   let comptes = 0;
   const users = await NdjsonWriter.open(sortie.users);
   try {
-    for await (const user of readNdjson<ArchiveUser>(source.users)) {
-      const identite = table.get(user.id);
-      if (identite === undefined) continue;
-      await users.write(anonymiserUser(user, identite));
+    for (const anonyme of anonymes) {
+      await users.write(anonyme);
       comptes += 1;
     }
   } finally {
@@ -425,6 +451,12 @@ export async function anonymizeArchive(options: {
           reactions += 1;
           return [{ ...reaction, user_id: uid }];
         });
+        // Avant de reduire props : c est lui qui porte encore les noms tels
+        // qu ils apparaissent dans le texte, et sans cette passe la ligne
+        // apparie l identite reelle et son substitut.
+        const texte = reecrireNomsDesignes(post, resolveur);
+        nomsSubstitues += texte.substitutions;
+        nomsNonTrouves += texte.nonTrouves;
         const anonyme: ArchivePost = {
           id: post.id,
           channel_id: post.channel_id,
@@ -435,7 +467,7 @@ export async function anonymizeArchive(options: {
           delete_at: post.delete_at,
           root_id: post.root_id,
           type: post.type,
-          message: post.message,
+          message: texte.message,
           is_pinned: post.is_pinned,
           // Les mots-diese sont une derivation du corps du message : `#prenom.nom`
           // y survivrait a une reecriture du corps, et l index en fait une colonne
@@ -482,6 +514,8 @@ export async function anonymizeArchive(options: {
     reactions,
     referencesReecrites,
     props,
+    nomsSubstitues,
+    nomsNonTrouves,
     binairesNonRepris,
   };
 }

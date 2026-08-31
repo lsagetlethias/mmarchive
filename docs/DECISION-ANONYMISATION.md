@@ -188,6 +188,34 @@ que l'argument qui a fait supprimer les avatars, une photo de visage identifie p
 qu'un nom, s'y applique mot pour mot. Les 762 lignes sont conservées, seule l'image est
 annulée : en retirer ferait diverger `counts.emojis`, que la vérification compare.
 
+## La table de correspondance écrite à côté de la question
+
+Le défaut le plus grave rencontré sur cette commande, trouvé après sa livraison, et qui
+mérite d'être écrit parce qu'il se reproduira.
+
+Un message système porte un texte généré par Mattermost : « alice a été ajouté au canal par
+bob ». Ce texte n'était pas touché, alors que `props` et `user_id` de la même ligne étaient
+pseudonymisés. Une seule ligne appariait donc l'identité réelle et son substitut, **sans
+avoir besoin de l'archive source**. Mesuré : 64 648 messages, exposant 3 206 comptes sur
+3 277, soit 97,8 %. Le sel jeté ne protège de rien quand la réponse est écrite à côté de la
+question.
+
+La correction se fait en deux temps, du plus sûr au moins sûr. D'abord le nom lu dans
+`props`, qui le porte nommément : aucune heuristique, aucun faux positif possible. Ensuite,
+sur les seuls messages système, tout jeton d'au moins quatre caractères qui est un nom de
+compte connu. Ce second temps est nécessaire parce qu'un compte ayant changé de nom laisse
+un message figé sur l'ancien, que `props` ne nomme plus : « @julien a rejoint le canal » à
+côté d'un `props.username` valant « julien.dauphant ». Il peut se tromper sur un nom
+d'utilisateur qui serait aussi un mot ordinaire, et c'est l'arbitrage assumé plus bas.
+
+Mesuré après correction : **zéro**.
+
+Second défaut de la même famille, plus discret. Les fiches de comptes sortaient dans l'ordre
+de la source, ligne pour ligne : un `paste` entre les deux fichiers rendait la table
+complète à qui détient l'archive d'origine. Elles sortent désormais dans l'ordre de leur
+identifiant de substitution, tiré au hasard. La promesse est que la correspondance n'existe
+nulle part, pas qu'elle soit pénible à reconstituer.
+
 ## Le contrôle des identités résiduelles
 
 `mmarchive-verify` **ne vérifie rien de l'anonymat**, et le croire est le risque principal.
@@ -271,7 +299,10 @@ des blocs `attachments`, conservé pour ne pas vider 312 183 messages ; le nom e
 canaux ; le nom des emojis personnalisés, souvent formé sur un prénom ; le nom et la
 description de la team, qui désignent l'organisation.
 
-Deux résidus méritent d'être nommés parce qu'ils ont été mesurés sur l'archive produite.
+Trois résidus méritent d'être nommés parce qu'ils ont été mesurés sur l'archive produite.
+Un prénom porté par plusieurs comptes reste en clair dans les messages système, et c'est
+voulu : « vanessa » désigne quatre comptes de l'archive de référence, donc le substituer
+serait arbitraire, et il n'apparie rien puisqu'il ne désigne personne en particulier.
 Onze identifiants de comptes réels sont **collés dans le corps de sept messages**, sous
 forme de permalien ou d'identifiant brut : la réécriture du texte devra donc traiter les
 identifiants de 26 caractères, et pas seulement les mentions et les noms. Et une personne
