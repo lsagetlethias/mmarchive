@@ -142,6 +142,13 @@ describe("le seuil d effectif", () => {
     expect(partPublique(0, 3277)).toBe("0,0 %");
   });
 
+  it("calcule la borne sur le denominateur au lieu de l ecrire en dur", () => {
+    // Une borne figee serait fausse des qu on change de taille d archive, et le
+    // rapport deviendrait faux la ou il se veut prudent.
+    expect(partPublique(1, 10)).toBe("moins de 50,0 %");
+    expect(partPublique(1, 100)).toBe("moins de 5,0 %");
+  });
+
   it("s arrete a une decimale, le denominateur etant public", () => {
     // Un taux a trois decimales sur 3 277 comptes est un numerateur deguise.
     expect(partPublique(1234, 3277)).toBe("37,7 %");

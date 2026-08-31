@@ -68,13 +68,17 @@ program
   .action(async (opts: Options) => {
     const logger = new Logger();
     const horodatage = new Date().toISOString();
+    // Les deux-points d une date ISO sont interdits dans un nom de fichier sous
+    // Windows, ou l ecriture echouerait. L horodatage complet reste dans le
+    // contenu du rapport, ou il ne gene personne.
+    const pourNomDeFichier = horodatage.replace(/[:.]/g, "-");
     const voisin = (nom: string): string => join(dirname(resolve(opts.out)), nom);
     const cheminSynthese = resolve(
-      opts.rapport ?? voisin(`rapport-anonymisation-${horodatage}.md`),
+      opts.rapport ?? voisin(`rapport-anonymisation-${pourNomDeFichier}.md`),
     );
     const cheminReleve =
       opts.releve === undefined
-        ? voisin(`releve-ne-pas-diffuser-${horodatage}.ndjson`)
+        ? voisin(`releve-ne-pas-diffuser-${pourNomDeFichier}.ndjson`)
         : resolve(opts.releve);
 
     // Avant la passe et non apres : un chemin fautif doit echouer en une

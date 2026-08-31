@@ -70,8 +70,14 @@ export function effectifPublic(valeur: number): string {
  */
 export function partPublique(numerateur: number, denominateur: number): string {
   if (denominateur === 0) return "sans objet";
-  if (numerateur > 0 && numerateur < SEUIL_EFFECTIF) return `moins de 0,2 %`;
-  return `${((100 * numerateur) / denominateur).toFixed(1).replace(".", ",")} %`;
+  const virgule = (valeur: number): string => valeur.toFixed(1).replace(".", ",");
+  // La borne se calcule sur le denominateur, elle ne s ecrit pas en dur : la
+  // meme valeur serait fausse sur une archive d une autre taille, et le rapport
+  // deviendrait faux la ou il se veut prudent.
+  if (numerateur > 0 && numerateur < SEUIL_EFFECTIF) {
+    return `moins de ${virgule((100 * SEUIL_EFFECTIF) / denominateur)} %`;
+  }
+  return `${virgule((100 * numerateur) / denominateur)} %`;
 }
 
 /** Une forme de texte residuelle, agregee par forme et jamais par occurrence. */
