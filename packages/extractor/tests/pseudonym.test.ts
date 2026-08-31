@@ -46,7 +46,7 @@ describe("assignPseudonyms", () => {
     expect(adjectifs.size).toBe(10);
   });
 
-  it("ne repete ni nom ni adjectif entre deux pseudonymes voisins", () => {
+  it("puise dans tout son vocabulaire plutot que dans une poignee de noms", () => {
     const suite = [...assignPseudonyms(ids(200)).values()];
     const noms = new Set(suite.map((p) => p.split("-")[1]));
     expect(noms.size).toBeGreaterThan(90);
@@ -62,17 +62,14 @@ describe("assignPseudonyms", () => {
   });
 
   it("ne suit pas l ordre des identifiants", () => {
-    // Une distribution qui suivrait l ordre naturel se rejouerait sans le sel.
-    // Compare la suite entiere plutot qu un seul element : sur deux cents
-    // identifiants, un element donne retombe au meme rang une fois sur deux
-    // cents, ce qui ferait echouer ce test au hasard.
-    const suite = (): string[] => ids(200).map((id) => assignPseudonyms(ids(200)).get(id) ?? "");
-    const a = ids(200).map((id, i) => [id, i] as const);
+    // Une distribution qui suivrait l ordre d entree se rejouerait sans le sel :
+    // il suffirait de posseder la liste des comptes. Porte sur la suite entiere
+    // plutot que sur un element, qui retomberait a son rang d origine une fois
+    // sur deux cents et ferait echouer ce test au hasard.
     const table = assignPseudonyms(ids(200));
-    const rangs = a.map(([id]) => [...table.values()].indexOf(table.get(id) ?? ""));
-    // Les rangs attribues ne suivent pas l ordre d entree : la suite n est pas croissante.
-    expect(rangs.every((r, i) => r === i)).toBe(false);
-    expect(suite).toBeTruthy();
+    const attribues = [...table.values()];
+    const rangs = ids(200).map((id) => attribues.indexOf(table.get(id) ?? ""));
+    expect(rangs.every((rang, entree) => rang === entree)).toBe(false);
   });
 
   it("ne rend rien qui ressemble a un nom de personne", () => {
