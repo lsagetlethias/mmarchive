@@ -138,11 +138,19 @@ export interface MesuresSortie {
   telephones: number;
   identifiantsColles: IdentifiantColle[];
   /**
-   * Messages systeme dont le texte nomme encore un compte a cote de son
-   * pseudonyme. Zero est la valeur attendue ; toute autre valeur rend l archive
-   * non diffusable, et le rapport le calcule plutot que de le supposer.
+   * Messages systeme dont le texte porte encore le nom d un compte.
+   *
+   * Zero est la valeur attendue : la passe substitue ces noms, et c est la
+   * surface qu elle pretend traiter. Toute autre valeur est donc un echec de la
+   * passe, pas un simple residu, et rend l archive non diffusable.
+   *
+   * Ce que ce compteur n etablit PAS, et que le rapport ne doit pas laisser
+   * croire : que le nom trouve soit celui du compte que la ligne designe par
+   * ailleurs sous son pseudonyme. Un message de A qui nomme B compte ici sans
+   * apparier A. Etablir la relation demanderait la table des identites, que le
+   * producteur de rapport n a pas, a dessein.
    */
-  appariementsSysteme: number;
+  nomsResiduelsSysteme: number;
   /** Couples canal-jeton. Plusieurs jetons peuvent viser le meme canal. */
   canauxCandidats: CanalCandidat[];
   /** Canaux distincts concernes, qui est le nombre a annoncer. */
@@ -167,7 +175,7 @@ export function mesuresVides(): MesuresSortie {
     adressesDistinctes: 0,
     telephones: 0,
     identifiantsColles: [],
-    appariementsSysteme: 0,
+    nomsResiduelsSysteme: 0,
     canauxCandidats: [],
     canauxDistincts: 0,
     emojisNommes: 0,

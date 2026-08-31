@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -119,12 +119,20 @@ describe("la synthese", () => {
     expect(texte).toContain("non_diffusable");
   });
 
-  it("rend un verdict negatif quand le texte apparie une identite et son pseudonyme", () => {
+  it("rend un verdict negatif quand un nom survit la ou la passe substitue", () => {
     // Le controle residuel ne peut pas le voir : il range le corps des messages
     // dans ce qu il ne couvre pas. Le rapport le calcule.
-    const texte = rendreSynthese(contexte({ mesures: { appariementsSysteme: 12 } }));
+    const texte = rendreSynthese(contexte({ mesures: { nomsResiduelsSysteme: 12 } }));
     expect(texte).toContain("non_diffusable");
     expect(texte).toContain("12");
+  });
+
+  it("ne pretend pas etablir une relation qu il ne peut pas prouver", () => {
+    // Le producteur n a pas la table des identites, a dessein : il compte une
+    // presence, pas un appariement, et doit le dire.
+    const texte = rendreSynthese(contexte({ mesures: { nomsResiduelsSysteme: 3 } }));
+    expect(texte).toContain("ne dit pas");
+    expect(texte).toContain("table des identites");
   });
 });
 
@@ -192,23 +200,35 @@ describe("l emplacement des documents", () => {
     await rm(racine, { recursive: true, force: true });
   });
 
-  it("refuse d ecrire dans l archive produite, qui serait diffusee avec", () => {
+  it("refuse d ecrire dans l archive produite, qui serait diffusee avec", async () => {
     const sortie = join(racine, "sortie");
-    expect(() => {
-      refuserCheminInterne(join(sortie, "rapport.md"), join(racine, "src"), sortie);
-    }).toThrow(AnonymizeError);
+    await expect(
+      refuserCheminInterne(join(sortie, "rapport.md"), join(racine, "src"), sortie),
+    ).rejects.toThrow(AnonymizeError);
   });
 
-  it("refuse d ecrire dans l archive source", () => {
+  it("refuse d ecrire dans l archive source", async () => {
     const source = join(racine, "src");
-    expect(() => {
-      refuserCheminInterne(join(source, "sous", "rapport.md"), source, join(racine, "sortie"));
-    }).toThrow(/a l interieur de l archive source/);
+    await expect(
+      refuserCheminInterne(join(source, "sous", "rapport.md"), source, join(racine, "sortie")),
+    ).rejects.toThrow(/a l interieur de l archive source/);
   });
 
-  it("accepte un chemin voisin", () => {
-    expect(() => {
-      refuserCheminInterne(join(racine, "rapport.md"), join(racine, "src"), join(racine, "sortie"));
-    }).not.toThrow();
+  it("refuse un chemin qui atteint la sortie par un lien symbolique", async () => {
+    // `resolve` ne fait que du calcul de chaine : un lien pose en dehors et
+    // pointant vers la sortie passait le controle, et l ecriture suivait le lien.
+    const sortie = join(racine, "sortie");
+    await mkdir(sortie, { recursive: true });
+    const passerelle = join(racine, "passerelle");
+    await symlink(sortie, passerelle);
+    await expect(
+      refuserCheminInterne(join(passerelle, "rapport.md"), join(racine, "src"), sortie),
+    ).rejects.toThrow(AnonymizeError);
+  });
+
+  it("accepte un chemin voisin", async () => {
+    await expect(
+      refuserCheminInterne(join(racine, "rapport.md"), join(racine, "src"), join(racine, "sortie")),
+    ).resolves.toBeUndefined();
   });
 });

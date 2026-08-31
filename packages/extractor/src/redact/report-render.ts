@@ -66,13 +66,15 @@ function verdict(contexte: ContexteRapport): { valeur: string; cause: string } {
       cause: `${String(manquements.length)} identite(s) ont survecu dans des champs qui devaient etre pseudonymises.`,
     };
   }
-  if (mesures.appariementsSysteme > 0) {
+  if (mesures.nomsResiduelsSysteme > 0) {
     return {
       valeur: "non_diffusable",
       cause:
-        `${String(mesures.appariementsSysteme)} message(s) systeme nomment en clair, dans leur texte, ` +
-        "un compte que leurs metadonnees designent par ailleurs sous son identite de substitution. " +
-        "Une seule de ces lignes apparie une identite reelle et son pseudonyme.",
+        `${String(mesures.nomsResiduelsSysteme)} message(s) systeme portent encore le nom en clair d un ` +
+        "compte. C est une surface que la passe substitue : en trouver un est un echec de la passe, " +
+        "et ces lignes portent par ailleurs des identites de substitution. Ce compte ne dit pas que " +
+        "le nom trouve soit celui du compte que la ligne designe, ce qui demanderait la table des " +
+        "identites, mais la presence meme du nom suffit a ne pas diffuser.",
     };
   }
   return {

@@ -83,8 +83,8 @@ program
 
     // Avant la passe et non apres : un chemin fautif doit echouer en une
     // seconde plutot qu au bout d une demi-minute de travail.
-    refuserCheminInterne(cheminSynthese, opts.archive, opts.out);
-    refuserCheminInterne(cheminReleve, opts.archive, opts.out);
+    await refuserCheminInterne(cheminSynthese, opts.archive, opts.out);
+    await refuserCheminInterne(cheminReleve, opts.archive, opts.out);
 
     const resultat = await anonymizeArchive({
       archiveDir: opts.archive,

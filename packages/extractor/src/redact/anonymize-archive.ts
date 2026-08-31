@@ -19,8 +19,8 @@
  * clair et les adresses y survivent. A l issue de cette passe l archive n est
  * pas diffusable. Voir docs/DECISION-ANONYMISATION.md.
  */
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   ARCHIVE_LAYOUT,
   type ArchiveChannel,
@@ -243,20 +243,68 @@ async function porteUneArchiveAnonymisee(racine: string): Promise<boolean> {
  * ferait disparaitre en silence a la passe suivante. Le controle vient avant la
  * passe, pour echouer en une seconde plutot qu apres une demi-minute de travail.
  */
-export function refuserCheminInterne(chemin: string, source: string, sortie: string): void {
-  const cible = resolve(chemin);
+export async function refuserCheminInterne(
+  chemin: string,
+  source: string,
+  sortie: string,
+): Promise<void> {
+  // `resolve` ne fait que du calcul de chaine : un lien symbolique pose en
+  // dehors et pointant vers la sortie passerait le controle, et l ecriture
+  // suivrait le lien. On resout donc le parent existant le plus proche, le
+  // fichier lui-meme n existant pas encore.
+  // Deux formes de la cible, et il faut les deux. La forme lexicale attrape le
+  // cas ordinaire ; celle qui suit les liens attrape le contournement, un lien
+  // pose en dehors et pointant vers la sortie passant sinon le controle avant
+  // que l ecriture ne le suive.
+  const cibles = [resolve(chemin), join(await realParent(chemin), basename(chemin))];
   for (const [racine, quoi] of [
-    [resolve(source), "l archive source"],
-    [resolve(sortie), "l archive produite"],
+    [await realOuResolu(source), "l archive source"],
+    [await realOuResolu(sortie), "l archive produite"],
   ] as const) {
-    const versLaCible = relative(racine, cible);
-    const dehors =
-      versLaCible === ".." || versLaCible.startsWith(`..${sep}`) || isAbsolute(versLaCible);
+    const dehors = cibles.every((cible) => {
+      const versLaCible = relative(racine, cible);
+      return versLaCible === ".." || versLaCible.startsWith(`..${sep}`) || isAbsolute(versLaCible);
+    });
     if (!dehors) {
       throw new AnonymizeError(
-        `${cible} est a l interieur de ${quoi}. Le rapport designe ce que l anonymisation a ` +
+        `${resolve(chemin)} est a l interieur de ${quoi}. Le rapport designe ce que l anonymisation a ` +
           "cherche a cacher : il ne doit ni voyager avec l archive, ni etre efface avec elle.",
       );
+    }
+  }
+}
+
+/** Chemin reel s il existe, sinon le chemin resolu lexicalement. */
+async function realOuResolu(chemin: string): Promise<string> {
+  try {
+    return await realpath(chemin);
+  } catch (cause) {
+    if (systemErrorCode(cause) !== "ENOENT") throw cause;
+    return resolve(chemin);
+  }
+}
+
+/**
+ * Chemin reel du repertoire qui contiendra ce fichier, liens suivis.
+ *
+ * Le fichier n existe pas encore, donc il n a pas de `realpath` : on remonte
+ * jusqu au premier ancetre existant, ce qui suit un lien pose sur le chemin.
+ *
+ * La remontee ne vaut que pour la CIBLE. L appliquer aux racines les
+ * elargirait : une sortie qui n existe pas encore verrait sa racine remonter au
+ * repertoire parent, et tout voisin y serait declare interieur.
+ */
+async function realParent(chemin: string): Promise<string> {
+  let candidat = dirname(resolve(chemin));
+  for (;;) {
+    try {
+      return await realpath(candidat);
+    } catch (cause) {
+      if (systemErrorCode(cause) !== "ENOENT") throw cause;
+      const parent = dirname(candidat);
+      // La racine est son propre parent : sans cette sortie, la boucle tourne.
+      if (parent === candidat) return candidat;
+      candidat = parent;
     }
   }
 }

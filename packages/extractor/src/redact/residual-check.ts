@@ -150,6 +150,27 @@ export function collecterIdentitesOrigine(users: Iterable<ArchiveUser>): Identit
   return { ids, usernames, noms, motsRecherchables, porteurs };
 }
 
+/**
+ * Formes d un libelle susceptibles d etre un nom de compte.
+ *
+ * Les mots seuls ne suffisent pas : un nom d utilisateur Mattermost peut
+ * contenir un point ou un tiret, donc un compte nomme « alice-smith » ne serait
+ * jamais reconnu dans un canal « alice-smith » si on ne comparait que les mots.
+ * La valeur entiere normalisee entre donc aussi dans les candidates.
+ */
+function formesCandidates(valeur: string): Set<string> {
+  const normalisee = normaliser(valeur).trim();
+  const candidates = new Set(normalisee.match(MOT) ?? []);
+  if (normalisee !== "") candidates.add(normalisee);
+  // Une forme composee du libelle, pour les noms ecrits avec un separateur que
+  // le decoupage en mots aurait fait disparaitre.
+  for (const separateur of ["-", "."]) {
+    const segments = normalisee.split(separateur).filter((s) => s !== "");
+    if (segments.length > 1) candidates.add(segments.join(separateur));
+  }
+  return candidates;
+}
+
 function extrait(valeur: string): string {
   return valeur.length <= 32 ? valeur : `${valeur.slice(0, 32)}...`;
 }
@@ -320,8 +341,7 @@ export async function checkResidualIdentities(options: {
   let emojisNommes = 0;
   for await (const emoji of readNdjson<ArchiveEmoji>(paths.emojis)) {
     collecteur.reference("emojis.ndjson", "creator_id", emoji.creator_id, "uid");
-    const jetons = new Set(normaliser(emoji.name).match(MOT) ?? []);
-    for (const jeton of jetons) {
+    for (const jeton of formesCandidates(emoji.name)) {
       const porteurs = options.origine.porteurs.get(jeton) ?? 0;
       if (porteurs >= 1 && porteurs <= 2 && jeton.length >= LONGUEUR_NOM_MINIMALE) {
         emojisNommes += 1;
@@ -345,7 +365,7 @@ export async function checkResidualIdentities(options: {
       ["name", canal.name],
       ["display_name", canal.display_name],
     ] as const) {
-      for (const jeton of new Set(normaliser(valeur).match(MOT) ?? [])) {
+      for (const jeton of formesCandidates(valeur)) {
         const porteurs = options.origine.porteurs.get(jeton) ?? 0;
         if (porteurs === 0 || porteurs > 2 || jeton.length < LONGUEUR_NOM_MINIMALE) continue;
         candidats.push({
@@ -387,6 +407,9 @@ export async function checkResidualIdentities(options: {
       if (texte === "") continue;
 
       const trouvees = mentionsDe(texte);
+      // Elles comptent parmi les mentions rencontrees : les exclure du total
+      // faisait annoncer moins de mentions que le message n en porte.
+      mesures.mentions += trouvees.collectives;
       mesures.mentionsCollectives += trouvees.collectives;
       for (const forme of trouvees.formes) {
         mesures.mentions += 1;
@@ -429,14 +452,19 @@ export async function checkResidualIdentities(options: {
         });
       }
 
-      // Un message systeme dont le texte nomme encore un compte, a cote du
-      // pseudonyme que portent props et user_id : c est la table de
-      // correspondance, et le rapport la calcule plutot que de la supposer.
+      // Un message systeme dont le texte porte encore le nom d un compte. La
+      // passe substitue ces noms : en trouver un est un echec de la passe, et
+      // non un residu comme le corps des messages humains.
+      //
+      // Le controle ne verifie pas que ce nom soit celui du compte que la ligne
+      // designe par ailleurs : il faudrait la table des identites, que ce code
+      // n a pas. Il compte une presence, pas un appariement, et le rapport le
+      // dit ainsi.
       if (systeme) {
         const jetons = new Set(texte.toLowerCase().match(/[a-z0-9_-][a-z0-9._-]*/g) ?? []);
         for (const jeton of jetons) {
           if (jeton.length >= LONGUEUR_NOM_MINIMALE && options.origine.usernames.has(jeton)) {
-            mesures.appariementsSysteme += 1;
+            mesures.nomsResiduelsSysteme += 1;
             break;
           }
         }

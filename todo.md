@@ -219,10 +219,11 @@ authentification. Cadré dans `docs/DECISION-ANONYMISATION.md`.
       trouvée est une preuve, aucune identité trouvée n'en est pas une. Écrit avant que le
       contrôle ne lève, sans quoi il manquerait dans le seul cas où il compte. Il dit ce qui est garanti et ce qui
       ne l'est pas, et ne doit jamais être diffusé avec l'archive puisqu'il désigne ce qu'on
-      a caché. Il liste notamment les 57 canaux publics dont le nom porte une identité : ils
-      ne sont pas renommés, parce que cela casserait les permaliens, mais leur nom apparaît
-      dans la barre latérale, dans chaque permalien et en tête de chaque fragment du RAG.
-      Les voir listés permet d'en traiter quelques uns à la main avant diffusion.
+      a caché. Il liste notamment les canaux publics dont le nom porte une identité, 23 sur
+      758 mesurés par l'outil à chaque exécution et non plus une fois à la main : ils ne sont
+      pas renommés, parce que cela casserait les permaliens, mais leur nom apparaît dans la
+      barre latérale, dans chaque permalien et en tête de chaque fragment du RAG. Les voir
+      listés permet d'en traiter quelques uns à la main avant diffusion.
 - [ ] **Réécriture du texte** : mentions résolues vers le pseudonyme pour garder les fils
       lisibles, mentions orphelines neutralisées, adresses remplacées par `<redacted>`.
       Deux surfaces et non une : le corps des messages, et le texte des blocs `attachments`

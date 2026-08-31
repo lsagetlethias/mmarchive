@@ -45,4 +45,10 @@ describe("identifiantsDe", () => {
     expect(identifiantsDe(`voir ${"a".repeat(26)} ici`)).toEqual(["a".repeat(26)]);
     expect(identifiantsDe("x".repeat(30))).toEqual([]);
   });
+
+  it("garde les repetitions, l appelant en comptant des occurrences", () => {
+    // Dedupliquer ici ferait annoncer moins d occurrences qu il n y en a.
+    const id = "a".repeat(26);
+    expect(identifiantsDe(`${id} puis ${id}`)).toHaveLength(2);
+  });
 });

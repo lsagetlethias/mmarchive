@@ -75,7 +75,12 @@ export function telephonesDe(texte: string): number {
   return [...texte.matchAll(TELEPHONE)].length;
 }
 
-/** Identifiants de 26 caracteres presents dans un texte, sans doublon. */
+/**
+ * Identifiants de 26 caracteres presents dans un texte, occurrences comprises.
+ *
+ * Les repetitions sont conservees : l appelant en compte des occurrences, et
+ * dedupliquer ici ferait annoncer moins d occurrences qu il n y en a.
+ */
 export function identifiantsDe(texte: string): readonly string[] {
-  return [...new Set([...texte.matchAll(IDENTIFIANT)].map((t) => t[0]))];
+  return [...texte.matchAll(IDENTIFIANT)].map((t) => t[0]);
 }
