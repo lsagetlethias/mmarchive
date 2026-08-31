@@ -661,6 +661,20 @@ describe("les refus", () => {
     expect(await readdir(sortie)).toEqual(["notes-importantes.txt"]);
   });
 
+  it("reconnait une archive anonymisee dont le manifeste a une autre forme", async () => {
+    // Le garde-fou ne valide pas le manifeste, il cherche le bloc. Sans cette
+    // tolerance, une archive produite par une version dont le bloc differe
+    // cesserait d etre reconnue, et la commande tournerait sur sa propre sortie.
+    await anonymiser();
+    const manifeste = join(sortie, "manifest.json");
+    const brut = JSON.parse(await readFile(manifeste, "utf8")) as Record<string, unknown>;
+    brut.anonymized = { forme_inconnue: true };
+    await writeFile(manifeste, JSON.stringify(brut), "utf8");
+    await expect(
+      anonymizeArchive({ archiveDir: sortie, outDir: join(sortie, "..", "x"), logger: silent }),
+    ).rejects.toThrow(/porte deja une archive anonymisee/);
+  });
+
   it("refuse --force sur une sortie laissee par une passe interrompue", async () => {
     // Le marqueur du manifeste n est ecrit qu en toute fin : une sortie
     // partielle ne le porte pas, et se supprime a la main apres examen.

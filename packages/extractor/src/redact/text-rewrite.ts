@@ -19,7 +19,14 @@
  * valide. Enchainer les passes ne peut donc pas etre idempotent, quel que soit
  * l ordre choisi.
  */
-import { ADRESSE_MENTION, CORPS_MENTION, estMentionCollective, LOCAL_ADRESSE } from "./measure.js";
+import {
+  ADRESSE_MENTION,
+  CORPS_MENTION,
+  estMentionCollective,
+  LOCAL_ADRESSE,
+  TELEPHONE_INTERNATIONAL,
+  TELEPHONE_NATIONAL,
+} from "./measure.js";
 import type { ResolveurIdentite } from "./props-filter.js";
 
 /**
@@ -102,10 +109,9 @@ const FORMES = new RegExp(
     String.raw`(?<adresseMention>(?<![\p{L}\p{N}._%+-])@${LOCAL_ADRESSE}(?:@${DOMAINE})+(?![\p{L}\p{N}]))`,
     String.raw`(?<adresse>${LOCAL_ADRESSE}(?:@${DOMAINE})+(?![\p{L}\p{N}]))`,
     String.raw`(?<identifiant>(?<![\p{L}\p{N}])[a-z0-9]{26}(?![\p{L}\p{N}]))`,
-    // Reference NOMMEE au separateur : sa position numerique depend du nombre de
-    // groupes qui precedent dans l alternation, donc un `\N` se decalerait au
-    // premier ajout de forme.
-    String.raw`(?<telephone>(?<![\p{L}\p{N}_])(?:\+33\s?|0)[1-9](?:(?<sep>[\s.-]?)[0-9]{2}(?:\k<sep>[0-9]{2}){3})(?![\p{L}\p{N}_]))`,
+    // Motifs partages avec les detecteurs, references NOMMEES : une position
+    // numerique se decalerait au premier ajout de forme dans l alternation.
+    String.raw`(?<telephone>(?<![\p{L}\p{M}\p{N}_])(?:${TELEPHONE_INTERNATIONAL}|${TELEPHONE_NATIONAL})(?![\p{L}\p{M}\p{N}_]))`,
     String.raw`(?<mention>(?<![\p{L}\p{N}_%+])@(?:${CORPS_MENTION}))`,
   ].join("|"),
   "gu",

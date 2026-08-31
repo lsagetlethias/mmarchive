@@ -82,25 +82,22 @@ export type JoinedTeamRecord = z.infer<typeof joinedTeamRecordSchema>;
  * messages porte encore des noms ecrits en clair, et qu il ne tient donc pas une
  * archive diffusable.
  */
-/** Surfaces de texte que l anonymisation sait reecrire. */
-export const rewrittenSurfaceSchema = z.enum(["message", "props.attachments"]);
-
 /**
- * Formes de texte traitees.
+ * Surfaces et formes que cette version sait reecrire.
  *
- * `noms` manque volontairement tant que le remplacement des noms ecrits en clair
- * n est pas livre. Son absence se lit, et c est le but.
+ * Ce sont des TYPES et non des schemas de validation, et la distinction est le
+ * fond du sujet. Un `z.enum` ferait echouer la lecture d une archive produite
+ * par une version ulterieure qui aurait ajoute une forme, alors que la section
+ * « compatibilite et evolution » du format impose a un lecteur d ignorer ce qu il
+ * ne connait pas. Le type contraint ce que l outil ECRIT ; la validation accepte
+ * ce qu il LIT.
+ *
+ * `noms` n y figure pas tant que le remplacement des noms ecrits en clair n est
+ * pas livre : le manifeste ne doit pas pouvoir affirmer un travail qui n existe
+ * pas.
  */
-export const rewrittenFormSchema = z.enum([
-  "mentions",
-  "adresses",
-  "telephones",
-  "identifiants",
-  "noms",
-]);
-
-export type RewrittenSurface = z.infer<typeof rewrittenSurfaceSchema>;
-export type RewrittenForm = z.infer<typeof rewrittenFormSchema>;
+export type RewrittenSurface = "message" | "props.attachments";
+export type RewrittenForm = "mentions" | "adresses" | "telephones" | "identifiants";
 
 export const anonymizationRecordSchema = z.object({
   at: isoDate,
@@ -117,7 +114,7 @@ export const anonymizationRecordSchema = z.object({
    * le commenter, et une liste de residus vides se lirait un jour comme le
    * verdict positif que le rapport s interdit par ailleurs.
    */
-  text_rewritten: z.record(rewrittenSurfaceSchema, z.array(rewrittenFormSchema)),
+  text_rewritten: z.record(z.string(), z.array(z.string())),
 });
 
 export type AnonymizationRecord = z.infer<typeof anonymizationRecordSchema>;

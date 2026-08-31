@@ -80,6 +80,11 @@ export const ADRESSE_MENTION = new RegExp(
  * colle a une lettre ou a un tiret bas et ramasse un fragment de jeton
  * technique, ce qui vaut 287 detections sur l archive de reference.
  *
+ * Deux alternatives et non une, parce que les deux formes n ont pas la meme
+ * structure : le prefixe national « 06 » est colle, l international « +33 6 »
+ * porte un separateur. Les fondre laissait passer « +33 6.12.34.56.78 », dont le
+ * premier separateur n etait compare a rien.
+ *
  * Ancre des deux cotes, et surtout **le separateur doit etre le meme partout**,
  * ce que la reference arriere impose. Le rendre optionnel a chaque groupe
  * acceptait des formes hybrides qui n existent pas : sur l archive de reference,
@@ -92,8 +97,13 @@ export const ADRESSE_MENTION = new RegExp(
  * etrangers, les numeros ecrits en toutes lettres, et ceux coupes par un retour
  * a la ligne.
  */
-const TELEPHONE =
-  /(?<![\p{L}\p{N}_])(?:\+33\s?|0)[1-9](?:([\s.-]?)[0-9]{2}(?:\1[0-9]{2}){3})(?![\p{L}\p{N}_])/gu;
+export const TELEPHONE_NATIONAL = String.raw`0[1-9](?<sepn>[\s.-]?)[0-9]{2}(?:\k<sepn>[0-9]{2}){3}`;
+export const TELEPHONE_INTERNATIONAL = String.raw`\+33(?<sepi>[\s.-]?)[1-9]\k<sepi>[0-9]{2}(?:\k<sepi>[0-9]{2}){3}`;
+
+const TELEPHONE = new RegExp(
+  String.raw`(?<![\p{L}\p{M}\p{N}_])(?:${TELEPHONE_INTERNATIONAL}|${TELEPHONE_NATIONAL})(?![\p{L}\p{M}\p{N}_])`,
+  "gu",
+);
 
 /** Identifiant Mattermost isole dans du texte. */
 const IDENTIFIANT = /(?<![A-Za-z0-9])[a-z0-9]{26}(?![A-Za-z0-9])/g;

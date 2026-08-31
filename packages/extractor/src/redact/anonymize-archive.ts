@@ -263,7 +263,18 @@ async function refuserSortieOccupee(sortie: string, source: string, force: boole
 async function porteUneArchiveAnonymisee(racine: string): Promise<boolean> {
   try {
     const brut: unknown = JSON.parse(await readFile(join(racine, ARCHIVE_LAYOUT.manifest), "utf8"));
-    return manifestSchema.safeParse(brut).data?.anonymized !== undefined;
+    // Deliberement tolerant : la seule presence du bloc suffit, sans valider le
+    // reste du manifeste. Un garde-fou qui exigerait un manifeste conforme
+    // cesserait de reconnaitre une archive produite par une version dont le bloc
+    // a une autre forme, et laisserait la commande tourner sur sa propre sortie,
+    // ce qui est precisement le cas destructeur.
+    return (
+      typeof brut === "object" &&
+      brut !== null &&
+      "anonymized" in brut &&
+      typeof (brut as { anonymized: unknown }).anonymized === "object" &&
+      (brut as { anonymized: unknown }).anonymized !== null
+    );
   } catch {
     return false;
   }
