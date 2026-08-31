@@ -240,6 +240,41 @@ c'est-à-dire exactement les plus faciles à oublier.
 Il énumère aussi ce qu'il ne couvre pas, et la commande l'affiche. Un contrôle qui tairait
 ses limites serait pire que pas de contrôle, puisqu'il ferait croire l'archive diffusable.
 
+## La réécriture des formes ancrées
+
+Toute la sûreté de cette étape vient de l'ancrage. Une mention commence par un arobase, une
+adresse porte un arobase et un domaine, un identifiant fait vingt-six caractères. Rien n'est
+deviné à partir d'un mot ordinaire, ce qui explique qu'elle puisse être large là où l'étape
+suivante devra être prudente.
+
+**Une seule passe, une alternation ordonnée, un branchement sur la forme reconnue.** Ce n'est
+pas un choix de style, et quatre remplacements enchaînés ne feraient pas la même chose : le
+texte rendu par un callback n'est jamais relu par le moteur, alors qu'une passe suivante
+relirait ce que la précédente a écrit. Or les valeurs injectées sont tirées des alphabets
+mêmes que les détecteurs lisent, l'identifiant de substitution ayant exactement la forme d'un
+identifiant et le nom de substitution étant un corps de mention comme une partie locale
+d'adresse valides. Enchaîner ne peut donc pas être idempotent, quel que soit l'ordre.
+
+**Une référence qui ne résout vers rien est retirée dans les métadonnées, laissée intacte
+dans le texte.** L'asymétrie est mesurée, pas esthétique : les corps portent 10 534 jetons de
+vingt-six caractères, dont 11 désignent un compte et 6 566 sont des permaliens que le format
+conserve délibérément. Transporter ici la règle des métadonnées en détruirait 10 523 pour en
+traiter 11.
+
+**Les mentions collectives sont laissées intactes.** Sans règle explicite elles tombent dans
+la neutralisation, ce qui abîmerait 3 585 messages pour zéro identité.
+
+**Les substituts ne portent ni chevron ni arobase.** `<redacted>` aurait été relu par le rendu
+markdown du viewer : le chevron coupe le lien là où il est posé, et une adresse remplacée dans
+une destination de lien produit un lien de contact cliquable. 2 861 adresses de l'archive
+vivent dans un lien markdown.
+
+**Rejouer la commande sur sa propre sortie est refusé.** Presque sans effet avant cette étape,
+destructeur depuis : aucun pseudonyme de la première passe ne résout contre une table neuve,
+donc toutes les mentions deviendraient orphelines et seraient neutralisées. Le contrôle
+résiduel ne le verrait pas, puisqu'il est positif contre le nouvel ensemble, cohérent avec
+lui-même.
+
 ## Le remplacement des noms en clair, et son revers
 
 C'est la partie qui décide de la valeur du résultat, et la seule qui ne peut pas être exacte.
@@ -316,9 +351,8 @@ d'un document qui s'ouvre sur « diffusable ».
 
 ## Ce que cela garantit, et ce que cela ne garantit pas
 
-**À l'issue de l'étape 2, seule livrée à ce jour, l'archive n'est pas diffusable.** Le
-manifeste le dit lui-même par `anonymized.message_text_rewritten` à `false`, et la commande
-le répète en clair à chaque exécution.
+**L'archive n'est pas diffusable à ce stade.** Le manifeste le dit par ce qu'il n'énumère
+pas : `anonymized.text_rewritten` liste les formes traitées, et `noms` n'y figure pas.
 
 Est garanti dès maintenant, et uniquement sur les champs **structurés** : plus aucun
 identifiant ni nom de compte parmi les auteurs de messages, les réactions, les déposants de
@@ -381,8 +415,10 @@ Deux noms distincts rendent la confusion impossible à commettre plutôt que rar
    d'origine ; le relevé porte le détail et se détruit. Le rapport s'écrit avant que le
    contrôle ne lève, sans quoi la seule exécution où il est indispensable serait précisément
    celle qui n'en produirait aucun.
-4. La réécriture du texte : mentions résolues, mentions orphelines, adresses, numéros, et
-   les identifiants bruts collés dans le corps.
+4. La réécriture du texte sur les formes ancrées, dans les deux surfaces. **Livré.** Mesuré :
+   245 313 mentions substituées et 15 591 neutralisées dans les corps, 73 191 adresses et
+   1 235 numéros retirés, 11 identifiants de comptes substitués. Après la passe, plus aucune
+   adresse ni aucun numéro, et zéro mention portant le nom d'un compte connu.
 5. Le remplacement des noms en clair, la partie risquée, à mesurer sur un échantillon avant
    de l'appliquer à l'archive entière. Elle porte désormais sur deux surfaces, le corps des
    messages et le texte des blocs `attachments`.

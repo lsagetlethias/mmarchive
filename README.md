@@ -435,9 +435,17 @@ il n'existe aucun drapeau pour l'éviter. S'il trouve une seule identité surviv
 commande échoue et l'archive produite ne doit pas être diffusée. S'il passe, il énumère ce
 qu'il **ne couvre pas**, et cette liste vaut d'être lue.
 
+Le texte est réécrit sur ses **formes ancrées**, dans les messages comme dans le texte des
+blocs d'intégration : les mentions qui désignent un compte prennent son pseudonyme et le fil
+reste lisible, celles qui ne désignent personne sont neutralisées, les adresses et les
+numéros de téléphone sont retirés. Les identifiants de comptes collés dans un message sont
+substitués ; ceux qui ne désignent aucun compte sont laissés tels quels, parce que ce sont
+des permaliens et que les détruire coûterait bien plus que ça ne rapporterait.
+
 > À l'issue de cette étape, l'archive n'est **pas encore diffusable** : le corps des messages
-> porte toujours mentions, noms écrits en clair et adresses. Le manifeste le dit lui-même par
-> `anonymized.message_text_rewritten` à `false`. Lisez
+> porte toujours des noms écrits en clair, que rien n'ancre et qui demandent une autre
+> méthode. Le manifeste le dit par l'absence de `noms` dans
+> `anonymized.text_rewritten`. Lisez
 > [`docs/DECISION-ANONYMISATION.md`](docs/DECISION-ANONYMISATION.md), et en particulier la
 > section « ce que cela garantit, et ce que cela ne garantit pas », avant toute diffusion.
 

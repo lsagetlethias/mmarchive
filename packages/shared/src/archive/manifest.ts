@@ -77,16 +77,47 @@ export type JoinedTeamRecord = z.infer<typeof joinedTeamRecordSchema>;
  *
  * Elle dit une fois, en un endroit, ce qu il faudrait autrement repeter sur
  * chaque ligne de `files.ndjson` au prix d une valeur ajoutee a un enum ferme.
- * Elle dit aussi jusqu ou l anonymisation est allee : un lecteur qui trouve
- * `message_text_rewritten` a faux sait que le corps des messages porte encore
- * des noms, et qu il ne tient donc pas une archive diffusable.
+ * Elle dit aussi jusqu ou l anonymisation est allee, par ce qu elle enumere : un
+ * lecteur qui ne trouve pas `noms` dans `text_rewritten` sait que le corps des
+ * messages porte encore des noms ecrits en clair, et qu il ne tient donc pas une
+ * archive diffusable.
  */
+/** Surfaces de texte que l anonymisation sait reecrire. */
+export const rewrittenSurfaceSchema = z.enum(["message", "props.attachments"]);
+
+/**
+ * Formes de texte traitees.
+ *
+ * `noms` manque volontairement tant que le remplacement des noms ecrits en clair
+ * n est pas livre. Son absence se lit, et c est le but.
+ */
+export const rewrittenFormSchema = z.enum([
+  "mentions",
+  "adresses",
+  "telephones",
+  "identifiants",
+  "noms",
+]);
+
+export type RewrittenSurface = z.infer<typeof rewrittenSurfaceSchema>;
+export type RewrittenForm = z.infer<typeof rewrittenFormSchema>;
+
 export const anonymizationRecordSchema = z.object({
   at: isoDate,
   tool_version: z.string(),
   /** Pieces jointes, avatars et emojis personnalises non repris. */
   binaries_removed: z.boolean(),
-  message_text_rewritten: z.boolean(),
+  /**
+   * Ce qui a ETE FAIT, par surface. Jamais ce qui reste.
+   *
+   * Un booleen unique ne pouvait plus rien dire de vrai : il ne nommait qu une
+   * des deux surfaces reecrites, et il aurait fallu le mettre a vrai alors que
+   * les noms ecrits en clair subsistent, ce qui ferait croire l archive
+   * diffusable. Enumerer les formes traitees rend l ecart visible sans avoir a
+   * le commenter, et une liste de residus vides se lirait un jour comme le
+   * verdict positif que le rapport s interdit par ailleurs.
+   */
+  text_rewritten: z.record(rewrittenSurfaceSchema, z.array(rewrittenFormSchema)),
 });
 
 export type AnonymizationRecord = z.infer<typeof anonymizationRecordSchema>;

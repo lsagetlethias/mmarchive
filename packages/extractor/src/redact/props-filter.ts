@@ -14,6 +14,7 @@
  * Tout ce qui n est pas nomme ici tombe.
  */
 import type { Identite } from "./identity-table.js";
+import { type CompteursTexte, reecrireFormesAncrees } from "./text-rewrite.js";
 
 /** Marqueurs de provenance, sans identite et lus par des lecteurs d archive. */
 const DRAPEAUX = new Set([
@@ -68,6 +69,17 @@ function estObjet(valeur: unknown): valeur is Record<string, unknown> {
 export interface ResolveurIdentite {
   parId(id: string): Identite | undefined;
   parUsername(username: string): Identite | undefined;
+  /**
+   * Vrai si cette valeur est un nom de substitution deja emis.
+   *
+   * Sert a la reecriture du texte : une passe anterieure a deja substitue des
+   * noms dans les messages systeme, et sans ce test la passe suivante les
+   * prendrait pour des mentions non resolues et les neutraliserait. C est ce
+   * qui rend la reecriture idempotente.
+   */
+  estSubstitution(nom: string): boolean;
+  /** Identifiant de substitution d un identifiant d origine, s il en designe un. */
+  uidPourIdentifiant(id: string): string | undefined;
 }
 
 /** Ce qu une reduction a retire, pour que le resume de la commande le dise. */
@@ -99,24 +111,51 @@ export function compteursPropsVides(): CompteursProps {
   };
 }
 
-function reduireField(field: unknown): Record<string, unknown> | undefined {
+/**
+ * Reecrit une valeur conservee, si c est du texte.
+ *
+ * La reecriture se fait ICI et non dans une passe separee : ce module est le
+ * seul a connaitre la liste blanche des champs conserves, et cette liste a deja
+ * bouge deux fois. Une passe separee en tiendrait une copie, qui divergerait au
+ * prochain ajustement, et un champ ajoute a la liste blanche serait conserve
+ * sans etre reecrit sans que personne ne le voie.
+ */
+function valeurReecrite(
+  valeur: unknown,
+  resolveur: ResolveurIdentite,
+  texte: CompteursTexte,
+): unknown {
+  return typeof valeur === "string" ? reecrireFormesAncrees(valeur, resolveur, texte) : valeur;
+}
+
+function reduireField(
+  field: unknown,
+  resolveur: ResolveurIdentite,
+  texte: CompteursTexte,
+): Record<string, unknown> | undefined {
   if (!estObjet(field)) return undefined;
   const out: Record<string, unknown> = {};
   for (const [cle, valeur] of Object.entries(field)) {
-    if (CHAMPS_FIELD.has(cle)) out[cle] = valeur;
+    if (CHAMPS_FIELD.has(cle)) out[cle] = valeurReecrite(valeur, resolveur, texte);
   }
   return Object.keys(out).length === 0 ? undefined : out;
 }
 
-function reduireAttachment(bloc: unknown): Record<string, unknown> | undefined {
+function reduireAttachment(
+  bloc: unknown,
+  resolveur: ResolveurIdentite,
+  texte: CompteursTexte,
+): Record<string, unknown> | undefined {
   if (!estObjet(bloc)) return undefined;
   const out: Record<string, unknown> = {};
   for (const [cle, valeur] of Object.entries(bloc)) {
-    if (ATTACHMENT_TEXTE.has(cle)) out[cle] = valeur;
+    if (ATTACHMENT_TEXTE.has(cle)) out[cle] = valeurReecrite(valeur, resolveur, texte);
   }
   const fields = bloc.fields;
   if (Array.isArray(fields)) {
-    const gardes = fields.map(reduireField).filter((f) => f !== undefined);
+    const gardes = fields
+      .map((field) => reduireField(field, resolveur, texte))
+      .filter((f) => f !== undefined);
     if (gardes.length > 0) out.fields = gardes;
   }
   return Object.keys(out).length === 0 ? undefined : out;
@@ -133,6 +172,9 @@ export function reduireProps(
   props: Record<string, unknown>,
   resolveur: ResolveurIdentite,
   compteurs: CompteursProps,
+  // Obligatoire, jamais optionnel : un futur appelant doit trancher plutot
+  // qu heriter d un defaut qui laisserait du texte non reecrit.
+  texte: CompteursTexte,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
 
@@ -144,7 +186,9 @@ export function reduireProps(
 
     if (cle === "attachments") {
       if (Array.isArray(valeur)) {
-        const gardes = valeur.map(reduireAttachment).filter((b) => b !== undefined);
+        const gardes = valeur
+          .map((bloc) => reduireAttachment(bloc, resolveur, texte))
+          .filter((b) => b !== undefined);
         compteurs.attachmentsReduits += gardes.length;
         if (gardes.length > 0) out[cle] = gardes;
         else compteurs.clesRetirees += 1;

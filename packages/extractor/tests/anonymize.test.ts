@@ -573,9 +573,14 @@ describe("le manifeste", () => {
     await anonymiser();
     const manifest = await manifeste();
     expect(manifest.anonymized?.binaries_removed).toBe(true);
-    // Faux tant que la reecriture du texte n est pas livree : un lecteur doit
-    // pouvoir savoir qu il ne tient pas encore une archive diffusable.
-    expect(manifest.anonymized?.message_text_rewritten).toBe(false);
+    // Le manifeste enumere ce qui a ETE FAIT, jamais ce qui reste : l absence de
+    // « noms » se lit sans etre commentee, et une liste de residus vide se
+    // lirait un jour comme le verdict positif que le rapport s interdit.
+    expect(manifest.anonymized?.text_rewritten).toEqual({
+      message: ["mentions", "adresses", "telephones", "identifiants"],
+      "props.attachments": ["mentions", "adresses", "telephones", "identifiants"],
+    });
+    expect(manifest.anonymized?.text_rewritten.message).not.toContain("noms");
   });
 
   it("recale les sept compteurs, pas seulement ceux que redact recalait", async () => {
