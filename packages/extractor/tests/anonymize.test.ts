@@ -107,6 +107,15 @@ async function buildArchive(): Promise<void> {
       props: { addedUserId: ORPHELIN, addedUsername: "compte-disparu" },
     }),
     post({
+      id: "w".repeat(26),
+      type: "system_add_to_channel",
+      user_id: BOB,
+      // Un nom court designe par props ne doit pas etre remplace a l interieur
+      // d un mot plus long : « bob » ne transforme pas « bobsleigh ».
+      message: "bobsleigh et bob.martin ont ete evoques par bob, avec bob_.",
+      props: { username: "bob" },
+    }),
+    post({
       id: "v".repeat(26),
       type: "system_add_to_channel",
       user_id: BOB,
@@ -229,10 +238,10 @@ async function buildArchive(): Promise<void> {
       purpose: "Objet du canal",
       create_at: 1,
       delete_at: 0,
-      total_msg_count: 7,
+      total_msg_count: 8,
       last_post_at: 1_700_000_000_000,
       was_joined_by_tool: false,
-      archived_post_count: 7,
+      archived_post_count: 8,
     },
   ]);
 
@@ -287,7 +296,7 @@ async function buildArchive(): Promise<void> {
       counts: {
         teams: 1,
         channels: 1,
-        posts: 7,
+        posts: 8,
         users: 2,
         emojis: 2,
         attachments: 1,
@@ -480,6 +489,22 @@ describe("la table de correspondance", () => {
     expect([alice.username, bob.username]).toContain(props.addedUsername);
   });
 
+  it("ne substitue un nom qu en jeton entier, jamais dans un mot", async () => {
+    // Un remplacement brut de la valeur de props atteindrait l interieur des
+    // mots : un compte nomme « bob » transformerait « bobsleigh ».
+    await anonymiser();
+    const bob = await fiche(BOB_ROLES);
+    const posts = await lire(`posts/${CHANNEL}.ndjson`);
+    const message = posts.find((p) => p.id === "w".repeat(26))?.message as string;
+    expect(message).toContain("bobsleigh");
+    expect(message).toContain("bob.martin");
+    // Un tiret bas final appartient au nom, il n est pas de la ponctuation :
+    // « bob_ » est un autre compte que « bob », et ne doit pas etre substitue.
+    expect(message).toContain("bob_");
+    expect(message).toContain(bob.username as string);
+    expect(message.startsWith("bobsleigh")).toBe(true);
+  });
+
   it("ne se lit pas dans l ordre des fiches de comptes", async () => {
     // Ecrire les comptes dans l ordre de la source rendait la table complete a
     // qui detient l archive d origine, par un simple paste ligne a ligne.
@@ -559,7 +584,7 @@ describe("le manifeste", () => {
     expect(manifest.counts).toMatchObject({
       teams: 1,
       channels: 1,
-      posts: 7,
+      posts: 8,
       users: 2,
       emojis: 2,
       attachments: 0,
@@ -594,7 +619,7 @@ describe("les champs de texte", () => {
     const survivant = posts.find((p) => p.id === "u".repeat(26));
     expect(survivant?.message).toBe("avant\u2028apres\u2029suite");
     expect(posts[0]?.message).toBe("bonjour");
-    expect(posts).toHaveLength(7);
+    expect(posts).toHaveLength(8);
   });
 });
 

@@ -35,9 +35,15 @@ const NOMS_DANS_LE_TEXTE = ["username", "addedUsername", "removedUsername"] as c
  * Jetons d un texte systeme, tels que Mattermost les y ecrit.
  *
  * Un nom d utilisateur Mattermost n admet que ces caracteres, et le gabarit le
- * fait parfois preceder d un arobase.
+ * fait parfois preceder d un arobase, qui n en fait pas partie.
+ *
+ * Le jeton ne peut pas finir par un point, qui est de la ponctuation : sinon
+ * « bob. » cesse de correspondre au « bob » que `props` designe. Il peut finir
+ * par un tiret bas ou un tiret, qui n en sont pas et appartiennent aux noms :
+ * un compte de l archive de reference s appelle « vermeer_ », et le tronquer
+ * laissait dix-neuf messages porter son nom en clair.
  */
-const JETON = /[A-Za-z0-9._-]{2,}/g;
+const JETON = /[A-Za-z0-9_-](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?/g;
 
 /**
  * En deca, un nom d utilisateur se confond avec un mot ordinaire.
@@ -63,61 +69,53 @@ export interface ReecritureTexte {
   readonly nonTrouves: number;
 }
 
-function echapper(valeur: string): string {
-  return valeur.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /**
  * Rend le texte du message, noms substitues.
  *
  * `props` est celui d ORIGINE, avant reduction : c est lui qui porte encore les
  * noms tels qu ils apparaissent dans le texte.
+ *
+ * Les deux passages travaillent sur des JETONS entiers et jamais sur une
+ * sous-chaine. Un remplacement brut de la valeur de `props` atteindrait
+ * l interieur des mots : un compte nomme « bob » transformerait « bobcat » en
+ * « anon-quartz-agilecat ».
  */
 export function reecrireNomsDesignes(
   post: ArchivePost,
   resolveur: ResolveurIdentite,
 ): ReecritureTexte {
-  let message = post.message;
-  let substitutions = 0;
-  let nonTrouves = 0;
-
+  const designes = new Set<string>();
   for (const cle of NOMS_DANS_LE_TEXTE) {
     const nom = post.props[cle];
-    if (typeof nom !== "string" || nom === "") continue;
-    const identite = resolveur.parUsername(nom);
-    // Un nom que l annuaire ne connait pas ne peut pas etre substitue, et n a pas
-    // a l etre : `props` retire la cle, donc la ligne n apparie plus rien. Le nom
-    // reste dans le texte, comme tous ceux du corps des messages.
-    if (identite === undefined) continue;
-    // Le nom est parfois precede d un arobase dans le texte, parfois nu. Les
-    // deux formes designent la meme personne et se remplacent pareil.
-    const motif = new RegExp(echapper(nom), "g");
-    let occurrences = 0;
-    message = message.replace(motif, () => {
-      occurrences += 1;
-      return identite.username;
-    });
-    if (occurrences === 0) nonTrouves += 1;
-    else substitutions += occurrences;
+    if (typeof nom === "string" && nom !== "") designes.add(nom);
   }
 
-  // Second passage, sur les seuls messages systeme : leur texte est ecrit par
-  // Mattermost et non par un humain, il est court et contraint.
-  //
-  // Il est necessaire parce que `props` ne suffit pas. Un compte qui a change de
-  // nom laisse un message fige sur l ancien, tandis que `props` porte le nouveau
-  // : « @julien a rejoint le canal » a cote d un `props.username` valant
-  // « julien.dauphant ». Le premier passage ne trouve rien a remplacer, et la
-  // ligne continue d apparier un nom reel avec le pseudonyme que porte
-  // `post.user_id`. Retirer `props` n y suffirait pas, pour la meme raison.
-  if (post.type.startsWith("system_")) {
-    message = message.replace(JETON, (jeton) => {
-      if (jeton.length < LONGUEUR_JETON_MINIMALE) return jeton;
-      const identite = resolveur.parUsername(jeton);
-      if (identite === undefined) return jeton;
-      substitutions += 1;
-      return identite.username;
-    });
+  const systeme = post.type.startsWith("system_");
+  if (designes.size === 0 && !systeme) {
+    return { message: post.message, substitutions: 0, nonTrouves: 0 };
+  }
+
+  let substitutions = 0;
+  const rencontres = new Set<string>();
+  const message = post.message.replace(JETON, (jeton) => {
+    // Un nom que `props` designe nommement se substitue quelle que soit sa
+    // longueur : il n y a rien a deviner. Les autres jetons d un message systeme
+    // ne se substituent qu au dela de la longueur minimale.
+    const designe = designes.has(jeton);
+    if (!designe && (!systeme || jeton.length < LONGUEUR_JETON_MINIMALE)) return jeton;
+    const identite = resolveur.parUsername(jeton);
+    if (identite === undefined) return jeton;
+    if (designe) rencontres.add(jeton);
+    substitutions += 1;
+    return identite.username;
+  });
+
+  // Un nom designe par `props` mais absent du texte n a pas de consequence :
+  // `props` retire la cle quand elle ne resout pas, donc rien n apparie. Compte
+  // pour que le rapport puisse le dire plutot que de le taire.
+  let nonTrouves = 0;
+  for (const nom of designes) {
+    if (!rencontres.has(nom) && resolveur.parUsername(nom) !== undefined) nonTrouves += 1;
   }
 
   return { message, substitutions, nonTrouves };
