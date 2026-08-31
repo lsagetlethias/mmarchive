@@ -36,8 +36,15 @@ import {
 } from "@mmarchive/shared";
 import { readNdjson } from "@mmarchive/shared/ndjson";
 import { createArchivePaths } from "../archive/paths.js";
+import { adressesDe, identifiantsDe, mentionsDe, telephonesDe } from "./measure.js";
 import { PROPS_POSITIONS_REFERENCE } from "./props-filter.js";
 import { FORME_PSEUDONYME } from "./pseudonym.js";
+import {
+  type CanalCandidat,
+  type FormeResiduelle,
+  type MesuresSortie,
+  mesuresVides,
+} from "./report-data.js";
 
 export class ResidualIdentityError extends Error {
   readonly code: ErrorCode = ERROR_CODES.ResidualIdentityError;
@@ -61,6 +68,8 @@ export interface IdentitesOrigine {
   readonly usernames: ReadonlySet<string>;
   /** Prenoms, noms, surnoms et formes concatenees, en minuscules. */
   readonly noms: ReadonlySet<string>;
+  /** Nombre de comptes portant chaque forme. Un ou deux designe quelqu un. */
+  readonly porteurs: ReadonlyMap<string, number>;
   /**
    * Formes assez longues pour etre cherchees a l interieur d un texte.
    *
@@ -84,6 +93,8 @@ export interface ResidualReport {
   readonly manquements: readonly Manquement[];
   /** Ce que ce controle ne peut pas garantir, a afficher tel quel. */
   readonly horsControle: readonly string[];
+  /** Mesures faites au passage, sur l archive produite. */
+  readonly mesures: MesuresSortie;
 }
 
 /** Un nom plus court se confond avec des mots ordinaires et noierait le rapport. */
@@ -110,6 +121,7 @@ export function collecterIdentitesOrigine(users: Iterable<ArchiveUser>): Identit
   const ids = new Set<string>();
   const usernames = new Set<string>();
   const noms = new Set<string>();
+  const porteurs = new Map<string, number>();
   for (const user of users) {
     ids.add(user.id);
     if (user.username !== "") usernames.add(normaliser(user.username));
@@ -120,11 +132,22 @@ export function collecterIdentitesOrigine(users: Iterable<ArchiveUser>): Identit
     const prenom = normaliser(user.first_name.trim());
     const nom = normaliser(user.last_name.trim());
     if (prenom !== "" && nom !== "") noms.add(`${prenom} ${nom}`);
+
+    // Compte les porteurs de chaque forme : c est ce qui distingue un
+    // identifiant rare, qui designe quelqu un, d un prenom repandu employe
+    // comme mot ordinaire.
+    const formes = new Set<string>();
+    if (user.username !== "") formes.add(normaliser(user.username));
+    for (const champ of [user.first_name, user.last_name, user.nickname]) {
+      const valeur = normaliser(champ.trim());
+      if (valeur.length >= LONGUEUR_NOM_MINIMALE) formes.add(valeur);
+    }
+    for (const forme of formes) porteurs.set(forme, (porteurs.get(forme) ?? 0) + 1);
   }
   const motsRecherchables = new Set(
     [...noms, ...usernames].filter((forme) => forme.length >= LONGUEUR_NOM_MINIMALE),
   );
-  return { ids, usernames, noms, motsRecherchables };
+  return { ids, usernames, noms, motsRecherchables, porteurs };
 }
 
 function extrait(valeur: string): string {
@@ -294,8 +317,17 @@ export async function checkResidualIdentities(options: {
     }
   }
 
+  let emojisNommes = 0;
   for await (const emoji of readNdjson<ArchiveEmoji>(paths.emojis)) {
     collecteur.reference("emojis.ndjson", "creator_id", emoji.creator_id, "uid");
+    const jetons = new Set(normaliser(emoji.name).match(MOT) ?? []);
+    for (const jeton of jetons) {
+      const porteurs = options.origine.porteurs.get(jeton) ?? 0;
+      if (porteurs >= 1 && porteurs <= 2 && jeton.length >= LONGUEUR_NOM_MINIMALE) {
+        emojisNommes += 1;
+        break;
+      }
+    }
   }
 
   for await (const fichier of readNdjson<ArchiveFile>(paths.files)) {
@@ -303,13 +335,41 @@ export async function checkResidualIdentities(options: {
     collecteur.nettoye("files.ndjson", "name", fichier.name);
   }
 
+  const candidats: CanalCandidat[] = [];
   for await (const canal of readNdjson<ArchiveChannel>(paths.channels)) {
     collecteur.nettoye("channels.ndjson", "header", canal.header);
+    // Les noms de canaux ne sont pas reecrits : ils sont la cle des permaliens.
+    // Ceux qui portent une identite sont donc un residu assume, et le seul sur
+    // lequel un operateur peut agir a la main avant diffusion.
+    for (const [champ, valeur] of [
+      ["name", canal.name],
+      ["display_name", canal.display_name],
+    ] as const) {
+      for (const jeton of new Set(normaliser(valeur).match(MOT) ?? [])) {
+        const porteurs = options.origine.porteurs.get(jeton) ?? 0;
+        if (porteurs === 0 || porteurs > 2 || jeton.length < LONGUEUR_NOM_MINIMALE) continue;
+        candidats.push({
+          nom: canal.name,
+          nomAffiche: canal.display_name,
+          jeton,
+          champ,
+          porteurs,
+        });
+      }
+    }
   }
+
+  const mesures = mesuresVides();
+  // Agregats par forme, jamais par occurrence ni par message : le rapport dit
+  // ce qui reste, sans dire ou le trouver.
+  const formes = new Map<string, { occurrences: number; canaux: Set<string> }>();
+  const adressesVues = new Set<string>();
+  const volumes = new Map<string, number>();
 
   const postsDir = join(paths.root, ARCHIVE_LAYOUT.postsDir);
   for (const nom of await readdir(postsDir)) {
     if (!nom.endsWith(".ndjson")) continue;
+    const canal = nom.slice(0, -".ndjson".length);
     for await (const post of readNdjson<ArchivePost>(join(postsDir, nom))) {
       collecteur.reference(`posts/${nom}`, "user_id", post.user_id, "uid");
       for (const reaction of post.reactions) {
@@ -317,8 +377,93 @@ export async function checkResidualIdentities(options: {
       }
       collecteur.nettoye(`posts/${nom}`, "hashtags", post.hashtags);
       controlerProps(post, `posts/${nom}`, collecteur);
+
+      mesures.messages += 1;
+      if (post.user_id !== "") volumes.set(post.user_id, (volumes.get(post.user_id) ?? 0) + 1);
+      const systeme = post.type.startsWith("system_");
+      if (systeme) mesures.messagesSysteme += 1;
+
+      const texte = post.message;
+      if (texte === "") continue;
+
+      const trouvees = mentionsDe(texte);
+      mesures.mentionsCollectives += trouvees.collectives;
+      for (const forme of trouvees.formes) {
+        mesures.mentions += 1;
+        const minuscule = forme.toLowerCase();
+        // Trois cas, et les confondre rendrait le chiffre inutilisable : la
+        // mention deja reecrite, celle qui porte encore un nom connu et que la
+        // reecriture du texte saura traiter, et celle qui ne designe aucun
+        // compte et restera un residu.
+        if (options.substitution.usernames.has(minuscule)) {
+          mesures.mentionsPseudonymisees += 1;
+          continue;
+        }
+        if (options.origine.usernames.has(normaliser(forme))) {
+          mesures.mentionsATraiter += 1;
+          continue;
+        }
+        const vue = formes.get(forme) ?? { occurrences: 0, canaux: new Set<string>() };
+        vue.occurrences += 1;
+        vue.canaux.add(canal);
+        formes.set(forme, vue);
+      }
+
+      const adresses = adressesDe(texte);
+      if (adresses.length > 0) {
+        mesures.messagesAvecAdresse += 1;
+        mesures.adresses += adresses.length;
+        for (const adresse of adresses) adressesVues.add(adresse.toLowerCase());
+      }
+
+      mesures.telephones += telephonesDe(texte);
+
+      // Un identifiant de compte colle dans le corps : detection par
+      // appartenance exacte a l ensemble d origine, donc sans faux positif.
+      const colles = identifiantsDe(texte).filter((id) => options.origine.ids.has(id));
+      if (colles.length > 0) {
+        mesures.identifiantsColles.push({
+          postId: post.id,
+          canal,
+          occurrences: colles.length,
+        });
+      }
+
+      // Un message systeme dont le texte nomme encore un compte, a cote du
+      // pseudonyme que portent props et user_id : c est la table de
+      // correspondance, et le rapport la calcule plutot que de la supposer.
+      if (systeme) {
+        const jetons = new Set(texte.toLowerCase().match(/[a-z0-9_-][a-z0-9._-]*/g) ?? []);
+        for (const jeton of jetons) {
+          if (jeton.length >= LONGUEUR_NOM_MINIMALE && options.origine.usernames.has(jeton)) {
+            mesures.appariementsSysteme += 1;
+            break;
+          }
+        }
+      }
     }
   }
+
+  mesures.adressesDistinctes = adressesVues.size;
+  mesures.formesNonResolues = [...formes.entries()]
+    .map(
+      ([forme, vue]): FormeResiduelle => ({
+        forme,
+        occurrences: vue.occurrences,
+        canaux: vue.canaux.size,
+        connueDeLAnnuaire: options.origine.noms.has(normaliser(forme)),
+      }),
+    )
+    // Tri par forme et non par volume : un tri par volume est la fuite du
+    // volume sous forme ordinale.
+    .sort((a, b) => (a.forme < b.forme ? -1 : a.forme > b.forme ? 1 : 0));
+
+  const parVolume = [...volumes.values()];
+  mesures.canauxCandidats = candidats;
+  mesures.canauxDistincts = new Set(candidats.map((c) => c.nom)).size;
+  mesures.emojisNommes = emojisNommes;
+  mesures.compteLePlusActif = parVolume.length === 0 ? 0 : Math.max(...parVolume);
+  mesures.comptesAuDessusDeCent = parVolume.filter((n) => n > 100).length;
 
   const manifest = JSON.parse(await readFile(paths.manifest, "utf8")) as Manifest;
   collecteur.reference(
@@ -342,6 +487,7 @@ export async function checkResidualIdentities(options: {
     referencesVerifiees: collecteur.referencesVerifiees,
     valeursVerifiees: collecteur.valeursVerifiees,
     manquements: collecteur.manquements,
+    mesures,
     horsControle: [
       "le corps des messages, qui porte encore mentions, noms en clair et adresses",
       "le texte des blocs attachments, conserve pour ne pas vider 312 183 messages",

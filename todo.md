@@ -213,8 +213,11 @@ authentification. Cadré dans `docs/DECISION-ANONYMISATION.md`.
       `emojis.creator_id` à l'annuaire, ne regarde jamais `props`, et ignore les avatars.
       Formulé en positif, sans quoi il serait aveugle aux 156 identifiants qui ne résolvent
       vers aucun compte. Il énumère ce qu'il ne couvre pas, plutôt que de le taire.
-- [ ] **Rapport des occurrences résiduelles**, remonté avant la réécriture du texte pour que
-      ses effets soient observables quand elle arrivera. Il dit ce qui est garanti et ce qui
+- [x] **Rapport des occurrences résiduelles**, en deux documents. La synthèse circule et ne
+      porte aucune chaîne d'origine, aucun emplacement, aucune ligne par compte ; le relevé
+      porte le détail et doit être détruit. Le verdict n'est jamais positif : une identité
+      trouvée est une preuve, aucune identité trouvée n'en est pas une. Écrit avant que le
+      contrôle ne lève, sans quoi il manquerait dans le seul cas où il compte. Il dit ce qui est garanti et ce qui
       ne l'est pas, et ne doit jamais être diffusé avec l'archive puisqu'il désigne ce qu'on
       a caché. Il liste notamment les 57 canaux publics dont le nom porte une identité : ils
       ne sont pas renommés, parce que cela casserait les permaliens, mais leur nom apparaît

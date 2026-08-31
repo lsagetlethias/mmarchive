@@ -47,6 +47,11 @@ import {
   type ResolveurIdentite,
   reduireProps,
 } from "./props-filter.js";
+import {
+  type CategorieReference,
+  type CompteursReferences,
+  compteursReferencesVides,
+} from "./report-data.js";
 import { reecrireNomsDesignes } from "./system-message.js";
 
 export class AnonymizeError extends Error {
@@ -97,8 +102,8 @@ export interface AnonymizeResult {
   readonly emojis: number;
   readonly fichiers: number;
   readonly reactions: number;
-  /** References d identite reecrites hors de props (auteurs, reactions, depots). */
-  readonly referencesReecrites: number;
+  /** References d identite hors de props, ventilees par categorie de champ. */
+  readonly references: CompteursReferences;
   readonly props: CompteursProps;
   /** Noms substitues dans le texte parce que props les designait nommement. */
   readonly nomsSubstitues: number;
@@ -230,6 +235,32 @@ async function porteUneArchiveAnonymisee(racine: string): Promise<boolean> {
   }
 }
 
+/**
+ * Refuse d ecrire un fichier a l interieur de l archive source ou de la sortie.
+ *
+ * Un rapport pose dans la sortie voyagerait avec chaque copie diffusee, alors
+ * qu il designe precisement ce qu on a cherche a cacher ; et `--force` le
+ * ferait disparaitre en silence a la passe suivante. Le controle vient avant la
+ * passe, pour echouer en une seconde plutot qu apres une demi-minute de travail.
+ */
+export function refuserCheminInterne(chemin: string, source: string, sortie: string): void {
+  const cible = resolve(chemin);
+  for (const [racine, quoi] of [
+    [resolve(source), "l archive source"],
+    [resolve(sortie), "l archive produite"],
+  ] as const) {
+    const versLaCible = relative(racine, cible);
+    const dehors =
+      versLaCible === ".." || versLaCible.startsWith(`..${sep}`) || isAbsolute(versLaCible);
+    if (!dehors) {
+      throw new AnonymizeError(
+        `${cible} est a l interieur de ${quoi}. Le rapport designe ce que l anonymisation a ` +
+          "cherche a cacher : il ne doit ni voyager avec l archive, ni etre efface avec elle.",
+      );
+    }
+  }
+}
+
 /** Copie a l identique une liste de champs, en n en laissant passer aucun autre. */
 function anonymiserUser(user: ArchiveUser, identite: Identite): ArchiveUser {
   // Enumerer ce qu on garde plutot que retirer ce qui gene : un champ ajoute au
@@ -297,7 +328,7 @@ export async function anonymizeArchive(options: {
   };
 
   const props = compteursPropsVides();
-  let referencesReecrites = 0;
+  const references = compteursReferencesVides();
   let nomsSubstitues = 0;
   let nomsNonTrouves = 0;
 
@@ -311,10 +342,16 @@ export async function anonymizeArchive(options: {
    * laisserait intacts, et le controle residuel ne pourrait pas les voir
    * puisqu il ne connait que les comptes presents.
    */
-  const substituer = (id: string): string | null => {
+  const substituer = (id: string, categorie: CategorieReference): string | null => {
     const identite = table.get(id);
-    if (identite === undefined) return null;
-    referencesReecrites += 1;
+    if (identite === undefined) {
+      // Compte par categorie, et pas seulement dans props : une reaction dont le
+      // compte ne resout pas disparaissait de l archive sans qu aucun compteur
+      // ne le dise, donc sans que le rapport puisse le rapporter.
+      references[categorie].orphelines += 1;
+      return null;
+    }
+    references[categorie].reecrites += 1;
     return identite.uid;
   };
 
@@ -360,7 +397,7 @@ export async function anonymizeArchive(options: {
       const anonyme: ArchiveEmoji = {
         id: emoji.id,
         name: emoji.name,
-        creator_id: substituer(emoji.creator_id) ?? "",
+        creator_id: substituer(emoji.creator_id, "emojis") ?? "",
         create_at: emoji.create_at,
         update_at: emoji.update_at,
         delete_at: emoji.delete_at,
@@ -389,7 +426,7 @@ export async function anonymizeArchive(options: {
         id: fichier.id,
         post_id: fichier.post_id,
         channel_id: fichier.channel_id,
-        user_id: substituer(fichier.user_id) ?? "",
+        user_id: substituer(fichier.user_id, "fichiers") ?? "",
         name: libelleNeutre(fichier, fichiers),
         extension: fichier.extension,
         size: fichier.size,
@@ -444,9 +481,9 @@ export async function anonymizeArchive(options: {
     const flux = await NdjsonWriter.open(join(sortie.root, ARCHIVE_LAYOUT.postsDir, nom));
     try {
       for await (const post of readNdjson<ArchivePost>(entree)) {
-        const auteur = substituer(post.user_id);
+        const auteur = substituer(post.user_id, "auteurs");
         const reactionsAnonymes = post.reactions.flatMap((reaction) => {
-          const uid = substituer(reaction.user_id);
+          const uid = substituer(reaction.user_id, "reactions");
           if (uid === null) return [];
           reactions += 1;
           return [{ ...reaction, user_id: uid }];
@@ -512,7 +549,7 @@ export async function anonymizeArchive(options: {
     emojis,
     fichiers,
     reactions,
-    referencesReecrites,
+    references,
     props,
     nomsSubstitues,
     nomsNonTrouves,

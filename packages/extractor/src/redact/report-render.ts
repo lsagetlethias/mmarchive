@@ -1,0 +1,277 @@
+/**
+ * Rendu du rapport, en deux documents qui ne s adressent pas au meme lecteur.
+ *
+ * La SYNTHESE circule : elle va au juriste qui autorise ou non la diffusion, et
+ * au mainteneur. Elle ne contient aucune chaine d origine, aucun emplacement,
+ * aucune ligne par compte. Elle tient en deux pages de faits chiffres, ce qui
+ * est le seul moyen de rendre tenable la charge qu elle laisse a son lecteur.
+ *
+ * Le RELEVE ne circule pas : il porte les formes et les emplacements, donc il
+ * est lui-meme une cle de reidentification. Il ne se produit que sur demande
+ * explicite, ou d office quand le controle a trouve des manquements, puisqu il
+ * n y a alors rien a diffuser et que le detail est ce qu on cherche.
+ *
+ * Le rapport ne rend jamais de verdict positif. La preuve est asymetrique : une
+ * identite trouvee est une preuve, aucune identite trouvee n en est pas une,
+ * puisque le corps des messages, le nom des canaux et celui de la team restent
+ * hors perimetre. Et un verdict positif termine la revue : personne ne lit les
+ * limites d un document qui s ouvre sur « diffusable ».
+ */
+import type { AnonymizeResult } from "./anonymize-archive.js";
+import {
+  type CategorieReference,
+  effectifPublic,
+  partPublique,
+  SEUIL_EFFECTIF,
+} from "./report-data.js";
+import type { ResidualReport } from "./residual-check.js";
+
+export interface ContexteRapport {
+  readonly resultat: AnonymizeResult;
+  readonly controle: ResidualReport;
+  readonly versionOutil: string;
+  readonly horodatage: string;
+  /** Vrai si un releve a ete produit. Son chemin n y figure jamais. */
+  readonly releveProduit: boolean;
+}
+
+const LIBELLES: Record<CategorieReference, string> = {
+  auteurs: "Auteurs de messages",
+  reactions: "Reactions",
+  fichiers: "Deposants de pieces jointes",
+  emojis: "Createurs d emoji",
+};
+
+function tableau(entetes: readonly string[], lignes: readonly (readonly string[])[]): string {
+  const bloc = [
+    `| ${entetes.join(" | ")} |`,
+    `| ${entetes.map(() => "---").join(" | ")} |`,
+    ...lignes.map((l) => `| ${l.join(" | ")} |`),
+  ];
+  return bloc.join("\n");
+}
+
+/**
+ * Verdict, a deux valeurs et jamais positif.
+ *
+ * `non_diffusable` se demontre : le controle residuel est positif et ferme sur
+ * un ensemble de champs connus, donc une valeur hors de l ensemble de
+ * substitution est une preuve. `sans_avis` est tout ce qu on peut dire d autre.
+ */
+function verdict(contexte: ContexteRapport): { valeur: string; cause: string } {
+  const { manquements, mesures } = contexte.controle;
+  if (manquements.length > 0) {
+    return {
+      valeur: "non_diffusable",
+      cause: `${String(manquements.length)} identite(s) ont survecu dans des champs qui devaient etre pseudonymises.`,
+    };
+  }
+  if (mesures.appariementsSysteme > 0) {
+    return {
+      valeur: "non_diffusable",
+      cause:
+        `${String(mesures.appariementsSysteme)} message(s) systeme nomment en clair, dans leur texte, ` +
+        "un compte que leurs metadonnees designent par ailleurs sous son identite de substitution. " +
+        "Une seule de ces lignes apparie une identite reelle et son pseudonyme.",
+    };
+  }
+  return {
+    valeur: "sans_avis",
+    cause:
+      "Aucune identite n a ete trouvee dans le perimetre couvert. Ce n est pas une autorisation " +
+      "de diffuser : le perimetre ouvert, enumere plus bas, n a pas ete mesure et ne peut pas l etre " +
+      "par un programme qui ne voit qu un repertoire.",
+  };
+}
+
+export function rendreSynthese(contexte: ContexteRapport): string {
+  const { resultat, controle, versionOutil, horodatage } = contexte;
+  const m = controle.mesures;
+  const avis = verdict(contexte);
+  const lignes: string[] = [];
+  const ajouter = (...bloc: string[]): void => {
+    lignes.push(...bloc, "");
+  };
+
+  ajouter(
+    "# Rapport d anonymisation",
+    "",
+    "**Ce document ne se diffuse pas avec l archive et ne s archive pas avec elle.** Il designe",
+    "precisement ce que l anonymisation a cherche a cacher, et ce qu elle n a pas atteint.",
+    "",
+    `Archive produite le ${horodatage} par mmarchive ${versionOutil}.`,
+  );
+
+  ajouter(
+    "## Verdict",
+    "",
+    `**${avis.valeur}**`,
+    "",
+    avis.cause,
+    "",
+    "Ce rapport ne rend jamais de verdict positif. Une identite trouvee est une preuve ; aucune",
+    "identite trouvee n en est pas une, puisque le corps des messages, le nom des canaux, celui",
+    "des emojis et celui de la team restent hors du perimetre verifiable.",
+  );
+
+  ajouter(
+    "## Perimetre de la garantie, champs structures",
+    "",
+    "Compte pendant la passe d anonymisation.",
+    "",
+    tableau(
+      ["Categorie de champ", "References reecrites", "Retirees faute de compte"],
+      (Object.keys(LIBELLES) as CategorieReference[]).map((cle) => [
+        LIBELLES[cle],
+        String(resultat.references[cle].reecrites),
+        String(resultat.references[cle].orphelines),
+      ]),
+    ),
+    "",
+    "Une reference retiree l est parce que le compte a disparu de l instance ou que sa",
+    "recuperation avait echoue a l extraction. La conserver aurait laisse un identifiant reel.",
+    "",
+    tableau(
+      ["Metadonnees des messages", "Nombre"],
+      [
+        ["Cles retirees hors liste blanche", String(resultat.props.clesRetirees)],
+        ["References reecrites", String(resultat.props.referencesReecrites)],
+        ["References retirees faute de compte", String(resultat.props.referencesOrphelines)],
+        ["Blocs attachments reduits a leur texte", String(resultat.props.attachmentsReduits)],
+        ["Noms substitues dans le texte des messages systeme", String(resultat.nomsSubstitues)],
+      ],
+    ),
+  );
+
+  ajouter(
+    "## Ce qui n est pas traite a ce stade",
+    "",
+    "Mesure sur l archive produite. Ces surfaces portent du texte que la passe n a pas reecrit.",
+    "",
+    tableau(
+      ["Surface", "Volume"],
+      [
+        ["Messages", String(m.messages)],
+        ["Mentions rencontrees", String(m.mentions)],
+        ["dont deja reecrites vers un pseudonyme", String(m.mentionsPseudonymisees)],
+        ["dont portant encore le nom d un compte connu", String(m.mentionsATraiter)],
+        ["dont collectives, ne designant personne", String(m.mentionsCollectives)],
+        [
+          "dont ne designant aucun compte, en formes distinctes",
+          String(m.formesNonResolues.length),
+        ],
+        ["Messages portant une adresse electronique", String(m.messagesAvecAdresse)],
+        ["Adresses distinctes", String(m.adressesDistinctes)],
+        ["Occurrences ressemblant a un numero de telephone", String(m.telephones)],
+        ["Canaux dont le nom porte une identite rare", String(m.canauxDistincts)],
+        ["Emojis dont le nom porte une identite rare", String(m.emojisNommes)],
+      ],
+    ),
+    "",
+    "Les mentions portant encore le nom d un compte connu sont ce que la reecriture du texte",
+    "saura traiter ; celles qui ne designent aucun compte resteront un residu, faute de forme a",
+    "laquelle les rattacher.",
+    "",
+    "Le nombre de remplacements operes dans le corps des messages est **zero**, et ce chiffre est",
+    "exact : la reecriture du texte n est pas livree. Les seuls noms substitues dans du texte le",
+    "sont dans les messages systeme, dont les metadonnees les designaient nommement.",
+  );
+
+  if (m.identifiantsColles.length > 0) {
+    const total = m.identifiantsColles.reduce((n, x) => n + x.occurrences, 0);
+    ajouter(
+      "## Identifiants de comptes colles dans le corps",
+      "",
+      `${String(total)} occurrence(s) dans ${String(m.identifiantsColles.length)} message(s).`,
+      "Detection par appartenance exacte a l ensemble des identifiants d origine, donc sans faux",
+      "positif. Le volume est trivial et la correction est manuelle : le releve les designe un",
+      "par un.",
+    );
+  }
+
+  ajouter(
+    "## Reversibilite par recoupement",
+    "",
+    "Des distributions, jamais une ligne par compte. Ces chiffres disent ce qu un lecteur qui",
+    "connait l organisation peut deduire sans aucun outil.",
+    "",
+    tableau(
+      ["Mesure", "Valeur"],
+      [
+        [
+          "Part du corpus portee par le compte le plus actif",
+          partPublique(m.compteLePlusActif, m.messages),
+        ],
+        ["Comptes au dela de cent messages", effectifPublic(m.comptesAuDessusDeCent)],
+      ],
+    ),
+    "",
+    "Le nom de la team est conserve : l organisation n est pas cachee, et ce choix est assume.",
+    "Un fil date, situe dans un canal identifiable, avec un enchainement de reponses",
+    "caracteristique, peut designer quelqu un pour qui connait le contexte. Aucune",
+    "pseudonymisation n y repond.",
+  );
+
+  ajouter(
+    "## Ce que ce rapport ne mesure pas",
+    "",
+    ...controle.horsControle.map((limite) => `- ${limite}`),
+    "",
+    "Angles morts de methode, qui ne se corrigent pas par un reglage :",
+    "",
+    "- le motif de telephone ne reconnait que les formes francaises, et rate les numeros",
+    "  etrangers, ceux ecrits en toutes lettres et ceux coupes par un retour a la ligne ;",
+    "- une personne designee par un surnom, une initiale, une orthographe approximative ou une",
+    "  signature passe au travers, faute de forme a laquelle la rattacher ;",
+    "- les identites contenues dans les images ne sont pas lues ;",
+    `- tout effectif inferieur a ${String(SEUIL_EFFECTIF)} est fondu dans une classe plus large,`,
+    "  parce qu un decompte a un n est pas un decompte mais une designation.",
+  );
+
+  if (contexte.releveProduit) {
+    ajouter(
+      "## Releve detaille",
+      "",
+      "Un releve a ete produit a cote de ce document. Il porte les formes residuelles et leurs",
+      "emplacements, donc il est lui-meme une cle de reidentification : il ne se diffuse pas, ne",
+      "s archive pas, et doit etre detruit une fois les corrections faites.",
+    );
+  }
+
+  return `${lignes.join("\n").trimEnd()}\n`;
+}
+
+/**
+ * Releve, en NDJSON.
+ *
+ * Une ligne d en-tete qui dit ce qu est le fichier, puis une ligne par entree.
+ * Le format se filtre au `grep` et supporte des milliers de lignes, ce que le
+ * Markdown ne fait pas.
+ */
+export function rendreReleve(contexte: ContexteRapport): string {
+  const m = contexte.controle.mesures;
+  const lignes: unknown[] = [
+    {
+      _: "RELEVE D IDENTITES RESIDUELLES. NE PAS DIFFUSER, NE PAS ARCHIVER AVEC L ARCHIVE. Ce fichier porte les formes et les emplacements que l anonymisation n a pas traites : il est une cle de reidentification. A detruire une fois les corrections faites.",
+      produit_le: contexte.horodatage,
+      outil: contexte.versionOutil,
+    },
+  ];
+
+  // Les canaux d abord : c est la seule rubrique sur laquelle l operateur agit
+  // AVANT de diffuser, en renommant ou en excluant a la main.
+  for (const candidat of m.canauxCandidats) {
+    lignes.push({ rubrique: "canal_candidat", ...candidat });
+  }
+  for (const manquement of contexte.controle.manquements) {
+    lignes.push({ rubrique: "manquement", ...manquement });
+  }
+  for (const forme of m.formesNonResolues) {
+    lignes.push({ rubrique: "mention_non_resolue", ...forme });
+  }
+  for (const colle of m.identifiantsColles) {
+    lignes.push({ rubrique: "identifiant_colle", ...colle });
+  }
+
+  return `${lignes.map((l) => JSON.stringify(l)).join("\n")}\n`;
+}
