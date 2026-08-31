@@ -566,6 +566,13 @@ describe("codes de sortie", () => {
     ).toBe(2);
   });
 
+  it("rend 2 sur une option inconnue, comme sur toute erreur de saisie", async () => {
+    // Enumerer les codes d erreur de commander un par un laisserait passer ceux
+    // qu une version ulterieure ajoutera : toute erreur qu il signale est une
+    // erreur de saisie, et 1 reste reserve a ce qui echoue pendant l effacement.
+    expect(await lancer(["--archive", workDir, "--mode", "remove", "--inconnue"])).toBe(2);
+  });
+
   it("rend 0 sur une aide demandee", async () => {
     expect(await lancer(["--help"])).toBe(0);
   });

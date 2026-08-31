@@ -194,8 +194,10 @@ Besoin distinct de `redact`, qui répond aux demandes d'effacement individuelles
 archive entière diffusable, ce que le juridique peut exiger même derrière une
 authentification. Cadré dans `docs/DECISION-ANONYMISATION.md`.
 
-- [x] **Pseudonymes** lisibles et manifestement artificiels, `redact/pseudonym.ts`. Nom de
-      chose plus adjectif accordé, distribués depuis un hachage salé, sel jeté après usage.
+- [x] **Pseudonymes** lisibles et manifestement artificiels, dans
+      `packages/extractor/src/redact/pseudonym.ts`. Forme `Anon-Obsidienne-Discrete`,
+      distribués depuis un hachage salé, sel jeté après usage. Le préfixe n'est pas
+      décoratif : sans lui, une combinaison sur six se lisait comme une identité.
       Un générateur de noms réalistes a été écarté sur mesure : trente prénoms français très
       courants sont tous déjà portés par un compte de l'archive, donc il aurait attribué les
       propos de quelqu'un au nom d'une personne réelle.

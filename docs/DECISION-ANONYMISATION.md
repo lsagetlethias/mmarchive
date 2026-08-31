@@ -38,8 +38,9 @@ que le résultat ne tient pas.
 | --------------------------------------------------- | ----------------------------------- |
 | Messages citant un prénom ou nom d'un compte connu    | 515 760, soit 39,7 %                |
 | Messages contenant une mention `@`                    | 215 658, soit 16,6 %                |
-| dont mentions résolues vers un compte connu           | 244 280                             |
-| dont mentions sans compte correspondant               | 91 812                              |
+| Mentions `@`, en occurrences                          | 336 092                             |
+| dont résolues vers un compte connu                    | 244 280                             |
+| dont sans compte correspondant                        | 91 812                              |
 | Messages contenant une adresse électronique           | 41 960, soit 3,2 %                  |
 | Messages ressemblant à un numéro de téléphone         | 2 903, soit 0,2 %                   |
 | Pièces jointes dont le nom porte un nom de personne   | 2 452 sur 46 756                    |
@@ -53,12 +54,20 @@ d'ailleurs surestimé : le comptage attrape des mots courants qui sont aussi des
 ## Les décisions
 
 **Pseudonymes lisibles et manifestement artificiels.** Nom de chose plus adjectif accordé,
-`Obsidienne Discrete`, distribués depuis un hachage salé. Livré dans `redact/pseudonym.ts`.
+`Anon-Obsidienne-Discrete`, distribués depuis un hachage salé. Livré dans
+`packages/extractor/src/redact/pseudonym.ts`.
 
 Un générateur de noms réalistes a été écarté sur mesure : sur cette archive, trente prénoms
 français très courants sont **tous** déjà portés par un compte. Attribuer les propos de
 quelqu'un au nom d'une personne réelle est plus grave que de ne pas anonymiser, puisque cela
 ne se contente pas de laisser fuir une identité, cela en fabrique une fausse.
+
+La forme nom plus adjectif n'y suffisait pas : mesurée sur le vocabulaire retenu, **une
+combinaison sur six se lisait encore comme une identité**, « Jade Humble », « Ambre
+Fertile », plusieurs noms de choses étant aussi des prénoms. Écarter ces mots un par un
+reviendrait à tenir une liste de prénoms, donc à se tromper un jour sur un prénom rare. Le
+préfixe `Anon-` règle la question par la forme : aucun état civil ne s'écrit ainsi, et le
+lecteur le voit à chaque ligne au lieu de l'oublier au bout de dix minutes.
 
 **Le sel est tiré au hasard à chaque exécution et jeté.** Sans lui, un `sha256(user_id)` se
 renverse en quelques secondes par qui détient la liste des identifiants de l'instance, soit
@@ -69,7 +78,7 @@ et retirerait à l'archive son caractère anonyme ; ce fichier deviendrait la ch
 surtout pas perdre.
 
 **Les mentions sont remplacées par le pseudonyme**, pas neutralisées : `@prenom.nom` devient
-`@Obsidienne-Discrete`. Les fils restent lisibles, on continue de voir qui répond à qui,
+`@Anon-Obsidienne-Discrete`. Les fils restent lisibles, on continue de voir qui répond à qui,
 ce qui est la valeur de l'archive.
 
 Les 91 812 mentions sans compte correspondant ne peuvent pas être traduites. Elles sont

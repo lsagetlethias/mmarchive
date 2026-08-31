@@ -12,8 +12,15 @@
  * attribuerait a coup sur des identites existantes : sur l archive de reference,
  * trente prenoms francais tres courants sont tous deja portes par un compte.
  * Prendre les propos d une personne pour les attribuer au nom d une autre est
- * pire que de ne pas anonymiser. La forme nom plus adjectif accorde ne se
- * confond pas avec un patronyme, et rappelle a qui lit qu il lit un pseudonyme.
+ * pire que de ne pas anonymiser.
+ *
+ * La forme nom plus adjectif n y suffisait pas. Mesure sur ce vocabulaire :
+ * 868 combinaisons sur 5 050 se lisent comme une identite, « Jade Humble » ou
+ * « Ambre Fertile », parce que plusieurs noms de choses sont aussi des prenoms.
+ * Ecarter ces mots un par un reviendrait a tenir une liste de prenoms, c est a
+ * dire a se tromper un jour sur un prenom rare. Le prefixe `Anon-` regle la
+ * question par la forme : aucun etat civil ne s ecrit ainsi, et le lecteur le
+ * voit a chaque ligne au lieu de l oublier au bout de dix minutes.
  *
  * **Unique.** Deux personnes ne doivent jamais partager un pseudonyme, sans quoi
  * leurs propos fusionnent. Le tirage au hasard ne suffit pas : sur trois mille
@@ -189,6 +196,15 @@ const ADJECTIFS: readonly (readonly [string, string])[] = [
   ["Pensif", "Pensive"],
 ];
 
+/**
+ * Marque tout pseudonyme comme tel.
+ *
+ * Sans elle, une combinaison sur six se lit comme un nom de personne. Avec elle,
+ * aucune ne le peut : c est une garantie de forme, pas une liste de mots a
+ * maintenir a jour.
+ */
+export const PREFIXE = "Anon-";
+
 /** Combinaisons distinctes que ce vocabulaire peut former. */
 export const CAPACITE = NOMS.length * ADJECTIFS.length;
 
@@ -207,7 +223,8 @@ function combinaison(rang: number): string {
   const tour = Math.floor(rang / CAPACITE);
   // Au dela du vocabulaire, un numero plutot qu un mot invente : mieux vaut un
   // pseudonyme un peu lourd qu une collision qui fondrait deux personnes en une.
-  return tour === 0 ? `${nom.mot} ${accorde}` : `${nom.mot} ${accorde} ${String(tour + 1)}`;
+  const suffixe = tour === 0 ? "" : `-${String(tour + 1)}`;
+  return `${PREFIXE}${nom.mot}-${accorde}${suffixe}`;
 }
 
 /**

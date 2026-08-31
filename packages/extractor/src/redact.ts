@@ -14,12 +14,19 @@ const program = new Command();
 // Commander sort en 0 quand une option requise manque, ce qui ferait croire a un
 // script que la commande a fait son travail. Le README documente 2 pour un
 // argument invalide, et c est ce que rendent les autres commandes.
+//
+// Toute erreur signalee par commander est une erreur de saisie : option inconnue,
+// argument manquant, valeur absente. Les enumerer une par une laisserait passer
+// celles qu une version ulterieure ajoutera, alors que le code 1 doit rester
+// reserve a ce qui echoue pendant l effacement lui meme. Commander a deja ecrit
+// le message, le repeter le ferait paraitre deux fois.
+const SORTIES_NORMALES = new Set([
+  "commander.help",
+  "commander.helpDisplayed",
+  "commander.version",
+]);
 program.exitOverride((erreur) => {
-  if (erreur.code === "commander.helpDisplayed" || erreur.code === "commander.version") {
-    process.exit(0);
-  }
-  process.stderr.write(erreur.message.endsWith("\n") ? erreur.message : `${erreur.message}\n`);
-  process.exit(erreur.code === "commander.missingMandatoryOptionValue" ? 2 : 1);
+  process.exit(SORTIES_NORMALES.has(erreur.code) ? 0 : 2);
 });
 program
   .name("mmarchive-redact")

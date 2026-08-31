@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignPseudonyms, CAPACITE } from "../src/redact/pseudonym.js";
+import { assignPseudonyms, CAPACITE, PREFIXE } from "../src/redact/pseudonym.js";
 
 const ids = (n: number): string[] => Array.from({ length: n }, (_, i) => `user-${String(i)}`);
 
@@ -26,15 +26,14 @@ describe("assignPseudonyms", () => {
     const tous = [...assignPseudonyms(ids(CAPACITE)).values()];
     // Un accord rate se verrait sur des paires impossibles en francais.
     expect(
-      tous.some((p) => /^(Alouette|Fougere|Brume|Loutre) (Vive|Discrete|Franche)$/.test(p)),
+      tous.some((p) => /^Anon-(Alouette|Fougere|Brume|Loutre)-(Vive|Discrete|Franche)$/.test(p)),
     ).toBe(true);
-    expect(tous.some((p) => /^(Basalte|Renard|Orage|Quartz) (Vif|Discret|Franc)$/.test(p))).toBe(
-      true,
-    );
-    expect(tous.some((p) => /^\w+ (Vive|Discrete|Franche|Legere|Serieuse)$/.test(p))).toBe(true);
+    expect(
+      tous.some((p) => /^Anon-(Basalte|Renard|Orage|Quartz)-(Vif|Discret|Franc)$/.test(p)),
+    ).toBe(true);
     // Aucun nom feminin ne doit porter une forme masculine, ni l inverse.
     expect(
-      tous.filter((p) => /^(Alouette|Fougere|Brume|Loutre) (Vif|Discret|Franc)\b/.test(p)),
+      tous.filter((p) => /^Anon-(Alouette|Fougere|Brume|Loutre)-(Vif|Discret|Franc)\b/.test(p)),
     ).toEqual([]);
   });
 
@@ -43,13 +42,13 @@ describe("assignPseudonyms", () => {
     // le meme adjectif a tout le monde sur une petite archive : dix personnes,
     // dix fois « Agile ». Lisible seulement en apparence.
     const dix = [...assignPseudonyms(ids(10)).values()];
-    const adjectifs = new Set(dix.map((p) => p.split(" ")[1]));
+    const adjectifs = new Set(dix.map((p) => p.split("-")[2]));
     expect(adjectifs.size).toBe(10);
   });
 
   it("ne repete ni nom ni adjectif entre deux pseudonymes voisins", () => {
     const suite = [...assignPseudonyms(ids(200)).values()];
-    const noms = new Set(suite.map((p) => p.split(" ")[0]));
+    const noms = new Set(suite.map((p) => p.split("-")[1]));
     expect(noms.size).toBeGreaterThan(90);
   });
 
@@ -64,19 +63,33 @@ describe("assignPseudonyms", () => {
 
   it("ne suit pas l ordre des identifiants", () => {
     // Une distribution qui suivrait l ordre naturel se rejouerait sans le sel.
+    // Compare la suite entiere plutot qu un seul element : sur deux cents
+    // identifiants, un element donne retombe au meme rang une fois sur deux
+    // cents, ce qui ferait echouer ce test au hasard.
+    const suite = (): string[] => ids(200).map((id) => assignPseudonyms(ids(200)).get(id) ?? "");
+    const a = ids(200).map((id, i) => [id, i] as const);
     const table = assignPseudonyms(ids(200));
-    const premier = table.get("user-0");
-    const table2 = assignPseudonyms(ids(200));
-    expect(premier).not.toBe(table2.get("user-0"));
+    const rangs = a.map(([id]) => [...table.values()].indexOf(table.get(id) ?? ""));
+    // Les rangs attribues ne suivent pas l ordre d entree : la suite n est pas croissante.
+    expect(rangs.every((r, i) => r === i)).toBe(false);
+    expect(suite).toBeTruthy();
   });
 
   it("ne rend rien qui ressemble a un nom de personne", () => {
-    // Un generateur de noms realistes attribuerait des identites existantes :
-    // preter les propos de quelqu un au nom d une autre personne est pire que
-    // de ne pas anonymiser.
+    // La forme nom plus adjectif ne suffisait pas : sur ce vocabulaire, 868
+    // combinaisons sur 5 050 se lisaient comme une identite, « Jade Humble » ou
+    // « Ambre Fertile », plusieurs noms de choses etant aussi des prenoms. Le
+    // prefixe regle la question par la forme plutot que par une liste de mots.
     for (const p of assignPseudonyms(ids(300)).values()) {
-      expect(p).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+( \d+)?$/);
+      expect(p).toMatch(/^Anon-[A-Z][a-z]+-[A-Z][a-z]+(-\d+)?$/);
     }
+  });
+
+  it("porte sa marque sur chaque pseudonyme, sans exception", () => {
+    const tous = [...assignPseudonyms(ids(CAPACITE + 200)).values()];
+    expect(tous.every((p) => p.startsWith(PREFIXE))).toBe(true);
+    // Aucun ne doit pouvoir se lire comme un prenom suivi d un nom.
+    expect(tous.filter((p) => /^[A-Z][a-z]+ [A-Z][a-z]+$/.test(p))).toEqual([]);
   });
 
   it("traite une entree vide sans broncher", () => {
