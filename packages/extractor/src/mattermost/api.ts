@@ -111,10 +111,13 @@ export class MattermostApi {
   /**
    * Fiche complete d un canal.
    *
-   * Le catalogue de selection ne transporte que ce qui sert a choisir : l objet,
-   * l en-tete et la date de creation d un canal n y figurent pas. Ils se relisent
-   * ici au moment d ecrire l archive, plutot que de transiter par un fichier que
-   * l utilisateur edite a la main.
+   * Le catalogue de selection ne transporte que ce qui sert a choisir :
+   * `header`, `purpose` et `create_at` n y figurent pas. Ils se relisent ici,
+   * plutot que de transiter par un fichier que l utilisateur edite a la main.
+   *
+   * Le filtre defensif porte ici sa vraie valeur : c est la seule verification
+   * de type que le fichier de selection ne peut pas tromper, puisqu elle
+   * interroge l instance.
    */
   async getChannel(channelId: string): Promise<MmChannel> {
     const channel = await this.client.json(MM.getChannel(channelId), mmChannelSchema);

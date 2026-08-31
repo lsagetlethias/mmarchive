@@ -7,6 +7,7 @@ import {
   describeError,
   type JoinedChannelRecord,
   type Manifest,
+  NonPublicChannelError,
   SCHEMA_VERSION,
   type SelectionFile,
   type SelectionMode,
@@ -261,7 +262,56 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
     reporter.note(`Emojis personnalises : ${String(result.count)}`);
   }
 
-  reporter.phase("Canaux", plan.channels.length, { estimate: true });
+  /**
+   * Fiches completes des canaux, relues avant de lire le moindre message.
+   *
+   * Deux roles, et l ordre importe pour le second.
+   *
+   * Le premier est de recuperer ce que le catalogue de selection ne transporte
+   * pas : `header`, `purpose` et `create_at`. Ce fichier ne porte que ce qui sert
+   * a choisir, et il est editable a la main, donc le contenu de l archive ne doit
+   * pas en venir.
+   *
+   * Le second est d etre le dernier filtre defensif, celui que le YAML ne peut
+   * pas tromper. `buildPlan` verifie deja le type, mais il ne verifie que ce que
+   * le fichier declare : un `type: "O"` ecrit a la main sur un canal prive passe.
+   * Seule l instance sait. C est pour cela que cette passe precede l extraction
+   * plutot que de la suivre : un canal refuse ici ne voit aucun de ses messages
+   * lu, la ou un controle en fin de course arriverait apres l ecriture.
+   */
+  const fiches = new Map<string, MmChannel>();
+  const refuses = new Set<string>();
+  reporter.phase("Fiches des canaux", plan.channels.length);
+  await mapWithConcurrency(plan.channels, runOptions.concurrency, async (planned, index) => {
+    try {
+      fiches.set(planned.channel.id, await api.getChannel(planned.channel.id));
+    } catch (error) {
+      if (error instanceof NonPublicChannelError) {
+        refuses.add(planned.channel.id);
+        warnings.push({
+          code: "NON_PUBLIC_CHANNEL_REJECTED",
+          channel_id: planned.channel.id,
+          detail: `Le canal "${planned.channel.name}" est declare public par la selection mais ne l est pas sur l instance. Aucun de ses messages n a ete lu.`,
+        });
+        logger.warn(
+          `Canal "${planned.channel.name}" refuse : l instance ne le donne pas pour public.`,
+        );
+      } else {
+        // Une panne de lecture ne vaut pas la perte de l extraction : le canal
+        // reste archive, sans son objet ni sa date.
+        warnings.push({
+          code: "METADATA_FETCH_FAILED",
+          channel_id: planned.channel.id,
+          detail: `Fiche du canal "${planned.channel.name}" illisible : ${describeError(error)}`,
+        });
+      }
+    }
+    reporter.phaseProgress(index + 1);
+  });
+
+  const canauxRetenus = plan.channels.filter((planned) => !refuses.has(planned.channel.id));
+
+  reporter.phase("Canaux", canauxRetenus.length, { estimate: true });
 
   // Construit une seule fois : le reconstruire a chaque canal devenait
   // quadratique a mesure que la liste des pieces jointes grossissait.
@@ -280,7 +330,7 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
   let attachments = 0;
   let attachmentBytes = state.state.attachments_bytes;
 
-  await mapWithConcurrency(plan.channels, runOptions.concurrency, async (planned) => {
+  await mapWithConcurrency(canauxRetenus, runOptions.concurrency, async (planned) => {
     const channelId = planned.channel.id;
     const progress = state.progressFor(channelId);
     if (progress.status === "complete") {
@@ -565,35 +615,9 @@ export async function runExtraction(options: RunExtractionOptions): Promise<Mani
    * correspondant ne soit decrit. Constate sur une archive reelle, 758 fichiers
    * de posts pour 120 canaux decrits.
    */
-  const complets = plan.channels.filter(
+  const complets = canauxRetenus.filter(
     (planned) => state.progressFor(planned.channel.id).status === "complete",
   );
-
-  /**
-   * Fiches completes des canaux, relues juste avant d ecrire.
-   *
-   * Le catalogue de selection ne transporte que ce qui sert a choisir : l objet,
-   * l en-tete et la date de creation n y figurent pas. Les relire ici plutot que
-   * de les faire transiter par le YAML garde ce fichier lisible, et surtout
-   * empeche qu un YAML edite a la main dicte le contenu de l archive.
-   *
-   * Un echec ne fait pas echouer l extraction : une metadonnee manquante ne vaut
-   * pas la perte de plusieurs heures de messages deja ecrits. Elle est consignee
-   * en avertissement, et le champ reste vide comme avant.
-   */
-  const fiches = new Map<string, MmChannel>();
-  reporter.phase("Metadonnees des canaux");
-  await mapWithConcurrency(complets, runOptions.concurrency, async (planned) => {
-    try {
-      fiches.set(planned.channel.id, await api.getChannel(planned.channel.id));
-    } catch (error) {
-      warnings.push({
-        code: "METADATA_FETCH_FAILED",
-        channel_id: planned.channel.id,
-        detail: `Fiche du canal "${planned.channel.name}" illisible : ${describeError(error)}`,
-      });
-    }
-  });
 
   const archivedChannels: ArchiveChannel[] = [];
   for (const planned of complets) {

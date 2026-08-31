@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,6 +25,8 @@ const TEAM_ID = "t".repeat(26);
 const SELF_ID = "u".repeat(26);
 const OTHER_ID = "v".repeat(26);
 const FILE_ID = "f".repeat(26);
+/** Declare public par le fichier de selection, prive sur l instance. */
+const MENTEUR_ID = "m".repeat(26);
 
 const TOTAL_POSTS = 250;
 const PAGE_SIZE = 200;
@@ -99,8 +102,9 @@ function makeServer(): { fetchImpl: typeof fetch; requests: Recorded[] } {
     if (path === "/users/me") return json({ id: SELF_ID, username: "alice", roles: "system_user" });
     if (path === "/system/ping") return json({ status: "OK" });
     if (path === `/channels/${CHANNEL_ID}/pinned`) return json({ order: [], posts: {} });
-    // Fiches relues au moment d ecrire : l objet, l en-tete et la date de
-    // creation ne transitent pas par le fichier de selection.
+    // Fiches relues avant d extraire : `header`, `purpose` et `create_at` cote
+    // canal, `description`, `type` et `create_at` cote team, aucun de ces champs
+    // ne transitant par le fichier de selection.
     if (path === `/channels/${CHANNEL_ID}`) {
       return json({
         id: CHANNEL_ID,
@@ -112,6 +116,13 @@ function makeServer(): { fetchImpl: typeof fetch; requests: Recorded[] } {
         create_at: 1_600_000_000_000,
         delete_at: 0,
       });
+    }
+    if (path === `/channels/${MENTEUR_ID}`) {
+      return json({ id: MENTEUR_ID, type: "P", name: "prive", display_name: "Prive" });
+    }
+    if (path === `/channels/${MENTEUR_ID}/posts` || path === `/channels/${MENTEUR_ID}/pinned`) {
+      // Le simulateur accepte de les servir : c est a l outil de ne pas demander.
+      return json({ order: [], posts: {} });
     }
     if (path === `/teams/${TEAM_ID}`) {
       return json({
@@ -211,6 +222,34 @@ function selectionFor(out: string): SelectionFile {
   };
 }
 
+/** Selection ou un canal prive a ete maquille en public a la main. */
+function selectionMenteuse(out: string): SelectionFile {
+  const base = selectionFor(out);
+  const team = base.teams[0];
+  if (team === undefined) throw new Error("selection de test malformee");
+  return {
+    ...base,
+    teams: [
+      {
+        ...team,
+        channels: [
+          ...team.channels,
+          {
+            id: MENTEUR_ID,
+            name: "prive",
+            display_name: "Prive",
+            type: "O",
+            joined: true,
+            archived: false,
+            message_count: 10,
+            selected: true,
+          },
+        ],
+      },
+    ],
+  };
+}
+
 let workDir: string;
 
 beforeEach(async () => {
@@ -221,7 +260,7 @@ afterEach(async () => {
   await rm(workDir, { recursive: true, force: true });
 });
 
-async function extract(over: Partial<RunOptions> = {}) {
+async function extract(over: Partial<RunOptions> = {}, selection?: SelectionFile) {
   const { fetchImpl, requests } = makeServer();
   const client = new MattermostClient({
     baseUrl: "https://mm.example.org",
@@ -256,7 +295,7 @@ async function extract(over: Partial<RunOptions> = {}) {
     client,
     account,
     runOptions,
-    selection: selectionFor("https://mm.example.org"),
+    selection: selection ?? selectionFor("https://mm.example.org"),
     selectionMode: "file",
     totalPublicChannels: 1,
     logger: new Logger({ level: "error" }),
@@ -307,7 +346,7 @@ describe("extraction de bout en bout", () => {
     expect(writes).toEqual([]);
   });
 
-  it("decrit le canal avec son objet, son en-tete et sa date de creation", async () => {
+  it("decrit le canal avec son en-tete, son objet et sa date de creation", async () => {
     // Ces trois champs etaient ecrits en dur a la chaine vide et a zero : ils
     // sont relus au moment d ecrire, et perdus pour toujours une fois l instance
     // eteinte si personne ne les demande.
@@ -320,7 +359,7 @@ describe("extraction de bout en bout", () => {
     });
   });
 
-  it("decrit la team avec sa description et sa date de creation", async () => {
+  it("decrit la team avec sa description, son type et sa date de creation", async () => {
     await extract();
     const [team] = await readNdjson("teams.ndjson");
     expect(team).toMatchObject({
@@ -328,6 +367,20 @@ describe("extraction de bout en bout", () => {
       type: "O",
       create_at: 1_500_000_000_000,
     });
+  });
+
+  it("ne lit aucun message d un canal que l instance ne donne pas pour public", async () => {
+    // Le fichier de selection est editable a la main, et buildPlan ne peut
+    // verifier que ce qu il declare. Seule l instance sait. La fiche est donc
+    // relue AVANT le premier message : un controle en fin de course arriverait
+    // apres l ecriture.
+    const { manifest, requests } = await extract({}, selectionMenteuse("https://mm.example.org"));
+    const lectures = requests.filter((r) => r.path.startsWith(`/channels/${MENTEUR_ID}/`));
+    expect(lectures).toEqual([]);
+    expect(existsSync(join(workDir, "posts", `${MENTEUR_ID}.ndjson`))).toBe(false);
+    const canaux = await readNdjson("channels.ndjson");
+    expect(canaux.map((c) => c.id)).toEqual([CHANNEL_ID]);
+    expect(manifest.warnings.map((w) => w.code)).toContain("NON_PUBLIC_CHANNEL_REJECTED");
   });
 
   it("ecrit tous les messages, sans doublon malgre un pivot inclusif", async () => {

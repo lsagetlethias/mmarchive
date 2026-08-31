@@ -24,8 +24,11 @@ export const warningCodeSchema = z.enum([
   "EMOJI_DOWNLOAD_FAILED",
   "USER_FETCH_FAILED",
   /**
-   * Fiche d un canal ou d une team illisible. Son objet, son en-tete et sa date
-   * de creation manquent, le reste de l enregistrement est complet.
+   * Fiche d un canal ou d une team illisible.
+   *
+   * Sur un canal, `header`, `purpose` et `create_at` restent vides ou a zero ;
+   * sur une team, `description`, `type` et `create_at`. Le reste de
+   * l enregistrement est complet, et les messages ne sont pas affectes.
    */
   "METADATA_FETCH_FAILED",
   /** Serveur ancien sans post.metadata : reactions recuperees separement. */
