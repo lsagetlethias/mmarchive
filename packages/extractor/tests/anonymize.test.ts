@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AnonymizeError, anonymizeArchive } from "../src/redact/anonymize-archive.js";
 import { buildIdentityTable } from "../src/redact/identity-table.js";
 import type { NiveauAnonymisation } from "../src/redact/niveau.js";
+import {
+  checkResidualIdentities,
+  collecterIdentitesOrigine,
+} from "../src/redact/residual-check.js";
 import { Logger } from "../src/ui/logger.js";
 import { verifyArchive } from "../src/verify/checks.js";
 
@@ -156,6 +160,13 @@ async function buildArchive(): Promise<void> {
     // U+2028 est legal dans une chaine JSON et n est pas echappe par
     // JSON.stringify. Un decoupage par readline couperait la ligne en deux.
     post({ id: "u".repeat(26), message: "avant\u2028apres\u2029suite" }),
+    // Message humain portant les trois formes que les niveaux traitent
+    // differemment : une mention ancree, une adresse, un nom ecrit en clair.
+    post({
+      id: "x".repeat(26),
+      user_id: ALICE,
+      message: "@alice.martin ecris a alice.martin@example.org, merci Alice.",
+    }),
   ]);
 
   await writeNdjson(join(source, "users.ndjson"), [
@@ -297,7 +308,7 @@ async function buildArchive(): Promise<void> {
       counts: {
         teams: 1,
         channels: 1,
-        posts: 8,
+        posts: 9,
         users: 2,
         emojis: 2,
         attachments: 1,
@@ -597,7 +608,7 @@ describe("le manifeste", () => {
     expect(manifest.counts).toMatchObject({
       teams: 1,
       channels: 1,
-      posts: 8,
+      posts: 9,
       users: 2,
       emojis: 2,
       attachments: 0,
@@ -632,7 +643,135 @@ describe("les champs de texte", () => {
     const survivant = posts.find((p) => p.id === "u".repeat(26));
     expect(survivant?.message).toBe("avant\u2028apres\u2029suite");
     expect(posts[0]?.message).toBe("bonjour");
-    expect(posts).toHaveLength(8);
+    expect(posts).toHaveLength(9);
+  });
+});
+
+describe("les trois niveaux", () => {
+  const HUMAIN = "x".repeat(26);
+  const SYSTEME = "v".repeat(26);
+
+  async function corps(id: string): Promise<string> {
+    const posts = await lire(`posts/${CHANNEL}.ndjson`);
+    return (posts.find((p) => p.id === id)?.message ?? "") as string;
+  }
+
+  it("comptes ne reecrit ni mention, ni adresse, ni nom ecrit en clair", async () => {
+    await anonymiser("comptes");
+    expect(await corps(HUMAIN)).toBe(
+      "@alice.martin ecris a alice.martin@example.org, merci Alice.",
+    );
+  });
+
+  it("comptes substitue quand meme les noms que les metadonnees designent", async () => {
+    // Ce que le niveau le plus bas fait malgre tout, et doit faire : sans cela
+    // une ligne apparie l identite reelle et son pseudonyme, ce qui laisse la
+    // table de correspondance en clair dans l archive.
+    //
+    // La description du niveau a longtemps annonce que « le texte n est pas
+    // touche », ce que ce test contredit exactement.
+    await anonymiser("comptes");
+    const texte = await corps(SYSTEME);
+    expect(texte).not.toContain("alice.martin");
+    expect(texte).not.toContain("bob");
+    expect(texte).toMatch(/^anon-/);
+  });
+
+  it("comptes n annonce aucune reecriture de texte au manifeste", async () => {
+    await anonymiser("comptes");
+    const manifest = await manifeste();
+    expect(manifest.anonymized?.niveau).toBe("comptes");
+    expect(manifest.anonymized?.text_rewritten).toEqual({});
+  });
+
+  it("formes traite ce qui est ancre et laisse les noms ecrits en clair", async () => {
+    await anonymiser("formes");
+    const texte = await corps(HUMAIN);
+    expect(texte).not.toContain("@alice.martin");
+    expect(texte).not.toContain("alice.martin@example.org");
+    // Le nom nu n a aucun ancrage : c est le niveau superieur qui le traite.
+    expect(texte).toContain("Alice");
+  });
+
+  it("noms remplace en plus le nom ecrit en clair", async () => {
+    await anonymiser("noms");
+    const texte = await corps(HUMAIN);
+    expect(texte).not.toContain("Alice");
+    expect(texte).not.toContain("alice.martin");
+  });
+
+  it("chaque niveau dit au manifeste ce qu il a fait, jamais ce qui reste", async () => {
+    const ancrees = ["mentions", "adresses", "telephones", "identifiants"];
+    await anonymiser("formes");
+    expect((await manifeste()).anonymized?.text_rewritten).toEqual({
+      message: ancrees,
+      "props.attachments": ancrees,
+    });
+  });
+});
+
+describe("ce que le controle declare ne pas couvrir", () => {
+  async function limites(niveau: NiveauAnonymisation): Promise<readonly string[]> {
+    // Une anonymisation refuse de se rejouer par dessus une precedente, et
+    // c est voulu : ces tests comparent plusieurs niveaux, donc ils repartent
+    // d une sortie vide a chaque fois.
+    await rm(sortie, { recursive: true, force: true });
+    await anonymiser(niveau);
+    const originaux = (await lire("users.ndjson", source)) as never[];
+    const uids = new Set<string>();
+    const usernames = new Set<string>();
+    for (const user of await lire("users.ndjson")) {
+      uids.add(user.id as string);
+      usernames.add(user.username as string);
+    }
+    const rapport = await checkResidualIdentities({
+      outDir: sortie,
+      origine: collecterIdentitesOrigine(originaux),
+      substitution: { uids, usernames },
+      niveau,
+    });
+    return rapport.horsControle;
+  }
+
+  it("annonce le texte entier au niveau qui ne le reecrit pas", async () => {
+    const dit = (await limites("comptes")).join(" | ");
+    expect(dit).toContain("que ce niveau ne reecrit pas");
+    expect(dit).toContain("blocs attachments");
+  });
+
+  it("n annonce plus que les noms une fois les formes ancrees traitees", async () => {
+    const dit = (await limites("formes")).join(" | ");
+    expect(dit).toContain("les noms ecrits en clair");
+    expect(dit).not.toContain("que ce niveau ne reecrit pas");
+  });
+
+  it("n annonce plus que les noms non couverts au niveau le plus haut", async () => {
+    // La liste etait une constante figee qui declarait, a tous les niveaux, que
+    // le corps des messages « porte encore mentions, noms en clair et
+    // adresses ». Elle partait telle quelle dans la synthese remise au
+    // juridique, et le niveau par defaut la rendait fausse.
+    const dit = (await limites("noms")).join(" | ");
+    expect(dit).toContain("que le vocabulaire n a pas retenus");
+    expect(dit).not.toContain("mentions");
+  });
+
+  it("nomme les surfaces jamais couvertes, quel que soit le niveau", async () => {
+    for (const niveau of ["comptes", "formes", "noms"] as const) {
+      const dit = (await limites(niveau)).join(" | ");
+      expect(dit, niveau).toContain("le nom et l objet des canaux");
+      expect(dit, niveau).toContain("emojis personnalises");
+      expect(dit, niveau).toContain("la description de la team");
+    }
+  });
+
+  it("ne cite aucun chiffre de l archive de reference", async () => {
+    // « conserve pour ne pas vider 312 183 messages » etait un chiffre mesure
+    // sur une archive precise, imprime chez tous les autres utilisateurs.
+    for (const niveau of ["comptes", "formes", "noms"] as const) {
+      for (const limite of await limites(niveau)) {
+        expect(limite, niveau).not.toMatch(/\d/);
+      }
+    }
   });
 });
 

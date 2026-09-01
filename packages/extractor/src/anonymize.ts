@@ -15,6 +15,7 @@ import {
   estNiveau,
   NIVEAU_PAR_DEFAUT,
   NIVEAUX,
+  type NiveauAnonymisation,
   SEUIL_FREQUENCE_PAR_DEFAUT,
 } from "./redact/niveau.js";
 import { type ContexteRapport, rendreReleve, rendreSynthese } from "./redact/report-render.js";
@@ -133,7 +134,7 @@ program
     resumer(resultat, logger);
 
     logger.info("Controle des identites residuelles.");
-    const controle = await controler(opts.archive, opts.out);
+    const controle = await controler(opts.archive, opts.out, niveau);
 
     // Le releve s ecrit d office quand le controle a trouve quelque chose : il
     // n y a alors rien a diffuser, et le detail est ce qu on cherche.
@@ -198,7 +199,11 @@ function resumer(resultat: AnonymizeResult, logger: Logger): void {
   );
 }
 
-async function controler(archiveDir: string, outDir: string): Promise<ResidualReport> {
+async function controler(
+  archiveDir: string,
+  outDir: string,
+  niveau: NiveauAnonymisation,
+): Promise<ResidualReport> {
   const source = createArchivePaths(archiveDir);
   const sortie = createArchivePaths(outDir);
 
@@ -213,7 +218,12 @@ async function controler(archiveDir: string, outDir: string): Promise<ResidualRe
     usernames.add(user.username);
   }
 
-  return checkResidualIdentities({ outDir, origine, substitution: { uids, usernames } });
+  return checkResidualIdentities({
+    outDir,
+    origine,
+    substitution: { uids, usernames },
+    niveau,
+  });
 }
 
 try {
