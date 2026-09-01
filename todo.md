@@ -41,9 +41,22 @@ pour qu'ils ne reviennent pas.
       annuaire. Affiche le drapeau `orphanRoot` et les pièces jointes non archivées avec
       leur raison. Aucune ressource distante : polices système, table d'emojis embarquée
       (99,3 % des réactions de l'archive), emojis personnalisés servis depuis l'archive.
-- [ ] Rendu des messages, points restants : la table d'emojis laisse 0,7 % des raccourcis
-      en clair (`:beach_with_umbrella:`), et le Markdown Mattermost n'est pas couvert en
-      entier (les blocs `props` des intégrations ne sont pas rendus, par décision).
+- [ ] Rendu des messages, points restants. La table d'emojis laisse **0,66 % des réactions**
+      en clair, soit 2 843 sur 433 442, réparties sur 222 formes distinctes dont la plus
+      fréquente ne pèse que 138 occurrences. Mesuré en appelant `standardEmoji`, qui résout
+      déjà les teintes, les alias, les tirets et les genres.
+      Ce ne sont pas des emojis manquants mais des **noms différents** : Mattermost nomme
+      `beach_with_umbrella` ce que gemoji appelle `beach`, `sleuth_or_spy` ce qu'il appelle
+      `detective`. Allonger `ALIASES` à la main rattraperait un tiers du reste au prix d'une
+      liste à maintenir ; le vrai correctif est de générer la table depuis la source de
+      Mattermost plutôt que depuis gemoji, dans `scripts/generate-emoji-table.mjs`.
+      Le Markdown Mattermost n'est pas couvert en entier non plus (les blocs `props` des
+      intégrations ne sont pas rendus, par décision).
+- [ ] **Coloration des modificateurs dans le champ de recherche**, demandée par le cadrage
+      d'origine. Écartée pour l'instant : un `<input>` ne se colore pas, la technique connue
+      est un calque de texte coloré sous un champ rendu transparent, et elle se paie en bogues
+      de sélection, de défilement horizontal et de zoom. L'autocomplétion, elle, donne le même
+      service — savoir qu'on est dans un modificateur — sans cette fragilité.
 - [x] **Mode lite**, dans ses deux transports. SQLite compilé en WebAssembly, VFS de
       lecture seule adossé à un cache de blocs, le tout dans un worker. Aucune requête n'a
       changé : le worker appelle les mêmes fonctions que le serveur.
@@ -167,15 +180,12 @@ méritent d'être vus plutôt que découverts.
       dépôt. Ce que le dépôt fournit, c'est une écoute limitée à la boucle locale et une
       documentation qui explique quoi placer devant. Défendable pour un service qui n'a
       aucune raison d'être exposé directement, mais le basic auth manque bel et bien.
-- [ ] **Pas d'autocomplétion sur `from:` et `in:`.** Le cadrage la demandait à la frappe.
-      Le parser gère les deux modificateurs et l'aide de la vue recherche les documente,
-      mais rien ne complète pendant la saisie.
-      Le travail est entièrement côté interface : `data.tsx` charge déjà la liste complète
-      des canaux et des utilisateurs au démarrage, la même que celle qui sert à résoudre les
-      mentions, donc aucune route ni aucun aller-retour réseau n'est à ajouter. Reste à
-      détecter le modificateur en cours de saisie dans le champ de recherche, à proposer les
-      valeurs correspondantes et à gérer la navigation au clavier. À faire en même temps que
-      la coloration des modificateurs, qui vient du même cadrage et touche le même champ.
+- [x] **Autocomplétion sur `from:` et `in:`.** Livrée, sans route ni aller-retour réseau :
+      l'annuaire et la liste des canaux sont déjà chargés au démarrage. La détection porte
+      sur le texte à gauche du curseur, donc corriger au milieu d'une requête propose les
+      valeurs du modificateur où l'on se trouve et non du dernier tapé. Navigation au clavier,
+      motif de liste déroulante ARIA avec `aria-activedescendant`, et classement du plus court
+      d'abord : la première proposition est celle qu'Entrée valide, elle doit être la bonne.
 - [ ] Pas de route `GET /api/users/:id` : l'annuaire complet est servi d'un coup par
       `/api/users`, ce qui suffit au frontend actuel et évite une requête par message.
 - Noms divergents du cahier des charges, sans conséquence : `mmarchive-index build` plutôt
