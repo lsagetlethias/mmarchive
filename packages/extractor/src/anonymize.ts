@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { type ArchiveUser, describeError } from "@mmarchive/shared";
+import { type ArchiveUser, codeDeSortieCommander, describeError } from "@mmarchive/shared";
 import { readNdjson } from "@mmarchive/shared/ndjson";
 import { Command } from "commander";
 import { ArchivePathError, createArchivePaths } from "./archive/paths.js";
@@ -38,13 +38,8 @@ import { TOOL_VERSION } from "./version.js";
  */
 const program = new Command();
 
-const SORTIES_NORMALES = new Set([
-  "commander.help",
-  "commander.helpDisplayed",
-  "commander.version",
-]);
 program.exitOverride((erreur) => {
-  process.exit(SORTIES_NORMALES.has(erreur.code) ? 0 : 2);
+  process.exit(codeDeSortieCommander(erreur.code));
 });
 
 interface Options {
