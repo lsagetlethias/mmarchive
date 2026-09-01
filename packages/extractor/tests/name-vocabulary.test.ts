@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   construireVocabulaire,
   formesCandidates,
+  NOM_RETIRE,
   normaliserForme,
 } from "../src/redact/name-vocabulary.js";
 import { NIVEAUX, reecritLesFormes, reecritLesNoms } from "../src/redact/niveau.js";
@@ -71,6 +72,33 @@ describe("le vocabulaire", () => {
     expect(v.formes.size).toBe(0);
     expect(v.ecarteesParFrequence).toBe(1);
     expect(v.comptesNonCouverts).toBe(1);
+  });
+
+  it("ne donne jamais a une forme partagee le pseudonyme d un seul porteur", () => {
+    // Le cadrage a ecarte le generateur de noms realistes parce qu attribuer les
+    // propos de quelqu un au nom d une personne reelle fabrique une identite
+    // fausse. Un pseudonyme est le nom d une personne de l archive comme une
+    // autre : donner « Martin », porte par trois comptes, au pseudonyme du
+    // premier ferait exactement cela, sur 9 901 occurrences de l archive de
+    // reference.
+    const deux = [
+      user({ id: "a".repeat(26), last_name: "Martin" }),
+      user({ id: "b".repeat(26), last_name: "Martin" }),
+    ];
+    const v = construireVocabulaire(
+      deux,
+      new Map([
+        ["a".repeat(26), "Anon-Quartz-Agile"],
+        ["b".repeat(26), "Anon-Basalte-Sobre"],
+      ]),
+      new Map(),
+      200,
+    );
+    expect(v.formes.get("martin")).toBe(NOM_RETIRE);
+    expect(v.formes.get("martin")).not.toContain("Anon-");
+    expect(v.formesPartagees).toBe(1);
+    // Le nom reel disparait quand meme : c est le fil qu on perd, pas l anonymat.
+    expect(v.comptesCouverts).toBe(2);
   });
 
   it("ecarte une forme partagee par trop de comptes", () => {

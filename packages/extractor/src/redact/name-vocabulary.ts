@@ -40,9 +40,24 @@ const LONGUEUR_MINIMALE = 4;
 /** Au dela, une forme est un prenom repandu et non un identifiant. */
 const PORTEURS_MAXIMUM = 5;
 
+/**
+ * Substitut d une forme que plusieurs comptes portent.
+ *
+ * Sans arobase ni majuscule, comme les autres substituts, pour ne ressembler ni
+ * a une mention ni a un pseudonyme.
+ */
+export const NOM_RETIRE = "nom-retire";
+
 export interface VocabulaireNoms {
-  /** Formes retenues, normalisees, vers l identite a substituer. */
+  /** Formes retenues, normalisees, vers ce qui les remplace. */
   readonly formes: ReadonlyMap<string, string>;
+  /**
+   * Formes que plusieurs comptes portent, remplacees par un substitut neutre.
+   *
+   * Le fil est perdu sur celles-la, et c est voulu : leur donner le pseudonyme
+   * d un porteur attribuerait a quelqu un les propos qui concernent un autre.
+   */
+  readonly formesPartagees: number;
   /** Formes ecartees faute d etre assez rares, pour le rapport. */
   readonly ecarteesParFrequence: number;
   /**
@@ -124,12 +139,25 @@ export function construireVocabulaire(
         }
         continue;
       }
-      const nom = substitution.get(id);
-      // Une forme portee par deux comptes est remplacee par le pseudonyme du
-      // premier rencontre. C est arbitraire et sans consequence : les deux sont
-      // des pseudonymes, et l objectif est que le nom reel disparaisse.
-      if (nom !== undefined && !formes.has(forme)) formes.set(forme, nom);
+      if (formes.has(forme)) continue;
+      // Une forme portee par plusieurs comptes ne peut pas recevoir le
+      // pseudonyme de l un d eux : cela attribuerait a une personne les propos
+      // qui concernent une autre. Le cadrage a ecarte le generateur de noms
+      // realistes pour exactement ce motif, et un pseudonyme est le nom d une
+      // personne de l archive comme une autre. Mesure sur l archive de
+      // reference : 133 formes et 9 901 occurrences sont dans ce cas.
+      //
+      // Elles recoivent donc un substitut neutre. On perd le fil, on ne fabrique
+      // pas d attribution fausse.
+      const partagee = (porteurs.get(forme) ?? 0) > 1;
+      const nom = partagee ? NOM_RETIRE : substitution.get(id);
+      if (nom !== undefined) formes.set(forme, nom);
     }
+  }
+
+  let formesPartagees = 0;
+  for (const [forme, substitut] of formes) {
+    if (substitut === NOM_RETIRE) formesPartagees += (porteurs.get(forme) ?? 0) > 1 ? 1 : 0;
   }
 
   let comptesCouverts = 0;
@@ -139,6 +167,7 @@ export function construireVocabulaire(
 
   return {
     formes,
+    formesPartagees,
     ecarteesParFrequence,
     comptesCouverts,
     comptesNonCouverts: parCompte.length - comptesCouverts,

@@ -335,6 +335,13 @@ Au delà de 200, le volume de texte touché double bien plus vite que le nombre 
 protégées n'augmente. Le seuil est réglable par `--seuil-noms`, parce que l'arbitrage
 appartient à qui diffuse et non à l'outil.
 
+**Une forme que plusieurs comptes portent ne reçoit jamais le pseudonyme de l'un d'eux.** Le
+cadrage a écarté le générateur de noms réalistes parce qu'attribuer les propos de quelqu'un au
+nom d'une personne réelle fabrique une identité fausse ; or un pseudonyme est le nom d'une
+personne de l'archive comme une autre. Remplacer « Martin », porté par trois comptes, par le
+pseudonyme du premier ferait exactement cela, sur 9 901 occurrences mesurées. Ces formes
+reçoivent donc un substitut neutre : on perd le fil, on ne fabrique pas d'attribution.
+
 **186 comptes resteront nommables quel que soit le réglage.** Leurs formes font moins de quatre
 lettres ou sont partagées par trop de comptes. Ce chiffre figure au rapport, et il ne descendra
 pas.
