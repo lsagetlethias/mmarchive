@@ -9,15 +9,39 @@
 /**
  * Mention Mattermost.
  *
- * Ancree sur un caractere qui ne fait pas partie d un nom, sans quoi une adresse
- * electronique produirait une mention a chaque arobase. Le nom ne peut pas finir
- * par un point : Mattermost lui-meme retire la ponctuation finale avant de
- * resoudre, et « @alice. » en fin de phrase designe bien « alice ».
+ * Le corps admet les lettres Unicode, et ce n est pas un raffinement. Une classe
+ * ASCII coupe « @Stephane » sur sa lettre accentuee et n en garde que le debut :
+ * 657 mentions de l archive de reference etaient ainsi tronquees, et les
+ * neutraliser aurait laisse la queue du nom en clair, c est a dire exactement le
+ * masquage partiel que le cadrage ecarte par principe.
+ *
+ * L ancrage empeche qu une adresse produise une mention a chaque arobase :
+ * devant l arobase d une adresse il y a toujours un caractere de sa partie
+ * locale. Le point, le tiret et l arobase n y figurent PAS, faute de quoi
+ * « @@nom », « .@nom » et « -@nom » passeraient inapercus, ce qui vaut 127
+ * occurrences ou un nom de compte connu suit un arobase.
+ *
+ * Le nom ne peut pas finir par un point : Mattermost lui-meme retire la
+ * ponctuation finale avant de resoudre, et « @alice. » en fin de phrase designe
+ * bien « alice ».
  */
-const MENTION = /(?<![A-Za-z0-9._@-])@([A-Za-z0-9_-][A-Za-z0-9._-]*[A-Za-z0-9_-]|[A-Za-z0-9_-])/g;
+export const CORPS_MENTION = String.raw`[\p{L}\p{N}_-][\p{L}\p{N}._-]*[\p{L}\p{N}_-]|[\p{L}\p{N}_-]`;
+
+const MENTION = new RegExp(String.raw`(?<![\p{L}\p{N}_%+])@(${CORPS_MENTION})`, "gu");
 
 /** Mentions qui ne designent personne en particulier. */
 const MENTIONS_COLLECTIVES = new Set(["all", "channel", "here"]);
+
+/**
+ * Vrai pour une mention qui ne designe personne.
+ *
+ * Partage avec la reecriture : sans cette distinction, les 3 584 occurrences de
+ * l archive de reference tombent dans la branche des mentions non resolues et se
+ * font neutraliser, ce qui abime autant de messages pour zero identite.
+ */
+export function estMentionCollective(forme: string): boolean {
+  return MENTIONS_COLLECTIVES.has(forme.toLowerCase());
+}
 
 /**
  * Adresse electronique.
@@ -27,17 +51,59 @@ const MENTIONS_COLLECTIVES = new Set(["all", "channel", "here"]);
  * large ferait passer pour des adresses des identifiants de paquets ou des
  * chemins.
  */
-const ADRESSE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+export const LOCAL_ADRESSE = String.raw`[\p{L}\p{N}._%+-]+`;
+
+const ADRESSE = new RegExp(
+  String.raw`${LOCAL_ADRESSE}@[\p{L}\p{N}.-]+\.[\p{L}]{2,}(?![\p{L}\p{N}])`,
+  "gu",
+);
+
+/**
+ * Adresse precedee d un arobase, la forme `@local@domaine`.
+ *
+ * 56 occurrences dans les corps de l archive de reference, dont 17 ou la partie
+ * locale designe un compte connu. Aucun ordre generique ne la traite
+ * correctement : la voir d abord comme une mention laisse `@pseudonyme@domaine`,
+ * que la regle d adresse remange ensuite, le pseudonyme disparaissant avec ; la
+ * voir d abord comme une adresse est sur mais perd le fil dans les 17 cas
+ * resolus. D ou un cas nomme, en tete de l alternation.
+ */
+export const ADRESSE_MENTION = new RegExp(
+  String.raw`@(${LOCAL_ADRESSE})@[\p{L}\p{N}.-]+\.[\p{L}]{2,}`,
+  "u",
+);
 
 /**
  * Numero de telephone francais.
  *
- * Ancre des deux cotes pour ne pas ramasser un fragment d identifiant numerique.
+ * Ancre sur la classe de mot et non sur le seul chiffre : sans cela le motif se
+ * colle a une lettre ou a un tiret bas et ramasse un fragment de jeton
+ * technique, ce qui vaut 287 detections sur l archive de reference.
+ *
+ * Deux alternatives et non une, parce que les deux formes n ont pas la meme
+ * structure : le prefixe national « 06 » est colle, l international « +33 6 »
+ * porte un separateur. Les fondre laissait passer « +33 6.12.34.56.78 », dont le
+ * premier separateur n etait compare a rien.
+ *
+ * Ancre des deux cotes, et surtout **le separateur doit etre le meme partout**,
+ * ce que la reference arriere impose. Le rendre optionnel a chaque groupe
+ * acceptait des formes hybrides qui n existent pas : sur l archive de reference,
+ * 5 994 des 7 812 detections etaient des identifiants du type `01-23456789` dans
+ * des offres d emploi, plus des fragments d UUID et des couleurs hexadecimales.
+ * Quatre detections sur cinq etaient fausses, et le rapport les annoncait comme
+ * des numeros de telephone.
+ *
  * Ce qu il rate, et qui doit figurer au rapport a cote du chiffre : les formats
  * etrangers, les numeros ecrits en toutes lettres, et ceux coupes par un retour
  * a la ligne.
  */
-const TELEPHONE = /(?<![0-9])(?:\+33|0)\s?[1-9](?:[\s.-]?[0-9]{2}){4}(?![0-9])/g;
+export const TELEPHONE_NATIONAL = String.raw`0[1-9](?<sepn>[\s.-]?)[0-9]{2}(?:\k<sepn>[0-9]{2}){3}`;
+export const TELEPHONE_INTERNATIONAL = String.raw`\+33(?<sepi>[\s.-]?)[1-9]\k<sepi>[0-9]{2}(?:\k<sepi>[0-9]{2}){3}`;
+
+const TELEPHONE = new RegExp(
+  String.raw`(?<![\p{L}\p{M}\p{N}_])(?:${TELEPHONE_INTERNATIONAL}|${TELEPHONE_NATIONAL})(?![\p{L}\p{M}\p{N}_])`,
+  "gu",
+);
 
 /** Identifiant Mattermost isole dans du texte. */
 const IDENTIFIANT = /(?<![A-Za-z0-9])[a-z0-9]{26}(?![A-Za-z0-9])/g;
@@ -60,7 +126,7 @@ export function mentionsDe(texte: string): MentionsTrouvees {
   for (const trouve of texte.matchAll(MENTION)) {
     const forme = (trouve[1] ?? "").replace(/[.]+$/, "");
     if (forme === "") continue;
-    if (MENTIONS_COLLECTIVES.has(forme.toLowerCase())) collectives += 1;
+    if (estMentionCollective(forme)) collectives += 1;
     else formes.push(forme);
   }
   return { formes, collectives };

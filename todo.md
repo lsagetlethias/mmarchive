@@ -224,11 +224,13 @@ authentification. Cadré dans `docs/DECISION-ANONYMISATION.md`.
       pas renommés, parce que cela casserait les permaliens, mais leur nom apparaît dans la
       barre latérale, dans chaque permalien et en tête de chaque fragment du RAG. Les voir
       listés permet d'en traiter quelques uns à la main avant diffusion.
-- [ ] **Réécriture du texte** : mentions résolues vers le pseudonyme pour garder les fils
-      lisibles, mentions orphelines neutralisées, adresses remplacées par `<redacted>`.
-      Deux surfaces et non une : le corps des messages, et le texte des blocs `attachments`
-      où vit le corps entier de 312 183 messages. Traiter aussi les identifiants bruts de
-      26 caractères collés dans le corps, mesurés à onze occurrences sur sept messages.
+- [x] **Réécriture du texte**, sur les formes ancrées et sur les deux surfaces. Mesuré sur
+      l'archive de référence : 245 313 mentions substituées et 15 591 neutralisées dans les
+      corps, 73 191 adresses et 1 235 numéros retirés, 11 identifiants de comptes substitués.
+      Après la passe, plus aucune adresse, plus aucun numéro, et zéro mention portant le nom
+      d'un compte connu. Une seule alternation avec callback, jamais quatre passes chaînées :
+      les valeurs injectées ont exactement la forme de ce que les détecteurs cherchent, donc
+      une passe suivante relirait ce que la précédente a écrit.
 - [ ] **Noms en clair**, la partie risquée. 39,7 % des messages en contiennent, deux fois et
       demie plus que ceux qui portent une mention, et treize mots courants du français sont
       aussi des noms de comptes ici. L'arbitrage est de privilégier l'anonymat : un texte

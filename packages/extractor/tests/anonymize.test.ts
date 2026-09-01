@@ -573,9 +573,14 @@ describe("le manifeste", () => {
     await anonymiser();
     const manifest = await manifeste();
     expect(manifest.anonymized?.binaries_removed).toBe(true);
-    // Faux tant que la reecriture du texte n est pas livree : un lecteur doit
-    // pouvoir savoir qu il ne tient pas encore une archive diffusable.
-    expect(manifest.anonymized?.message_text_rewritten).toBe(false);
+    // Le manifeste enumere ce qui a ETE FAIT, jamais ce qui reste : l absence de
+    // « noms » se lit sans etre commentee, et une liste de residus vide se
+    // lirait un jour comme le verdict positif que le rapport s interdit.
+    expect(manifest.anonymized?.text_rewritten).toEqual({
+      message: ["mentions", "adresses", "telephones", "identifiants"],
+      "props.attachments": ["mentions", "adresses", "telephones", "identifiants"],
+    });
+    expect(manifest.anonymized?.text_rewritten.message).not.toContain("noms");
   });
 
   it("recale les sept compteurs, pas seulement ceux que redact recalait", async () => {
@@ -654,6 +659,20 @@ describe("les refus", () => {
     ).rejects.toThrow(/ne porte pas d archive anonymisee complete/);
     // Le contenu est intact : la commande a refuse avant d ecrire.
     expect(await readdir(sortie)).toEqual(["notes-importantes.txt"]);
+  });
+
+  it("reconnait une archive anonymisee dont le manifeste a une autre forme", async () => {
+    // Le garde-fou ne valide pas le manifeste, il cherche le bloc. Sans cette
+    // tolerance, une archive produite par une version dont le bloc differe
+    // cesserait d etre reconnue, et la commande tournerait sur sa propre sortie.
+    await anonymiser();
+    const manifeste = join(sortie, "manifest.json");
+    const brut = JSON.parse(await readFile(manifeste, "utf8")) as Record<string, unknown>;
+    brut.anonymized = { forme_inconnue: true };
+    await writeFile(manifeste, JSON.stringify(brut), "utf8");
+    await expect(
+      anonymizeArchive({ archiveDir: sortie, outDir: join(sortie, "..", "x"), logger: silent }),
+    ).rejects.toThrow(/porte deja une archive anonymisee/);
   });
 
   it("refuse --force sur une sortie laissee par une passe interrompue", async () => {

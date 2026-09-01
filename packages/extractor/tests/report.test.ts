@@ -12,6 +12,7 @@ import {
 } from "../src/redact/report-data.js";
 import { type ContexteRapport, rendreReleve, rendreSynthese } from "../src/redact/report-render.js";
 import type { ResidualReport } from "../src/redact/residual-check.js";
+import { compteursTexteVides } from "../src/redact/text-rewrite.js";
 
 /** Chaines d origine qui ne doivent jamais atteindre la synthese. */
 const SECRETS = ["alice.martin", "Alice", "canal-de-bob", "bob@exemple.org", "ppppp".repeat(5)];
@@ -36,6 +37,8 @@ function contexte(over: {
     },
     nomsSubstitues: 0,
     nomsNonTrouves: 0,
+    texteCorps: compteursTexteVides(),
+    texteBlocs: compteursTexteVides(),
     binairesNonRepris: 0,
   };
   return {

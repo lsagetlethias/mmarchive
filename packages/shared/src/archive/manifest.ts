@@ -77,16 +77,44 @@ export type JoinedTeamRecord = z.infer<typeof joinedTeamRecordSchema>;
  *
  * Elle dit une fois, en un endroit, ce qu il faudrait autrement repeter sur
  * chaque ligne de `files.ndjson` au prix d une valeur ajoutee a un enum ferme.
- * Elle dit aussi jusqu ou l anonymisation est allee : un lecteur qui trouve
- * `message_text_rewritten` a faux sait que le corps des messages porte encore
- * des noms, et qu il ne tient donc pas une archive diffusable.
+ * Elle dit aussi jusqu ou l anonymisation est allee, par ce qu elle enumere : un
+ * lecteur qui ne trouve pas `noms` dans `text_rewritten` sait que le corps des
+ * messages porte encore des noms ecrits en clair, et qu il ne tient donc pas une
+ * archive diffusable.
  */
+/**
+ * Surfaces et formes que cette version sait reecrire.
+ *
+ * Ce sont des TYPES et non des schemas de validation, et la distinction est le
+ * fond du sujet. Un `z.enum` ferait echouer la lecture d une archive produite
+ * par une version ulterieure qui aurait ajoute une forme, alors que la section
+ * « compatibilite et evolution » du format impose a un lecteur d ignorer ce qu il
+ * ne connait pas. Le type contraint ce que l outil ECRIT ; la validation accepte
+ * ce qu il LIT.
+ *
+ * `noms` n y figure pas tant que le remplacement des noms ecrits en clair n est
+ * pas livre : le manifeste ne doit pas pouvoir affirmer un travail qui n existe
+ * pas.
+ */
+export type RewrittenSurface = "message" | "props.attachments";
+export type RewrittenForm = "mentions" | "adresses" | "telephones" | "identifiants";
+
 export const anonymizationRecordSchema = z.object({
   at: isoDate,
   tool_version: z.string(),
   /** Pieces jointes, avatars et emojis personnalises non repris. */
   binaries_removed: z.boolean(),
-  message_text_rewritten: z.boolean(),
+  /**
+   * Ce qui a ETE FAIT, par surface. Jamais ce qui reste.
+   *
+   * Un booleen unique ne pouvait plus rien dire de vrai : il ne nommait qu une
+   * des deux surfaces reecrites, et il aurait fallu le mettre a vrai alors que
+   * les noms ecrits en clair subsistent, ce qui ferait croire l archive
+   * diffusable. Enumerer les formes traitees rend l ecart visible sans avoir a
+   * le commenter, et une liste de residus vides se lirait un jour comme le
+   * verdict positif que le rapport s interdit par ailleurs.
+   */
+  text_rewritten: z.record(z.string(), z.array(z.string())),
 });
 
 export type AnonymizationRecord = z.infer<typeof anonymizationRecordSchema>;

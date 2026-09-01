@@ -34,10 +34,11 @@ import {
   isMattermostId,
   type Manifest,
   manifestSchema,
+  type RewrittenForm,
   systemErrorCode,
 } from "@mmarchive/shared";
 import { NdjsonWriter, readNdjson } from "@mmarchive/shared/ndjson";
-import { createArchivePaths } from "../archive/paths.js";
+import { type ArchivePaths, createArchivePaths } from "../archive/paths.js";
 import { Logger } from "../ui/logger.js";
 import { TOOL_VERSION } from "../version.js";
 import { buildIdentityTable, type Identite } from "./identity-table.js";
@@ -53,6 +54,7 @@ import {
   compteursReferencesVides,
 } from "./report-data.js";
 import { reecrireNomsDesignes } from "./system-message.js";
+import { type CompteursTexte, compteursTexteVides, reecrireFormesAncrees } from "./text-rewrite.js";
 
 export class AnonymizeError extends Error {
   readonly code: ErrorCode = ERROR_CODES.AnonymizeError;
@@ -61,6 +63,14 @@ export class AnonymizeError extends Error {
     this.name = "AnonymizeError";
   }
 }
+
+/**
+ * Formes de texte que cette version reecrit.
+ *
+ * `noms` n y figure pas : le remplacement des noms ecrits en clair n est pas
+ * livre, et le manifeste enumere ce qui a ete fait, jamais ce qui reste.
+ */
+const FORMES_REECRITES: RewrittenForm[] = ["mentions", "adresses", "telephones", "identifiants"];
 
 /** Fichiers attendus a la racine d une archive. Tout le reste fait echouer. */
 const RACINE_ATTENDUE = new Set<string>([
@@ -107,6 +117,10 @@ export interface AnonymizeResult {
   readonly props: CompteursProps;
   /** Noms substitues dans le texte parce que props les designait nommement. */
   readonly nomsSubstitues: number;
+  /** Formes ancrees reecrites dans le corps des messages. */
+  readonly texteCorps: CompteursTexte;
+  /** Formes ancrees reecrites dans le texte des blocs attachments. */
+  readonly texteBlocs: CompteursTexte;
   /** Noms designes par props mais absents du texte. Sans consequence. */
   readonly nomsNonTrouves: number;
   /** Pieces jointes dont la metadonnee est conservee mais le binaire non repris. */
@@ -162,6 +176,26 @@ async function refuserArborescenceInattendue(racine: string): Promise<void> {
         "Verifiez l archive, puis retirez ces elements.",
     );
   }
+}
+
+/**
+ * Refuse de tourner sur une archive deja anonymisee.
+ *
+ * Presque sans effet avant la reecriture du texte, destructeur depuis. Aucune
+ * forme de substitution de la premiere passe ne resout contre la NOUVELLE table,
+ * donc toutes les mentions deviendraient orphelines et se feraient neutraliser.
+ * Le controle residuel ne le verrait pas : il est positif contre le nouvel
+ * ensemble de substitution, qui est coherent avec lui-meme. Et l operateur qui a
+ * jete la source d origine n a plus de recours.
+ */
+async function refuserSourceDejaAnonymisee(source: ArchivePaths): Promise<void> {
+  if (!(await porteUneArchiveAnonymisee(source.root))) return;
+  throw new AnonymizeError(
+    `${source.root} porte deja une archive anonymisee. La rejouer tirerait une table neuve, ` +
+      "contre laquelle aucun pseudonyme de la premiere passe ne resout : les mentions deviendraient " +
+      "toutes orphelines et seraient neutralisees, sans que rien ne le signale. Repartez de " +
+      "l archive d origine.",
+  );
 }
 
 async function refuserSortieOccupee(sortie: string, source: string, force: boolean): Promise<void> {
@@ -229,7 +263,18 @@ async function refuserSortieOccupee(sortie: string, source: string, force: boole
 async function porteUneArchiveAnonymisee(racine: string): Promise<boolean> {
   try {
     const brut: unknown = JSON.parse(await readFile(join(racine, ARCHIVE_LAYOUT.manifest), "utf8"));
-    return manifestSchema.safeParse(brut).data?.anonymized !== undefined;
+    // Deliberement tolerant : la seule presence du bloc suffit, sans valider le
+    // reste du manifeste. Un garde-fou qui exigerait un manifeste conforme
+    // cesserait de reconnaitre une archive produite par une version dont le bloc
+    // a une autre forme, et laisserait la commande tourner sur sa propre sortie,
+    // ce qui est precisement le cas destructeur.
+    return (
+      typeof brut === "object" &&
+      brut !== null &&
+      "anonymized" in brut &&
+      typeof (brut as { anonymized: unknown }).anonymized === "object" &&
+      (brut as { anonymized: unknown }).anonymized !== null
+    );
   } catch {
     return false;
   }
@@ -354,6 +399,7 @@ export async function anonymizeArchive(options: {
     );
   }
 
+  await refuserSourceDejaAnonymisee(source);
   await refuserArborescenceInattendue(source.root);
   await refuserSortieOccupee(sortie.root, source.root, force);
   await mkdir(join(sortie.root, ARCHIVE_LAYOUT.postsDir), { recursive: true });
@@ -370,15 +416,26 @@ export async function anonymizeArchive(options: {
       parUsername.set(user.username.toLowerCase(), identite);
     }
   }
+  // Les noms de substitution emis, pour que la reecriture du texte reconnaisse
+  // ce qu une passe anterieure a deja traite au lieu de le prendre pour une
+  // mention orpheline et de le neutraliser.
+  const emis = new Set([...table.values()].map((identite) => identite.username));
   const resolveur: ResolveurIdentite = {
     parId: (id) => table.get(id),
     parUsername: (nom) => parUsername.get(nom.toLowerCase()),
+    estSubstitution: (nom) => emis.has(nom.toLowerCase()),
+    uidPourIdentifiant: (id) => table.get(id)?.uid,
   };
 
   const props = compteursPropsVides();
   const references = compteursReferencesVides();
   let nomsSubstitues = 0;
   let nomsNonTrouves = 0;
+  // Deux surfaces, deux compteurs : le taux de resolution des mentions y est de
+  // 94 % d un cote et de 2 % de l autre, les sommer decrirait une population qui
+  // n existe pas.
+  const texteCorps = compteursTexteVides();
+  const texteBlocs = compteursTexteVides();
 
   /**
    * Une reference qui ne resout vers aucun compte est retiree, jamais conservee.
@@ -542,6 +599,10 @@ export async function anonymizeArchive(options: {
         const texte = reecrireNomsDesignes(post, resolveur);
         nomsSubstitues += texte.substitutions;
         nomsNonTrouves += texte.nonTrouves;
+        // Puis les formes ancrees, sur le resultat : les noms que props designe
+        // sont deja substitues, donc les mentions qui les portent resolvent vers
+        // un nom de substitution et sont reconnues comme deja traitees.
+        const corps = reecrireFormesAncrees(texte.message, resolveur, texteCorps);
         const anonyme: ArchivePost = {
           id: post.id,
           channel_id: post.channel_id,
@@ -552,13 +613,13 @@ export async function anonymizeArchive(options: {
           delete_at: post.delete_at,
           root_id: post.root_id,
           type: post.type,
-          message: texte.message,
+          message: corps,
           is_pinned: post.is_pinned,
           // Les mots-diese sont une derivation du corps du message : `#prenom.nom`
           // y survivrait a une reecriture du corps, et l index en fait une colonne
           // cherchable a part.
           hashtags: "",
-          props: reduireProps(post.props, resolveur, props),
+          props: reduireProps(post.props, resolveur, props, texteBlocs),
           file_ids: post.file_ids,
           reactions: reactionsAnonymes,
         };
@@ -601,6 +662,8 @@ export async function anonymizeArchive(options: {
     props,
     nomsSubstitues,
     nomsNonTrouves,
+    texteCorps,
+    texteBlocs,
     binairesNonRepris,
   };
 }
@@ -668,7 +731,12 @@ async function ecrireManifeste(
        * un enum ferme, au prix d une evolution du format.
        */
       binaries_removed: true,
-      message_text_rewritten: false,
+      // Les deux surfaces portent les memes formes : le meme moteur et la meme
+      // table tournent sur les deux, et la promesse doit etre unique.
+      text_rewritten: {
+        message: [...FORMES_REECRITES],
+        "props.attachments": [...FORMES_REECRITES],
+      },
     },
     ...(contexte.premier === null || contexte.dernier === null
       ? {}

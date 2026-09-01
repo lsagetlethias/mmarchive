@@ -145,6 +145,40 @@ export function rendreSynthese(contexte: ContexteRapport): string {
     ),
   );
 
+  const surface = (nom: string, c: typeof resultat.texteCorps): readonly string[][] => [
+    [`${nom} : mentions substituees`, String(c.mentionsSubstituees)],
+    [`${nom} : mentions deja traitees en amont`, String(c.mentionsDejaTraitees)],
+    [`${nom} : mentions neutralisees, ne designant aucun compte`, String(c.mentionsNeutralisees)],
+    [`${nom} : mentions collectives, laissees intactes`, String(c.mentionsCollectives)],
+    [`${nom} : adresses retirees`, String(c.adressesRetirees)],
+    [`${nom} : numeros retires`, String(c.telephonesRetires)],
+    [`${nom} : identifiants de comptes substitues`, String(c.identifiantsSubstitues)],
+    [
+      `${nom} : identifiants ne designant aucun compte, laisses intacts`,
+      String(c.identifiantsIndecidables),
+    ],
+  ];
+
+  ajouter(
+    "## Ce qui a ete reecrit dans le texte",
+    "",
+    "Compte pendant la passe, par surface. Les deux ne se somment pas : le taux de resolution des",
+    "mentions y differe d un facteur quarante, et un total decrirait une population qui n existe pas.",
+    "",
+    tableau(
+      ["Surface et forme", "Nombre"],
+      [
+        ...surface("Corps des messages", resultat.texteCorps),
+        ...surface("Blocs attachments", resultat.texteBlocs),
+      ],
+    ),
+    "",
+    "Une mention qui ne designe aucun compte est neutralisee plutot que laissee : une mention non",
+    "resolue reste un nom. Un identifiant qui ne designe aucun compte est au contraire laisse",
+    "intact, et l asymetrie est mesuree : la regle inverse detruirait des milliers de permaliens",
+    "que le format conserve deliberement, pour traiter une dizaine de cas.",
+  );
+
   ajouter(
     "## Ce qui n est pas traite a ce stade",
     "",
@@ -174,9 +208,9 @@ export function rendreSynthese(contexte: ContexteRapport): string {
     "saura traiter ; celles qui ne designent aucun compte resteront un residu, faute de forme a",
     "laquelle les rattacher.",
     "",
-    "Le nombre de remplacements operes dans le corps des messages est **zero**, et ce chiffre est",
-    "exact : la reecriture du texte n est pas livree. Les seuls noms substitues dans du texte le",
-    "sont dans les messages systeme, dont les metadonnees les designaient nommement.",
+    "Ce qui reste porte sur les NOMS ecrits en clair, que cette passe ne traite pas. Les formes",
+    "ancrees, celles qui commencent par un arobase ou qui portent un domaine, sont traitees et",
+    "comptees dans la section precedente.",
   );
 
   if (m.identifiantsColles.length > 0) {
