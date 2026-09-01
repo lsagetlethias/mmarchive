@@ -1,4 +1,10 @@
-import { codeDeSortieCommander, describeError } from "@mmarchive/shared";
+import {
+  codeDeSortieCommander,
+  describeFailure,
+  describeProgram,
+  generateCompletion,
+  isCompletionShell,
+} from "@mmarchive/shared";
 import { Command } from "commander";
 import { doctorCommand } from "./commands/doctor.js";
 import { inventoryCommand } from "./commands/inventory.js";
@@ -51,6 +57,7 @@ program
     "--no-probe",
     "Ne sonde pas les canaux non rejoints. Plus rapide, mais un compte capable de les lire sans join ne sera pas detecte.",
   )
+  .option("--json", "Sortie structuree sur la sortie standard, exploitable par un script")
   .action(async (opts: Record<string, unknown>) => {
     await inventoryCommand(opts, process.env, logger);
   });
@@ -63,6 +70,7 @@ program
   .option("--url <url>", "URL de l instance (ou MM_URL)")
   .option("--token <token>", "Token porteur (ou MM_TOKEN)")
   .option("--file <yaml>", "Fichier de selection, pour estimer le run et choisir un canal temoin")
+  .option("--json", "Sortie structuree sur la sortie standard, exploitable par un script")
   .action(async (opts: Record<string, unknown>) => {
     await doctorCommand(opts, process.env, logger);
   });
@@ -114,16 +122,27 @@ program
     if (errors > 0) process.exitCode = 1;
   });
 
+program
+  .command("completion")
+  .description("Emet un script de completion shell sur la sortie standard.")
+  .argument("[shell]", "bash, zsh ou fish", "bash")
+  .action((shell: string, _opts: unknown, commande: Command) => {
+    if (!isCompletionShell(shell)) {
+      commande.error(`Shell inconnu : "${shell}". Attendu bash, zsh ou fish.`, { exitCode: 2 });
+    }
+    process.stdout.write(generateCompletion(describeProgram(program), shell));
+  });
+
 async function main(): Promise<void> {
   try {
     await program.parseAsync(process.argv);
   } catch (error) {
     if (error instanceof OptionsError) {
-      logger.error(describeError(error));
+      logger.error(describeFailure(error, TOOL_VERSION));
       process.exitCode = 2;
       return;
     }
-    logger.error(describeError(error));
+    logger.error(describeFailure(error, TOOL_VERSION));
     process.exitCode = 1;
   }
 }

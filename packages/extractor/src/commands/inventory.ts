@@ -10,6 +10,7 @@ import { TOOL_VERSION } from "../version.js";
 export interface InventoryCommandOptions extends RawOptions {
   readonly probe?: boolean | undefined;
   readonly selectArchived?: boolean | undefined;
+  readonly json?: boolean | undefined;
 }
 
 /**
@@ -76,6 +77,41 @@ export async function inventoryCommand(
   await writeSelectionFile(outPath, result.file, summary);
 
   logger.success(`Fichier de selection ecrit : ${outPath}`);
+
+  if (raw.json === true) {
+    // Les quatre categories du modele de selection, telles quelles : c est sur
+    // elles que se decide ce qu il faudra cocher, et un script qui les recompte
+    // depuis le YAML dupliquerait `categorizeChannel`.
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          instance: connection.url,
+          compte: {
+            username: account.username,
+            is_system_admin: result.file.meta.account.is_system_admin,
+          },
+          serveur: result.serverVersion,
+          categories: {
+            member: counts.get("member") ?? 0,
+            readable_without_join: counts.get("readable_without_join") ?? 0,
+            join_required: counts.get("join_required") ?? 0,
+            archived_readable: counts.get("archived_readable") ?? 0,
+            archived_unreadable: counts.get("archived_unreadable") ?? 0,
+          },
+          channels_total: summary.channelsTotal,
+          channels_preselected: summary.channelsSelected,
+          selection_file: outPath,
+          warnings: result.warnings.map((warning) => ({
+            code: warning.code,
+            detail: warning.detail,
+          })),
+        },
+        null,
+        2,
+      )}\n`,
+    );
+  }
+
   logger.callout("Aucune modification n a ete faite sur l instance", [
     "Cette commande n emet que des lectures.",
     `${String(summary.channelsSelected)} canaux sont pre-selectionnes, tous deja accessibles.`,

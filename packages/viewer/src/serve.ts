@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { codeDeSortieCommander, describeError } from "@mmarchive/shared";
+import { codeDeSortieCommander, describeFailure } from "@mmarchive/shared";
 import { Command } from "commander";
 import pc from "picocolors";
 import { NodeSqlDriver } from "./query/node-driver.js";
@@ -85,6 +85,6 @@ program
 try {
   await program.parseAsync(process.argv);
 } catch (error) {
-  process.stderr.write(`${pc.red("Echec")} : ${describeError(error)}\n`);
+  process.stderr.write(`${pc.red("Echec")} : ${describeFailure(error, TOOL_VERSION)}\n`);
   process.exitCode = 1;
 }

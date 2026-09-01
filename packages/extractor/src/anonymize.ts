@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { type ArchiveUser, codeDeSortieCommander, describeError } from "@mmarchive/shared";
+import { type ArchiveUser, codeDeSortieCommander, describeFailure } from "@mmarchive/shared";
 import { readNdjson } from "@mmarchive/shared/ndjson";
 import { Command } from "commander";
 import { ArchivePathError, createArchivePaths } from "./archive/paths.js";
@@ -214,7 +214,7 @@ async function controler(archiveDir: string, outDir: string): Promise<ResidualRe
 try {
   await program.parseAsync(process.argv);
 } catch (error) {
-  new Logger().error(describeError(error));
+  new Logger().error(describeFailure(error, TOOL_VERSION));
   // Une saisie fautive se corrige et se relance ; une identite qui survit est
   // une panne de l outil, et l archive produite ne doit pas partir.
   process.exitCode = error instanceof ArchivePathError || error instanceof AnonymizeError ? 2 : 1;

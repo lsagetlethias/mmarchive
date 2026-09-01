@@ -516,13 +516,28 @@ Toutes les commandes se comportent correctement hors terminal :
   continue. Une confirmation impossible échoue avec un message actionnable plutôt que de
   suspendre le processus indéfiniment ;
 - la **progression et les diagnostics vont sur la sortie d'erreur**, la sortie standard ne
-  porte que le résultat. En pratique elle ne porte rien, sauf `verify --json`, le rapport
-  de `mmarchive-index` et l'URL annoncée par `mmarchive-serve` : tout ce qui s'adresse à
-  un lecteur humain passe par la sortie d'erreur, y compris les tableaux récapitulatifs ;
+  porte que le résultat : les sorties `--json`, le rapport de `mmarchive-index`, l'URL
+  annoncée par `mmarchive-serve` et les scripts de complétion. Tout ce qui s'adresse à un
+  lecteur humain passe par la sortie d'erreur, y compris les tableaux récapitulatifs ;
+- `--json` produit une **sortie structurée** sur `inventory`, `doctor` et `verify`, ainsi
+  que sur `mmarchive-index build`. Rien d'autre n'atteint la sortie standard, donc
+  `mmarchive-extract inventory --json | jq .categories` fonctionne tel quel ;
 - les **codes de sortie** sont exploitables : `0` succès, `1` échec, `2` argument invalide,
   `130` interruption par l'utilisateur ;
 - `NO_COLOR` et `--no-color` sont respectés, la couleur est désactivée automatiquement
   quand la sortie est redirigée.
+
+### Complétion shell
+
+`mmarchive-extract` et `mmarchive-index` émettent leur propre script de complétion, pour
+`bash`, `zsh` ou `fish` :
+
+```bash
+mmarchive-extract completion zsh > ~/.zfunc/_mmarchive-extract
+```
+
+Le script est dérivé du programme lui-même, pas d'une liste tenue à part : une
+sous-commande ou une option ajoutée est complétée sans intervention.
 
 ## Codes d'erreur
 
@@ -530,7 +545,13 @@ Chaque erreur qui remonte à l'utilisateur porte un code stable, affiché devant
 
 ```text
 Echec : [E3002] posts/abc.ndjson ligne 41 : JSON invalide.
+  mmarchive 1.1.0
 ```
+
+La version accompagne le message parce qu'une panne est souvent rapportée par capture
+d'écran, des mois plus tard : le code seul ne dit pas contre quelle version le relire.
+Les codes qui désignent une panne de l'outil et non une saisie fautive y ajoutent
+l'adresse où la signaler.
 
 La famille dit d'où vient le problème : `E10xx` ce que vous avez fourni, `E20xx`
 l'instance et les garde-fous, `E30xx` l'archive, `E40xx` la reprise, `E50xx` l'index.
