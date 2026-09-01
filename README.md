@@ -90,12 +90,16 @@ MM_TOKEN=votre-token
 
 ## Le point important : rejoindre un canal laisse une trace
 
-`GET /channels/{id}/posts` exige la permission `read_channel`, accordée aux seuls
-membres du canal. Avec un compte standard, vous ne pouvez donc lire que les canaux que
-vous avez déjà rejoints.
+`GET /channels/{id}/posts` exige la permission `read_channel`. Un compte qui ne l'a pas
+doit rejoindre le canal, et **rejoindre un canal publie un message système visible par tous
+ses membres**. Sur plusieurs dizaines de canaux, cela produit une vague de notifications
+très visible.
 
-**Rejoindre un canal publie un message système visible par tous ses membres.** Sur
-plusieurs dizaines de canaux, cela produit une vague de notifications très visible.
+Selon la configuration de votre instance, cette permission peut vous être déjà accordée :
+un Mattermost par défaut laisse le rôle `team_user` lire les canaux publics de ses teams
+sans les rejoindre. Dans ce cas, aucun join n'est nécessaire et aucun message n'est publié.
+mmarchive ne le suppose jamais : il sonde chaque canal, en lecture seule, et vous dit ce
+qu'il en est avant que vous ne choisissiez.
 
 mmarchive ne rejoint **jamais** un canal de sa propre initiative. Vous les désignez un
 par un, et l'outil vous montre le nombre exact de messages système que votre sélection

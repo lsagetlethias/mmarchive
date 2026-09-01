@@ -263,10 +263,13 @@ authentification. Cadré dans `docs/DECISION-ANONYMISATION.md`.
 - [x] **`--dry-run` sur `redact`**. La simulation parcourt et compte exactement ce que
       ferait la vraie passe, sans ouvrir un seul flux d'écriture. Un test compare les deux
       décomptes et vérifie que l'archive est rigoureusement inchangée après simulation.
-- [ ] **Test d'intégration contre un Mattermost local** en docker-compose, avec données
-      seedées : canal archivé, utilisateur désactivé, canal public non rejoint. Tout est
-      aujourd'hui vérifié contre un serveur simulé. Le `compose.yaml` du déploiement ne sert
-      pas à cela : il ne parle qu'au viewer, jamais à une instance.
+- [x] **Test d'intégration contre un Mattermost local**, épinglé sur la version de
+      l'instance de référence. `pnpm test:integration` monte le compose, sème les cas que le
+      simulateur ne sait pas produire et démonte. Il a immédiatement montré que la prémisse
+      écrite en tête de `CLAUDE.md` était fausse : un Mattermost neuf laisse `team_user` lire
+      un canal public sans le rejoindre, ce qui explique que 758 canaux aient été extraits
+      sans qu'aucun join soit nécessaire. Le test couvre les deux configurations, en retirant
+      la permission entre deux inventaires.
 
 ## Non retenu, et pourquoi
 

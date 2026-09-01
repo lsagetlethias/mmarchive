@@ -1,0 +1,58 @@
+# Instance Mattermost jetable, pour le seul test d integration de l extracteur.
+#
+# Rien a voir avec le compose.yaml de la racine, qui ne parle qu au viewer et ne
+# connait aucune instance. Celui-ci monte un serveur reel parce que le simulateur
+# des autres tests ne verifie que ce que nous croyons de l API : les six champs
+# que l extracteur jetait sont passes au travers de toute la suite, le simulateur
+# ne les renvoyant pas davantage.
+#
+# La version est EPINGLEE sur celle de l instance de reference, lue dans
+# manifest.source.server_version. Tester contre `latest` ne dirait rien du
+# serveur qu on archive, et c est precisement sur un ecart de reponse d API que
+# ce test doit mordre.
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: mmuser
+      POSTGRES_PASSWORD: mmuser-test
+      POSTGRES_DB: mattermost
+    # Aucun volume : l instance est jetable et doit repartir vide a chaque fois,
+    # sans quoi le premier compte ne se cree plus par l API.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mmuser -d mattermost"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  mattermost:
+    image: mattermost/mattermost-team-edition:10.12.4
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8065:8065"
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://mmuser:mmuser-test@postgres:5432/mattermost?sslmode=disable
+      MM_SERVICESETTINGS_SITEURL: http://localhost:8065
+      # Le premier compte se cree par l API quand la base est vide : c est le
+      # chemin normal, et il evite l assistant de configuration.
+      MM_TEAMSETTINGS_ENABLEOPENSERVER: "true"
+      # Sans cela, un canal archive est invisible et le cas que ce test doit
+      # couvrir ne peut pas etre construit.
+      MM_TEAMSETTINGS_EXPERIMENTALVIEWARCHIVEDCHANNELS: "true"
+      MM_LOGSETTINGS_CONSOLELEVEL: ERROR
+      MM_FILESETTINGS_MAXFILESIZE: "1048576"
+    # Ni volume ni tmpfs sur /mattermost : l image tourne sous un compte non
+    # privilegie et un montage appartenant a root lui refuse l ecriture, ce qui
+    # fait echouer le stockage de fichiers et la journalisation. Le conteneur est
+    # jetable, sa couche d ecriture suffit et disparait au `down`.
+    #
+    # Pas de healthcheck non plus : l image est distroless, elle ne contient ni
+    # curl ni shell. L attente se fait depuis l hote, qui interroge
+    # /api/v4/system/ping, et c est de toute facon la seule verification qui
+    # prouve que l API est joignable de la ou le test l appellera.
