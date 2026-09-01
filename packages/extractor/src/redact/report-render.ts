@@ -18,6 +18,7 @@
  * limites d un document qui s ouvre sur « diffusable ».
  */
 import type { AnonymizeResult } from "./anonymize-archive.js";
+import { DESCRIPTION_NIVEAUX } from "./niveau.js";
 import {
   type CategorieReference,
   effectifPublic,
@@ -102,6 +103,8 @@ export function rendreSynthese(contexte: ContexteRapport): string {
     "precisement ce que l anonymisation a cherche a cacher, et ce qu elle n a pas atteint.",
     "",
     `Archive produite le ${horodatage} par mmarchive ${versionOutil}.`,
+    "",
+    `Niveau appliqué : **${resultat.niveau}**. ${DESCRIPTION_NIVEAUX[resultat.niveau]}`,
   );
 
   ajouter(
@@ -157,6 +160,7 @@ export function rendreSynthese(contexte: ContexteRapport): string {
       `${nom} : identifiants ne designant aucun compte, laisses intacts`,
       String(c.identifiantsIndecidables),
     ],
+    [`${nom} : noms ecrits en clair remplaces`, String(c.nomsRemplaces)],
   ];
 
   ajouter(
@@ -178,6 +182,32 @@ export function rendreSynthese(contexte: ContexteRapport): string {
     "intact, et l asymetrie est mesuree : la regle inverse detruirait des milliers de permaliens",
     "que le format conserve deliberement, pour traiter une dizaine de cas.",
   );
+
+  if (resultat.vocabulaire !== undefined) {
+    const v = resultat.vocabulaire;
+    ajouter(
+      "## Le vocabulaire des noms, et ce qu il laisse",
+      "",
+      "C est la seule etape sans ancrage : un prenom ne se distingue d un mot ordinaire par rien,",
+      "et le prix de l erreur n est pas le meme dans les deux sens. Une forme oubliee laisse une",
+      "identite, une forme de trop abime du texte.",
+      "",
+      tableau(
+        ["Mesure", "Valeur"],
+        [
+          ["Formes retenues", String(v.formes.size)],
+          ["Formes ecartees comme trop frequentes dans le corpus", String(v.ecarteesParFrequence)],
+          ["Comptes dont au moins une forme est remplacee", effectifPublic(v.comptesCouverts)],
+          ["Comptes restant nommables en clair", effectifPublic(v.comptesNonCouverts)],
+        ],
+      ),
+      "",
+      "**Les comptes restant nommables sont le chiffre a lire.** Leurs formes sont trop courtes,",
+      "trop partagees entre comptes, ou trop frequentes dans le corpus pour etre remplacees sans",
+      "detruire le texte. Aucun reglage ne les couvre tous : une part d entre eux porte un prenom",
+      "que la langue emploie par ailleurs, et les remplacer reviendrait a remplacer le mot.",
+    );
+  }
 
   ajouter(
     "## Ce qui n est pas traite a ce stade",

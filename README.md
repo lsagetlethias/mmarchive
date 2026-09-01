@@ -405,6 +405,29 @@ diffusée, l'exigence n'est plus la même et la commande non plus :
 mmarchive-anonymize --archive ./archive --out ./archive-anonyme
 ```
 
+### Trois niveaux, parce que le coût n'est pas le même
+
+`--niveau <comptes|formes|noms>`, par défaut `noms`. Chaque niveau contient le précédent, et
+ils ne portent pas la même promesse :
+
+| Niveau | Ce qu'il ajoute | Coût sur le texte |
+| --- | --- | --- |
+| `comptes` | Fiches, métadonnées, références. Binaires non repris. | Aucun |
+| `formes` | Mentions, adresses, numéros, identifiants collés. | Nul en pratique : tout est ancré |
+| `noms` | Les noms écrits en clair. | Réel : un prénom est parfois un mot ordinaire |
+
+Le défaut est `noms` parce qu'une archive livrée sans mention du niveau doit être la plus
+protégée. Les niveaux inférieurs sont des choix explicites, pour relire ou pour diffuser en
+interne.
+
+`--seuil-noms <n>` règle le dernier niveau : au delà de N occurrences dans le corpus, une
+forme est traitée comme un mot ordinaire plutôt que comme un nom. Par défaut 200, qui est le
+point d'inflexion mesuré. Le manifeste et le rapport nomment tous deux le niveau appliqué.
+
+Une chose ne dépend d'aucun niveau : la substitution des noms que les métadonnées d'un message
+système désignent. Sans elle, une seule ligne apparie une identité réelle et son pseudonyme,
+ce qui n'a de sens à aucun niveau.
+
 Tous les comptes sont pseudonymisés, sous une forme manifestement artificielle du type
 `Anon-Obsidienne-Discrete`. Les identifiants de substitution sont **tirés au hasard** : ils
 gardent la forme d'un identifiant Mattermost mais ne désignent plus rien, et aucune
@@ -434,6 +457,12 @@ La commande se termine par un contrôle des identités résiduelles. Il ne peut 
 il n'existe aucun drapeau pour l'éviter. S'il trouve une seule identité survivante, la
 commande échoue et l'archive produite ne doit pas être diffusée. S'il passe, il énumère ce
 qu'il **ne couvre pas**, et cette liste vaut d'être lue.
+
+Au niveau `noms`, les prénoms et noms de comptes écrits en clair sont remplacés par le
+pseudonyme. C'est la seule étape sans ancrage, donc la seule où le sur-remplacement est un
+risque : une forme trop fréquente dans le corpus est un mot ordinaire, pas une personne citée
+mille fois, et elle est écartée. Le rapport annonce combien de comptes restent nommables
+malgré tout, chiffre qu'aucun réglage ne ramène à zéro.
 
 Le texte est réécrit sur ses **formes ancrées**, dans les messages comme dans le texte des
 blocs d'intégration : les mentions qui désignent un compte prennent son pseudonyme et le fil

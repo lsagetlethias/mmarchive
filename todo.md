@@ -231,10 +231,14 @@ authentification. Cadré dans `docs/DECISION-ANONYMISATION.md`.
       d'un compte connu. Une seule alternation avec callback, jamais quatre passes chaînées :
       les valeurs injectées ont exactement la forme de ce que les détecteurs cherchent, donc
       une passe suivante relirait ce que la précédente a écrit.
-- [ ] **Noms en clair**, la partie risquée. 39,7 % des messages en contiennent, deux fois et
-      demie plus que ceux qui portent une mention, et treize mots courants du français sont
-      aussi des noms de comptes ici. L'arbitrage est de privilégier l'anonymat : un texte
-      abîmé reste exploitable, une identité qui fuit ne se rattrape pas.
+- [x] **Noms en clair**, derrière le niveau `noms`. Le critère décisif est la fréquence dans
+      le corpus, mesurée par une passe dédiée : neuf formes font la moitié des occurrences du
+      vocabulaire et sont des mots ordinaires. Seuil par défaut 200, le point d'inflexion
+      mesuré, réglable par `--seuil-noms`. 1 715 formes retenues, 1 504 comptes couverts,
+      670 laissés nommables, chiffre annoncé au rapport et qu'aucun réglage ne ramène à zéro.
+- [x] **Trois niveaux d'anonymisation** (`comptes`, `formes`, `noms`), parce que les étapes
+      n'ont pas le même coût sur le texte et ne portent donc pas la même promesse. Le défaut
+      est le plus protecteur ; les niveaux inférieurs sont des choix explicites.
 
 ## Dette identifiée
 

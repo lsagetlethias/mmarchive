@@ -189,6 +189,7 @@ Champ optionnel, absent d'une archive d'extraction. Il est posé par
   "at": "2026-08-31T12:00:00.000Z",
   "tool_version": "1.1.0",
   "binaries_removed": true,
+  "niveau": "noms",
   "text_rewritten": {
     "message": ["mentions", "adresses", "telephones", "identifiants"],
     "props.attachments": ["mentions", "adresses", "telephones", "identifiants"]
@@ -200,6 +201,9 @@ Champ optionnel, absent d'une archive d'extraction. Il est posé par
 personnalisés ne sont pas repris. Le répéter sur chaque ligne de `files.ndjson` par une
 valeur de `skip_reason` aurait exigé d'étendre un enum fermé, donc de faire échouer la
 lecture chez tout lecteur existant.
+
+`niveau` nomme jusqu'où l'anonymisation est allée : `comptes`, `formes` ou `noms`. Ils ne
+portent pas la même promesse, et un lecteur doit ignorer une valeur qu'il ne connaît pas.
 
 `text_rewritten` énumère, par surface de texte, les **formes qui ont été traitées**. Jamais
 ce qui reste. Les valeurs possibles sont `mentions`, `adresses`, `telephones`,

@@ -105,6 +105,15 @@ export const anonymizationRecordSchema = z.object({
   /** Pieces jointes, avatars et emojis personnalises non repris. */
   binaries_removed: z.boolean(),
   /**
+   * Niveau applique.
+   *
+   * Les niveaux n ont pas le meme cout et ne portent donc pas la meme promesse :
+   * pseudonymiser les comptes ne touche a rien de ce qu on lit, remplacer les
+   * noms ecrits en clair abime du texte. Un lecteur doit savoir lequel a ete
+   * tenu, et une valeur inconnue s ignore comme partout ailleurs dans ce format.
+   */
+  niveau: z.string(),
+  /**
    * Ce qui a ETE FAIT, par surface. Jamais ce qui reste.
    *
    * Un booleen unique ne pouvait plus rien dire de vrai : il ne nommait qu une

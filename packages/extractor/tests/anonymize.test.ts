@@ -5,6 +5,7 @@ import { isMattermostId, type Manifest, manifestSchema } from "@mmarchive/shared
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AnonymizeError, anonymizeArchive } from "../src/redact/anonymize-archive.js";
 import { buildIdentityTable } from "../src/redact/identity-table.js";
+import type { NiveauAnonymisation } from "../src/redact/niveau.js";
 import { Logger } from "../src/ui/logger.js";
 import { verifyArchive } from "../src/verify/checks.js";
 
@@ -322,8 +323,8 @@ afterEach(async () => {
   await rm(join(sortie, ".."), { recursive: true, force: true });
 });
 
-async function anonymiser(): Promise<void> {
-  await anonymizeArchive({ archiveDir: source, outDir: sortie, logger: silent });
+async function anonymiser(niveau: NiveauAnonymisation = "noms"): Promise<void> {
+  await anonymizeArchive({ archiveDir: source, outDir: sortie, niveau, logger: silent });
 }
 
 describe("l archive source", () => {
@@ -492,7 +493,11 @@ describe("la table de correspondance", () => {
   it("ne substitue un nom qu en jeton entier, jamais dans un mot", async () => {
     // Un remplacement brut de la valeur de props atteindrait l interieur des
     // mots : un compte nomme « bob » transformerait « bobsleigh ».
-    await anonymiser();
+    //
+    // Au niveau « formes », qui ne remplace pas les noms ecrits en clair : ce
+    // test isole la substitution par props, et le niveau superieur remplacerait
+    // « martin » par ailleurs, ce qui melangerait deux mesures.
+    await anonymiser("formes");
     const bob = await fiche(BOB_ROLES);
     const posts = await lire(`posts/${CHANNEL}.ndjson`);
     const message = posts.find((p) => p.id === "w".repeat(26))?.message as string;

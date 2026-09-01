@@ -40,6 +40,8 @@ function contexte(over: {
     texteCorps: compteursTexteVides(),
     texteBlocs: compteursTexteVides(),
     binairesNonRepris: 0,
+    niveau: "noms",
+    vocabulaire: undefined,
   };
   return {
     resultat,

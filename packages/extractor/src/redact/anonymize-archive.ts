@@ -43,6 +43,19 @@ import { Logger } from "../ui/logger.js";
 import { TOOL_VERSION } from "../version.js";
 import { buildIdentityTable, type Identite } from "./identity-table.js";
 import {
+  compterFrequences,
+  construireVocabulaire,
+  formesCandidates,
+  type VocabulaireNoms,
+} from "./name-vocabulary.js";
+import {
+  NIVEAU_PAR_DEFAUT,
+  type NiveauAnonymisation,
+  reecritLesFormes,
+  reecritLesNoms,
+  SEUIL_FREQUENCE_PAR_DEFAUT,
+} from "./niveau.js";
+import {
   type CompteursProps,
   compteursPropsVides,
   type ResolveurIdentite,
@@ -121,6 +134,10 @@ export interface AnonymizeResult {
   readonly texteCorps: CompteursTexte;
   /** Formes ancrees reecrites dans le texte des blocs attachments. */
   readonly texteBlocs: CompteursTexte;
+  /** Niveau applique. Le rapport et le manifeste le nomment tous les deux. */
+  readonly niveau: NiveauAnonymisation;
+  /** Absent aux niveaux qui ne remplacent pas les noms ecrits en clair. */
+  readonly vocabulaire: VocabulaireNoms | undefined;
   /** Noms designes par props mais absents du texte. Sans consequence. */
   readonly nomsNonTrouves: number;
   /** Pieces jointes dont la metadonnee est conservee mais le binaire non repris. */
@@ -384,10 +401,15 @@ export async function anonymizeArchive(options: {
   archiveDir: string;
   outDir: string;
   force?: boolean;
+  niveau?: NiveauAnonymisation;
+  /** Au dela, une forme est traitee comme un mot ordinaire et non comme un nom. */
+  seuilFrequence?: number;
   logger?: Logger;
 }): Promise<AnonymizeResult> {
   const logger = options.logger ?? new Logger();
   const force = options.force ?? false;
+  const niveau = options.niveau ?? NIVEAU_PAR_DEFAUT;
+  const seuilFrequence = options.seuilFrequence ?? SEUIL_FREQUENCE_PAR_DEFAUT;
   const source = createArchivePaths(options.archiveDir);
   const sortie = createArchivePaths(options.outDir);
 
@@ -426,6 +448,35 @@ export async function anonymizeArchive(options: {
     estSubstitution: (nom) => emis.has(nom.toLowerCase()),
     uidPourIdentifiant: (id) => table.get(id)?.uid,
   };
+
+  /**
+   * Vocabulaire des noms ecrits en clair, au seul niveau qui les remplace.
+   *
+   * Il demande une passe de lecture supplementaire pour compter les frequences,
+   * et c est le prix de la seule etape sans ancrage : sans ce comptage, rien ne
+   * distingue un prenom d un mot ordinaire qui se trouve etre aussi un nom.
+   */
+  let vocabulaire: VocabulaireNoms | undefined;
+  if (reecritLesNoms(niveau)) {
+    logger.info("Comptage des noms dans le corpus.");
+    const candidates = new Set<string>();
+    const parIdentite = new Map<string, string>();
+    for await (const user of readNdjson<ArchiveUser>(source.users)) {
+      for (const forme of formesCandidates(user)) candidates.add(forme);
+      const identite = table.get(user.id);
+      if (identite !== undefined) parIdentite.set(user.id, identite.pseudonyme);
+    }
+    const frequences = await compterFrequences(source.root, candidates);
+    const users: ArchiveUser[] = [];
+    for await (const user of readNdjson<ArchiveUser>(source.users)) users.push(user);
+    vocabulaire = construireVocabulaire(users, parIdentite, frequences, seuilFrequence);
+    logger.info(
+      `${String(vocabulaire.formes.size)} formes retenues, ` +
+        `${String(vocabulaire.ecarteesParFrequence)} ecartees comme trop frequentes, ` +
+        `${String(vocabulaire.comptesCouverts)} comptes couverts et ` +
+        `${String(vocabulaire.comptesNonCouverts)} laisses nommables.`,
+    );
+  }
 
   const props = compteursPropsVides();
   const references = compteursReferencesVides();
@@ -602,7 +653,13 @@ export async function anonymizeArchive(options: {
         // Puis les formes ancrees, sur le resultat : les noms que props designe
         // sont deja substitues, donc les mentions qui les portent resolvent vers
         // un nom de substitution et sont reconnues comme deja traitees.
-        const corps = reecrireFormesAncrees(texte.message, resolveur, texteCorps);
+        //
+        // La substitution ci-dessus, elle, ne depend d aucun niveau : sans elle,
+        // une ligne apparie une identite reelle et son pseudonyme, ce qui n a de
+        // sens a aucun niveau.
+        const corps = reecritLesFormes(niveau)
+          ? reecrireFormesAncrees(texte.message, resolveur, texteCorps, vocabulaire?.formes)
+          : texte.message;
         const anonyme: ArchivePost = {
           id: post.id,
           channel_id: post.channel_id,
@@ -619,7 +676,13 @@ export async function anonymizeArchive(options: {
           // y survivrait a une reecriture du corps, et l index en fait une colonne
           // cherchable a part.
           hashtags: "",
-          props: reduireProps(post.props, resolveur, props, texteBlocs),
+          props: reduireProps(
+            post.props,
+            resolveur,
+            props,
+            reecritLesFormes(niveau) ? texteBlocs : undefined,
+            vocabulaire?.formes,
+          ),
           file_ids: post.file_ids,
           reactions: reactionsAnonymes,
         };
@@ -636,6 +699,7 @@ export async function anonymizeArchive(options: {
   }
 
   await ecrireManifeste(source.manifest, sortie.manifest, {
+    niveau,
     table,
     parUsername,
     counts: { teams, channels: canaux, posts, users: comptes, emojis, attachments: 0 },
@@ -664,6 +728,8 @@ export async function anonymizeArchive(options: {
     nomsNonTrouves,
     texteCorps,
     texteBlocs,
+    niveau,
+    vocabulaire,
     binairesNonRepris,
   };
 }
@@ -672,6 +738,7 @@ async function ecrireManifeste(
   entree: string,
   destination: string,
   contexte: {
+    niveau: NiveauAnonymisation;
     table: Map<string, Identite>;
     parUsername: Map<string, Identite>;
     counts: {
@@ -733,10 +800,10 @@ async function ecrireManifeste(
       binaries_removed: true,
       // Les deux surfaces portent les memes formes : le meme moteur et la meme
       // table tournent sur les deux, et la promesse doit etre unique.
-      text_rewritten: {
-        message: [...FORMES_REECRITES],
-        "props.attachments": [...FORMES_REECRITES],
-      },
+      niveau: contexte.niveau,
+      text_rewritten: reecritLesFormes(contexte.niveau)
+        ? { message: [...FORMES_REECRITES], "props.attachments": [...FORMES_REECRITES] }
+        : {},
     },
     ...(contexte.premier === null || contexte.dernier === null
       ? {}
