@@ -24,25 +24,37 @@ type de commit conventionnel pour que le CHANGELOG et le calcul de version reste
 
 | # | Constat | Statut |
 | --- | --- | --- |
-| 1 | Section juridique décrivant un procédé périmé | corrigé, `fix(extractor)` |
-| 2 | `horsControle` figé quel que soit le niveau | corrigé, `fix(extractor)` |
-| 3 | Catalogue d'endpoints listé à la main | corrigé, `fix(extractor)` |
-| 4 | Niveau `comptes` réécrivant le texte qu'il déclare intact | corrigé, `fix(extractor)` |
-| 5 | Codes de sortie incohérents | à venir, `fix(cli)` |
-| 6 | Progression et diagnostics sur stdout | à venir, `fix(cli)` |
-| 7 | `since` absent du format | corrigé, `fix(extractor)` |
-| 8 | Accumulations mémoire bornées par les messages | partiel, `identifiantsColles` plafonné |
-| 9 | `MessageList` non mémoïsé | à venir, `perf(viewer)` |
-| 10 | Rappels recréés à chaque rendu | à venir, `perf(viewer)` |
-| 11 | Aucun `React.memo` | à venir, `perf(viewer)` |
-| 12 | Manques de la grille CLI | à venir, `feat(cli)` |
-| 13 | Aucun `import()` dynamique | à venir, `perf(viewer)` |
+| 1 | Section juridique décrivant un procédé périmé | corrigé, #28 |
+| 2 | `horsControle` figé quel que soit le niveau | corrigé, #28 |
+| 3 | Catalogue d'endpoints listé à la main | corrigé, #28 |
+| 4 | Niveau `comptes` réécrivant le texte qu'il déclare intact | corrigé, #28 |
+| 5 | Codes de sortie incohérents | corrigé, #29 |
+| 6 | Progression et diagnostics sur stdout | corrigé, #29 |
+| 7 | `since` absent du format | corrigé, #28 |
+| 8 | Accumulations mémoire bornées par les messages | partiel, #28 |
+| 9 | `MessageList` non mémoïsé | corrigé, #30 |
+| 10 | Rappels recréés à chaque rendu | corrigé, #30 |
+| 11 | Aucun `React.memo` | corrigé, #30 |
+| 12 | Manques de la grille CLI | corrigé, #31 |
+| 13 | Aucun `import()` dynamique | écarté, arbitrage mesuré |
 
-Pour le constat 8, seul `identifiantsColles` est traité : c'était la seule des trois
-structures à croître sans borne pour un bénéfice nul. `seenIds` sert aussi à détecter les
-racines de fil orphelines, ce qui exige le canal entier, et son coût mesuré est de 5 Mo sur
-le pire canal de l'archive de référence. `bundle.messages` est structurel au mode de
-lecture du viewer. Les deux restent documentés ici comme assumés.
+**Constat 8, partiel et assumé.** Seul `identifiantsColles` est plafonné : c'était la
+seule des trois structures à croître sans borne pour un bénéfice nul. `seenIds` sert aussi
+à détecter les racines de fil orphelines, ce qui exige le canal entier, et son coût mesuré
+est de 5 Mo sur le pire canal de l'archive de référence. `bundle.messages` est structurel
+au mode de lecture du viewer.
+
+**Constat 13, écarté.** `standardEmoji` est appelé de façon synchrone pendant le rendu du
+Markdown : le différer impose soit un rendu asynchrone, soit un scintillement
+`:shortcode:` sur chaque message. La table pèse 15,5 Ko gzip sur un bundle de 149,5 Ko,
+soit 10 %. Dix pour cent du bundle ne valent pas ce scintillement, dans une application
+qui charge déjà un wasm de 865 Ko en mode lite. Le constat reste ici pour que la décision
+soit retrouvable, pas pour être repris tel quel.
+
+**Sur le constat 5, l'audit s'était trompé par omission.** Il listait quatre binaires ;
+il y en a cinq. `mmarchive-serve` sortait lui aussi en 1 sur une option inconnue, et c'est
+la garde dérivée des `bin` déclarés, écrite en corrigeant, qui l'a trouvé. Une liste tenue
+à la main, encore.
 
 ---
 
