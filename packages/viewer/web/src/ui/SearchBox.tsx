@@ -2,6 +2,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
   type ReactNode,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -32,6 +33,25 @@ export function SearchBox({ initial }: { readonly initial: string }): ReactNode 
   const [surligne, setSurligne] = useState(0);
   const [ouvert, setOuvert] = useState(false);
   const champ = useRef<HTMLInputElement>(null);
+  const fermeture = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const annulerFermeture = (): void => {
+    if (fermeture.current !== undefined) {
+      clearTimeout(fermeture.current);
+      fermeture.current = undefined;
+    }
+  };
+
+  // Sans ce nettoyage, une navigation pendant le delai laisse le minuteur
+  // s executer et poser un etat sur un composant demonte. Le nettoyage lit le
+  // ref, qui est stable, et non la fonction, recreee a chaque rendu : la
+  // declarer en dependance rejouerait l effet sans cesse.
+  useEffect(() => {
+    const differe = fermeture;
+    return () => {
+      if (differe.current !== undefined) clearTimeout(differe.current);
+    };
+  }, []);
 
   const candidats = useMemo(() => {
     const comptes: Suggestion[] = [...userById.values()]
@@ -39,7 +59,9 @@ export function SearchBox({ initial }: { readonly initial: string }): ReactNode 
       .map((user) => ({
         valeur: user.username,
         libelle: user.display === "" ? user.username : user.display,
-        detail: user.deactivated ? "compte desactive" : (user.position ?? undefined),
+        // `position` est une chaine, jamais nulle : sans ce test, un compte sans
+        // fonction affiche un element vide au lieu de n en afficher aucun.
+        detail: user.deactivated ? "compte desactive" : user.position || undefined,
       }));
     const canaux: Suggestion[] = channels.map((canal) => ({
       valeur: canal.name,
@@ -153,13 +175,18 @@ export function SearchBox({ initial }: { readonly initial: string }): ReactNode 
               setOuvert(true);
             }}
             onFocus={() => {
+              // Le champ reprend la main avant la fin du delai : la fermeture
+              // differee n a plus lieu d etre.
+              annulerFermeture();
               setOuvert(true);
             }}
             onBlur={() => {
               // Retarde : un clic sur une proposition passe par le blur du
               // champ avant d atteindre la liste, et fermer tout de suite
               // annulerait le choix.
-              setTimeout(() => {
+              annulerFermeture();
+              fermeture.current = setTimeout(() => {
+                fermeture.current = undefined;
                 setOuvert(false);
               }, 120);
             }}

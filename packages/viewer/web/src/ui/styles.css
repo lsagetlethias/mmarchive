@@ -174,7 +174,11 @@ a:focus-visible {
 
 .suggestion-libelle {
   color: var(--texte);
-  /* Le libelle cede la place avant la valeur, qui est ce qu on insere. */
+  /* Le libelle cede la place avant la valeur, qui est ce qu on insere.
+     `min-width: 0` est indispensable : dans une boite flexible, un enfant refuse
+     de retrecir en deca de son contenu, et l ellipse ne s applique jamais. */
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
