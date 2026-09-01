@@ -191,8 +191,8 @@ Champ optionnel, absent d'une archive d'extraction. Il est posé par
   "binaries_removed": true,
   "niveau": "noms",
   "text_rewritten": {
-    "message": ["mentions", "adresses", "telephones", "identifiants"],
-    "props.attachments": ["mentions", "adresses", "telephones", "identifiants"]
+    "message": ["mentions", "adresses", "telephones", "identifiants", "noms"],
+    "props.attachments": ["mentions", "adresses", "telephones", "identifiants", "noms"]
   }
 }
 ```
@@ -209,8 +209,9 @@ portent pas la même promesse, et un lecteur doit ignorer une valeur qu'il ne co
 ce qui reste. Les valeurs possibles sont `mentions`, `adresses`, `telephones`,
 `identifiants` et `noms` ; un lecteur doit ignorer une valeur qu'il ne connaît pas.
 
-L'absence de `noms` dit que le corps des messages porte encore des noms écrits en clair, et
-donc que **l'archive n'est pas diffusable**. Cette lecture par l'absence est délibérée : une
+L'absence de `noms`, comme dans une archive produite au niveau `formes`, dit que le corps des
+messages porte encore des noms écrits en clair, et donc que **l'archive n'est pas
+diffusable**. Cette lecture par l'absence est délibérée : une
 liste de ce qui reste, une fois vide, se lirait comme une autorisation, alors que
 l'anonymisation ne peut pas en donner.
 

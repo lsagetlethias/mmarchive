@@ -25,14 +25,14 @@ function user(over: Partial<ArchiveUser>): ArchiveUser {
 }
 
 describe("les formes candidates", () => {
-  it("ecarte ce qui est trop court pour designer quelqu un", () => {
-    // Treize formes de deux caracteres dans l archive de reference, dont deux
-    // paraissent plus d un million de fois : ce sont des mots que quelqu un
-    // porte aussi comme surnom.
+  it("retient toute forme simple, le filtrage par longueur venant apres", () => {
+    // Les formes trop courtes restent candidates pour que le compte qui n en a
+    // pas d autre apparaisse au rapport comme restant nommable. Les ecarter ici
+    // le faisait disparaitre des deux colonnes.
     const formes = formesCandidates(
       user({ first_name: "Ana", last_name: "Durand", nickname: "AD" }),
     );
-    expect([...formes]).toEqual(["durand"]);
+    expect([...formes].sort()).toEqual(["ad", "ana", "durand"]);
   });
 
   it("normalise les accents et la casse", () => {
@@ -88,6 +88,9 @@ describe("le vocabulaire", () => {
   it("compte comme non couvert un compte dont aucune forme n est retenue", () => {
     // C est le chiffre que le rapport doit annoncer : aucun reglage ne couvre
     // tout le monde, et le taire serait promettre ce qu on ne tient pas.
+    //
+    // « Ana » fait trois lettres, donc rien ne peut la remplacer : ce compte
+    // reste nommable en clair et doit apparaitre comme tel.
     const v = construireVocabulaire(
       [user({ first_name: "Ana" }), user({ id: "v".repeat(26), last_name: "Durand" })],
       new Map([["v".repeat(26), "Anon-Basalte-Sobre"]]),
@@ -95,6 +98,15 @@ describe("le vocabulaire", () => {
       200,
     );
     expect(v.comptesCouverts).toBe(1);
+    expect(v.comptesNonCouverts).toBe(1);
+  });
+
+  it("ne compte pas un compte sans aucun nom au repertoire", () => {
+    // L outil ne peut pas le nommer, donc il ne court pas ce risque-la : le
+    // faire figurer parmi les restants nommables gonflerait un chiffre que le
+    // rapport presente comme un risque.
+    const v = construireVocabulaire([user({})], new Map(), new Map(), 200);
+    expect(v.comptesCouverts).toBe(0);
     expect(v.comptesNonCouverts).toBe(0);
   });
 });

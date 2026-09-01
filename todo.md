@@ -235,7 +235,7 @@ authentification. Cadré dans `docs/DECISION-ANONYMISATION.md`.
       le corpus, mesurée par une passe dédiée : neuf formes font la moitié des occurrences du
       vocabulaire et sont des mots ordinaires. Seuil par défaut 200, le point d'inflexion
       mesuré, réglable par `--seuil-noms`. 1 715 formes retenues, 1 504 comptes couverts,
-      670 laissés nommables, chiffre annoncé au rapport et qu'aucun réglage ne ramène à zéro.
+      683 laissés nommables, chiffre annoncé au rapport et qu'aucun réglage ne ramène à zéro.
 - [x] **Trois niveaux d'anonymisation** (`comptes`, `formes`, `noms`), parce que les étapes
       n'ont pas le même coût sur le texte et ne portent donc pas la même promesse. Le défaut
       est le plus protecteur ; les niveaux inférieurs sont des choix explicites.

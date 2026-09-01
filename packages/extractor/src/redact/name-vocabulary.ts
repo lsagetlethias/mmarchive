@@ -45,7 +45,14 @@ export interface VocabulaireNoms {
   readonly formes: ReadonlyMap<string, string>;
   /** Formes ecartees faute d etre assez rares, pour le rapport. */
   readonly ecarteesParFrequence: number;
-  /** Comptes dont aucune forme n a pu etre retenue. */
+  /**
+   * Comptes qui portent un nom dans l annuaire et dont aucune forme n a pu etre
+   * retenue : trop courte, trop partagee, ou trop frequente dans le corpus.
+   *
+   * Ce sont eux qui restent nommables en clair, et c est le chiffre que le
+   * rapport annonce. Les comptes sans aucun nom au repertoire n y figurent pas :
+   * l outil ne peut pas les nommer, donc ils ne courent pas ce risque-la.
+   */
   readonly comptesNonCouverts: number;
   readonly comptesCouverts: number;
 }
@@ -65,9 +72,14 @@ export function formesCandidates(user: ArchiveUser): Set<string> {
   const formes = new Set<string>();
   for (const champ of [user.first_name, user.last_name, user.nickname]) {
     const forme = normaliserForme(champ);
-    if (forme.length >= LONGUEUR_MINIMALE && !forme.includes(" ")) formes.add(forme);
+    if (forme !== "" && !forme.includes(" ")) formes.add(forme);
   }
   return formes;
+}
+
+/** Vrai si cette forme est assez longue pour designer quelqu un. */
+export function formeAssezLongue(forme: string): boolean {
+  return forme.length >= LONGUEUR_MINIMALE;
 }
 
 /**
@@ -89,7 +101,9 @@ export function construireVocabulaire(
     const formes = formesCandidates(user);
     if (formes.size === 0) continue;
     parCompte.push({ id: user.id, formes });
-    for (const forme of formes) porteurs.set(forme, (porteurs.get(forme) ?? 0) + 1);
+    for (const forme of formes) {
+      if (formeAssezLongue(forme)) porteurs.set(forme, (porteurs.get(forme) ?? 0) + 1);
+    }
   }
 
   const formes = new Map<string, string>();
@@ -97,6 +111,11 @@ export function construireVocabulaire(
   const vues = new Set<string>();
   for (const { id, formes: candidates } of parCompte) {
     for (const forme of candidates) {
+      // Une forme trop courte reste comptee comme candidate, pour que le compte
+      // qui n en a pas d autre apparaisse au rapport comme restant nommable.
+      // L ecarter en amont le faisait disparaitre des deux colonnes, et
+      // l archive paraissait plus sure qu elle ne l est.
+      if (!formeAssezLongue(forme)) continue;
       if ((porteurs.get(forme) ?? 0) > PORTEURS_MAXIMUM) continue;
       if ((frequences.get(forme) ?? 0) > seuilFrequence) {
         if (!vues.has(forme)) {

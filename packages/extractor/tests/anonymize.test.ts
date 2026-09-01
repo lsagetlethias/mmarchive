@@ -581,11 +581,14 @@ describe("le manifeste", () => {
     // Le manifeste enumere ce qui a ETE FAIT, jamais ce qui reste : l absence de
     // « noms » se lit sans etre commentee, et une liste de residus vide se
     // lirait un jour comme le verdict positif que le rapport s interdit.
+    // Le niveau par defaut remplace les noms : le manifeste doit le dire, sans
+    // quoi il ment par omission sur ce qui a ete fait.
+    const formes = ["mentions", "adresses", "telephones", "identifiants", "noms"];
     expect(manifest.anonymized?.text_rewritten).toEqual({
-      message: ["mentions", "adresses", "telephones", "identifiants"],
-      "props.attachments": ["mentions", "adresses", "telephones", "identifiants"],
+      message: formes,
+      "props.attachments": formes,
     });
-    expect(manifest.anonymized?.text_rewritten.message).not.toContain("noms");
+    expect(manifest.anonymized?.niveau).toBe("noms");
   });
 
   it("recale les sept compteurs, pas seulement ceux que redact recalait", async () => {

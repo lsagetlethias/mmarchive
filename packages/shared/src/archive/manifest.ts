@@ -92,12 +92,12 @@ export type JoinedTeamRecord = z.infer<typeof joinedTeamRecordSchema>;
  * ne connait pas. Le type contraint ce que l outil ECRIT ; la validation accepte
  * ce qu il LIT.
  *
- * `noms` n y figure pas tant que le remplacement des noms ecrits en clair n est
- * pas livre : le manifeste ne doit pas pouvoir affirmer un travail qui n existe
- * pas.
+ * `noms` n est enumere que par le niveau qui les remplace : le manifeste dit ce
+ * qui a ete fait, et une liste figee mentirait par omission des que le niveau
+ * change.
  */
 export type RewrittenSurface = "message" | "props.attachments";
-export type RewrittenForm = "mentions" | "adresses" | "telephones" | "identifiants";
+export type RewrittenForm = "mentions" | "adresses" | "telephones" | "identifiants" | "noms";
 
 export const anonymizationRecordSchema = z.object({
   at: isoDate,
@@ -111,8 +111,11 @@ export const anonymizationRecordSchema = z.object({
    * pseudonymiser les comptes ne touche a rien de ce qu on lit, remplacer les
    * noms ecrits en clair abime du texte. Un lecteur doit savoir lequel a ete
    * tenu, et une valeur inconnue s ignore comme partout ailleurs dans ce format.
+   *
+   * Optionnel : une archive produite avant l introduction du champ n en porte
+   * pas, et doit rester lisible.
    */
-  niveau: z.string(),
+  niveau: z.string().optional(),
   /**
    * Ce qui a ETE FAIT, par surface. Jamais ce qui reste.
    *

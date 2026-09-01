@@ -465,7 +465,7 @@ Deux noms distincts rendent la confusion impossible à commettre plutôt que rar
    adresse ni aucun numéro, et zéro mention portant le nom d'un compte connu.
 5. Le remplacement des noms en clair, sur les deux surfaces. **Livré**, derrière le niveau
    `noms`. Mesuré sur l'archive de référence avec le seuil par défaut : 1 715 formes retenues,
-   590 écartées comme trop fréquentes, 1 504 comptes couverts et 670 laissés nommables. Les
+   590 écartées comme trop fréquentes, 1 504 comptes couverts et 683 laissés nommables. Les
    occurrences de noms de comptes passent de 1 358 817 à 795 860, celles qui restent portant
    sur les formes écartées.
 

@@ -78,12 +78,16 @@ export class AnonymizeError extends Error {
 }
 
 /**
- * Formes de texte que cette version reecrit.
+ * Formes de texte reecrites, selon le niveau.
  *
- * `noms` n y figure pas : le remplacement des noms ecrits en clair n est pas
- * livre, et le manifeste enumere ce qui a ete fait, jamais ce qui reste.
+ * Le manifeste enumere ce qui a ETE FAIT : une liste figee mentirait par
+ * omission des que le niveau change, un lecteur en concluant que les noms
+ * subsistent alors qu ils ont ete remplaces.
  */
-const FORMES_REECRITES: RewrittenForm[] = ["mentions", "adresses", "telephones", "identifiants"];
+function formesReecrites(niveau: NiveauAnonymisation): RewrittenForm[] {
+  const ancrees: RewrittenForm[] = ["mentions", "adresses", "telephones", "identifiants"];
+  return reecritLesNoms(niveau) ? [...ancrees, "noms"] : ancrees;
+}
 
 /** Fichiers attendus a la racine d une archive. Tout le reste fait echouer. */
 const RACINE_ATTENDUE = new Set<string>([
@@ -802,7 +806,10 @@ async function ecrireManifeste(
       // table tournent sur les deux, et la promesse doit etre unique.
       niveau: contexte.niveau,
       text_rewritten: reecritLesFormes(contexte.niveau)
-        ? { message: [...FORMES_REECRITES], "props.attachments": [...FORMES_REECRITES] }
+        ? {
+            message: formesReecrites(contexte.niveau),
+            "props.attachments": formesReecrites(contexte.niveau),
+          }
         : {},
     },
     ...(contexte.premier === null || contexte.dernier === null

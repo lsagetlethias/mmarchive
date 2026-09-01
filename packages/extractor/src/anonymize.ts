@@ -97,7 +97,7 @@ program
       process.exitCode = 2;
       return;
     }
-    if (opts.seuilNoms !== undefined && !/^\d+$/.test(opts.seuilNoms)) {
+    if (opts.seuilNoms !== undefined && !/^[1-9]\d*$/.test(opts.seuilNoms)) {
       logger.error(`--seuil-noms doit etre un entier positif, recu "${opts.seuilNoms}".`);
       process.exitCode = 2;
       return;
