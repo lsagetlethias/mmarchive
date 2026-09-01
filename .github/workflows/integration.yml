@@ -38,6 +38,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Aucune etape n a besoin de Git authentifie, et les scripts de cycle de
+          # vie que `pnpm install` execute lisent .git/config.
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
 

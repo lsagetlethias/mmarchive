@@ -28,7 +28,8 @@ import { Logger } from "../../packages/extractor/src/ui/logger.js";
 import { RunReporter } from "../../packages/extractor/src/ui/run-reporter.js";
 import { type EtatSeme, retirerLectureSansAdhesion, semer } from "./seed.js";
 
-const URL_INSTANCE = process.env["MM_INTEGRATION_URL"];
+// Vide vaut absent : sans cela le test partirait sur une base d URL invalide.
+const URL_INSTANCE = (process.env["MM_INTEGRATION_URL"] ?? "").trim();
 
 const silencieux = new Logger({ level: "error" });
 
@@ -45,7 +46,7 @@ function rapporteurMuet(): RunReporter {
   });
 }
 
-describe.skipIf(URL_INSTANCE === undefined)("extraction contre un Mattermost reel", () => {
+describe.skipIf(URL_INSTANCE === "")("extraction contre un Mattermost reel", () => {
   let etat: EtatSeme;
   let api: MattermostApi;
   let client: MattermostClient;

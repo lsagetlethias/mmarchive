@@ -22,7 +22,11 @@ demonter
 docker compose -f "$compose" up -d
 
 echo "Attente de l API sur $url"
-for _ in $(seq 1 60); do
+# Echeance reelle plutot qu un compte de tours : chaque tour peut couter trois
+# secondes de curl plus trois de pause, et soixante tours annonceraient trois
+# minutes pour en attendre six.
+limite=$((SECONDS + 180))
+while ((SECONDS < limite)); do
   if curl -fsS -m 3 "$url/api/v4/system/ping" >/dev/null 2>&1; then
     echo "  API joignable"
     # Surtout pas `exec` : il remplace ce shell, donc le piege de sortie

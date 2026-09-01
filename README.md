@@ -98,20 +98,25 @@ très visible.
 Selon la configuration de votre instance, cette permission peut vous être déjà accordée :
 un Mattermost par défaut laisse le rôle `team_user` lire les canaux publics de ses teams
 sans les rejoindre. Dans ce cas, aucun join n'est nécessaire et aucun message n'est publié.
-mmarchive ne le suppose jamais : il sonde chaque canal, en lecture seule, et vous dit ce
-qu'il en est avant que vous ne choisissiez.
+mmarchive ne le suppose jamais : par défaut il sonde chaque canal non rejoint, en lecture
+seule, et vous dit ce qu'il en est avant que vous ne choisissiez. `--no-probe` désactive ce
+sondage, au prix d'un inventaire qui classera par prudence tout canal non rejoint comme
+exigeant un join.
 
 mmarchive ne rejoint **jamais** un canal de sa propre initiative. Vous les désignez un
 par un, et l'outil vous montre le nombre exact de messages système que votre sélection
 va publier avant de faire quoi que ce soit.
 
-Trois catégories, distinguées partout :
+Quatre catégories, distinguées partout :
 
-| Catégorie           | Lisible                           | Rejoindre nécessaire | Effet de bord                 |
-| ------------------- | --------------------------------- | -------------------- | ----------------------------- |
-| Public, déjà membre | oui                               | non                  | aucun                         |
-| Public, non rejoint | non                               | oui                  | message système dans le canal |
-| Public, archivé     | selon la configuration du serveur | impossible           | aucun                         |
+| Catégorie                 | Lisible                           | Rejoindre nécessaire | Effet de bord                 |
+| ------------------------- | --------------------------------- | -------------------- | ----------------------------- |
+| Public, déjà membre       | oui                               | non                  | aucun                         |
+| Public, lisible sans join | oui, sondage concluant            | non                  | aucun                         |
+| Public, non rejoint       | non                               | oui                  | message système dans le canal |
+| Public, archivé           | selon la configuration du serveur | impossible           | aucun                         |
+
+La deuxième ligne est de loin la plus fréquente sur l'instance qui a servi de référence.
 
 ---
 

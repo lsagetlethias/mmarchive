@@ -14,7 +14,9 @@
  * un canal archive, et un compte desactive dont les messages subsistent.
  */
 
-const BASE = process.env["MM_INTEGRATION_URL"] ?? "http://localhost:8065";
+// Une variable definie mais vide donnerait une base d URL invalide, et des
+// erreurs sans rapport avec la cause.
+const BASE = (process.env["MM_INTEGRATION_URL"] ?? "").trim() || "http://localhost:8065";
 
 interface Compte {
   readonly id: string;
@@ -117,8 +119,9 @@ async function poster(
 
 export async function semer(): Promise<EtatSeme> {
   const marque = String(Date.now()).slice(-8);
-  // L administrateur est aussi le compte qui extraira : c est la situation
-  // reelle, un compte humain qui archive sa propre instance.
+  // L administrateur seme, il n extrait pas : l extraction se fait avec
+  // `lecteur`, un compte standard, qui est le cas que le cadrage decrit et le
+  // plus contraignant.
   const admin = await creerCompte(`admin${marque}`, `admin${marque}@exemple.test`);
   const autre = await creerCompte(`autre${marque}`, `autre${marque}@exemple.test`);
   const partant = await creerCompte(`partant${marque}`, `partant${marque}@exemple.test`);
@@ -146,8 +149,9 @@ export async function semer(): Promise<EtatSeme> {
     corps: { user_id: lecteur.id },
   });
 
-  // Cree par un autre compte, et l administrateur ne le rejoint pas : c est le
-  // cas qui exige un join, donc celui qui publie un message systeme visible.
+  // Cree par un autre compte, et celui qui extrait ne le rejoint jamais. Selon
+  // la configuration de l instance, le lire exige un join ou non : c est
+  // precisement ce que ce test verifie dans les deux sens.
   const nonRejoint = await creerCanal(autre.token, team.id, `ferme${marque}`, "Canal non rejoint");
   await poster(autre.token, nonRejoint, ["message hors de portee", "un autre"]);
 
