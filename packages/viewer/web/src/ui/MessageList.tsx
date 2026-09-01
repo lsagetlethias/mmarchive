@@ -1,8 +1,20 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Attachment, Message, MessageBundle, Reaction } from "../client/archive-client.js";
 import { formatDate, formatDay } from "../data.js";
 import { MessageRow } from "./Message.js";
+
+/** Cas vide partage : `?? []` recreerait un tableau a chaque rendu. */
+const AUCUNE_REACTION: readonly Reaction[] = [];
+const AUCUNE_PIECE_JOINTE: readonly Attachment[] = [];
 
 /** Deux messages du meme auteur a moins de cinq minutes forment un bloc. */
 const GROUPING_WINDOW_MS = 5 * 60 * 1000;
@@ -75,8 +87,16 @@ export function MessageList({
   // L API rend les messages du plus recent au plus ancien, parce que c est dans
   // ce sens qu une page se decoupe. La lecture, elle, se fait dans l ordre ou
   // la conversation s est deroulee.
-  const messages = [...bundle.messages].sort((a, b) => a.id - b.id);
-  const rows = buildRows(messages);
+  //
+  // Memoise parce que le virtualiseur rend a chaque frame de defilement, et que
+  // le tampon ne redescend jamais dans une session : mesure sur ce meme travail,
+  // 11 ms par rendu a 40 000 messages charges, soit les deux tiers du budget
+  // d une frame a 60 fps, contre 0,24 ms a 1 000.
+  const messages = useMemo(
+    () => [...bundle.messages].sort((a, b) => a.id - b.id),
+    [bundle.messages],
+  );
+  const rows = useMemo(() => buildRows(messages), [messages]);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -147,18 +167,24 @@ export function MessageList({
     if (element !== null && element.scrollTop < LOAD_THRESHOLD_PX) loadMore();
   }, [loadMore]);
 
-  const reactionsByMessage = new Map<number, Reaction[]>();
-  for (const reaction of bundle.reactions) {
-    const list = reactionsByMessage.get(reaction.messageId);
-    if (list === undefined) reactionsByMessage.set(reaction.messageId, [reaction]);
-    else list.push(reaction);
-  }
-  const attachmentsByMessage = new Map<number, Attachment[]>();
-  for (const attachment of bundle.attachments) {
-    const list = attachmentsByMessage.get(attachment.messageId);
-    if (list === undefined) attachmentsByMessage.set(attachment.messageId, [attachment]);
-    else list.push(attachment);
-  }
+  const reactionsByMessage = useMemo(() => {
+    const index = new Map<number, Reaction[]>();
+    for (const reaction of bundle.reactions) {
+      const list = index.get(reaction.messageId);
+      if (list === undefined) index.set(reaction.messageId, [reaction]);
+      else list.push(reaction);
+    }
+    return index;
+  }, [bundle.reactions]);
+  const attachmentsByMessage = useMemo(() => {
+    const index = new Map<number, Attachment[]>();
+    for (const attachment of bundle.attachments) {
+      const list = index.get(attachment.messageId);
+      if (list === undefined) index.set(attachment.messageId, [attachment]);
+      else list.push(attachment);
+    }
+    return index;
+  }, [bundle.attachments]);
 
   return (
     <div className="liste-messages" ref={scrollRef} onScroll={onScroll} key={sourceKey}>
@@ -193,8 +219,8 @@ export function MessageList({
               ) : row.message === undefined ? null : (
                 <MessageRow
                   message={row.message}
-                  reactions={reactionsByMessage.get(row.message.id) ?? []}
-                  attachments={attachmentsByMessage.get(row.message.id) ?? []}
+                  reactions={reactionsByMessage.get(row.message.id) ?? AUCUNE_REACTION}
+                  attachments={attachmentsByMessage.get(row.message.id) ?? AUCUNE_PIECE_JOINTE}
                   grouped={row.grouped ?? false}
                   replyCount={bundle.replyCounts[String(row.message.id)] ?? 0}
                   highlighted={focusId === row.message.id}

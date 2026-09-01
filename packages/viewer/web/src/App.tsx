@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import type { Message, MessageBundle } from "./client/archive-client.js";
 import { formatDate, useArchive } from "./data.js";
 import { channelHref, navigate, type Route, searchHref, useRoute } from "./route.js";
@@ -66,6 +66,14 @@ function ChannelView({
   const [error, setError] = useState<string | undefined>();
   const channel = channelById.get(channelId);
 
+  // Passee en fonction inline, elle changeait d identite a chaque rendu, et la
+  // liste la met en dependance de son rappel de defilement : toute memoisation
+  // en aval etait annulee d avance.
+  const loadOlder = useCallback(
+    (before: number) => client.channelMessages(channelId, { limit: 50, before }),
+    [client, channelId],
+  );
+
   useEffect(() => {
     let cancelled = false;
     setInitial(undefined);
@@ -112,7 +120,7 @@ function ChannelView({
         <MessageList
           sourceKey={`${String(channelId)}-${String(focusId ?? 0)}`}
           initial={initial}
-          loadOlder={(before) => client.channelMessages(channelId, { limit: 50, before })}
+          loadOlder={loadOlder}
           onOpenThread={onOpenThread}
           focusId={focusId}
         />
