@@ -1,6 +1,12 @@
 import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { codeDeSortieCommander, describeError } from "@mmarchive/shared";
+import {
+  codeDeSortieCommander,
+  describeFailure,
+  describeProgram,
+  generateCompletion,
+  isCompletionShell,
+} from "@mmarchive/shared";
 import { Command } from "commander";
 import pc from "picocolors";
 import { type BuildProgress, type BuildReport, buildIndex } from "./index/build.js";
@@ -261,9 +267,20 @@ program
     }
   });
 
+program
+  .command("completion")
+  .description("Emet un script de completion shell sur la sortie standard.")
+  .argument("[shell]", "bash, zsh ou fish", "bash")
+  .action((shell: string, _opts: unknown, commande: Command) => {
+    if (!isCompletionShell(shell)) {
+      commande.error(`Shell inconnu : "${shell}". Attendu bash, zsh ou fish.`, { exitCode: 2 });
+    }
+    process.stdout.write(generateCompletion(describeProgram(program), shell));
+  });
+
 try {
   await program.parseAsync(process.argv);
 } catch (error) {
-  process.stderr.write(`${pc.red("Echec")} : ${describeError(error)}\n`);
+  process.stderr.write(`${pc.red("Echec")} : ${describeFailure(error, TOOL_VERSION)}\n`);
   process.exitCode = 1;
 }

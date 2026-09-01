@@ -1,4 +1,4 @@
-import { codeDeSortieCommander, describeError } from "@mmarchive/shared";
+import { codeDeSortieCommander, describeFailure } from "@mmarchive/shared";
 import { Command } from "commander";
 import { ArchivePathError } from "./archive/paths.js";
 import { type RedactMode, redactArchive } from "./redact/redact-archive.js";
@@ -49,7 +49,7 @@ program
 try {
   await program.parseAsync(process.argv);
 } catch (error) {
-  new Logger().error(describeError(error));
+  new Logger().error(describeFailure(error, TOOL_VERSION));
   // Une saisie fautive et une panne ne se traitent pas pareil dans un script :
   // la premiere se corrige et se relance, la seconde s enquete. Le README
   // documente 2 pour un argument invalide, ce qu est un identifiant malforme

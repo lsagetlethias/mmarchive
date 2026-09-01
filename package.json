@@ -5,6 +5,14 @@
   "description": "Archivage et consultation hors ligne des canaux publics d une instance Mattermost.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lsagetlethias/mmarchive.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lsagetlethias/mmarchive/issues"
+  },
+  "homepage": "https://github.com/lsagetlethias/mmarchive#readme",
   "engines": {
     "node": ">=24.0.0"
   },

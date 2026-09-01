@@ -112,6 +112,7 @@ function biggestReadableChannel(file: SelectionFile): SelectionChannel | undefin
 
 export interface DoctorCommandOptions extends RawOptions {
   readonly file?: string | undefined;
+  readonly json?: boolean | undefined;
 }
 
 /**
@@ -270,4 +271,46 @@ export async function doctorCommand(
       "Le ratio de pieces jointes retenu est de 5 %, mesure sur une extraction reelle : " +
       "il domine l estimation et varie beaucoup d une instance a l autre.",
   );
+
+  if (raw.json === true) {
+    // Ce que la commande sert a decider : les deux reglages a passer au run, et
+    // de quoi juger s ils valent la peine. Le reste est du commentaire pour un
+    // lecteur humain, et il reste sur la sortie d erreur.
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          instance: connection.url,
+          compte: account.username,
+          serveur: version,
+          rate_limit_headers: {
+            observed: snapshot.observed,
+            limit: snapshot.limit ?? null,
+            remaining: snapshot.remaining ?? null,
+          },
+          latency_ms: latencyMs > 0 ? latencyMs : null,
+          advice: {
+            rate_limit: advice.rateLimit,
+            concurrency: advice.concurrency,
+            posts_page_size: bestPageSize,
+          },
+          estimate: {
+            defaults: {
+              total_requests: before.totalRequests,
+              post_pages: before.postPages,
+              duration_ms: before.durationMs,
+            },
+            calibrated: {
+              total_requests: after.totalRequests,
+              post_pages: after.postPages,
+              duration_ms: after.durationMs,
+            },
+          },
+          channels,
+          messages,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+  }
 }
