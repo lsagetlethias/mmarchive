@@ -4,10 +4,10 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export interface LoggerOptions {
   readonly level?: LogLevel;
-  /** Desactive couleurs et caracteres decoratifs. Defaut: !process.stdout.isTTY. */
+  /** Desactive couleurs et caracteres decoratifs. Defaut: !process.stderr.isTTY. */
   readonly plain?: boolean;
-  readonly out?: NodeJS.WritableStream;
-  readonly err?: NodeJS.WritableStream;
+  /** Defaut: la sortie d erreur. Voir le commentaire de la classe. */
+  readonly stream?: NodeJS.WritableStream;
 }
 
 const LEVEL_WEIGHT: Record<LogLevel, number> = {
@@ -140,18 +140,32 @@ export function redactSecrets(text: string, secrets?: readonly string[]): string
   );
 }
 
+/**
+ * Tout ce que ce logger ecrit s adresse a un humain, donc rien n en sort par la
+ * sortie standard.
+ *
+ * La progression et les diagnostics partaient sur stdout, ce que l aide de
+ * `--verbose` et le README annoncaient pourtant sur la sortie d erreur. Un
+ * `mm-verify --archive ./a > rapport.txt` melangeait donc le titre de section et
+ * le chemin de l archive au resultat, et rien ne restait a l ecran.
+ *
+ * Un resultat destine a une machine ne passe pas par ici : il s ecrit avec
+ * `process.stdout.write`, comme `verify --json` le fait.
+ *
+ * Le mode plain se decide donc sur stderr et non sur stdout : sinon rediriger
+ * une sortie standard desormais vide suffirait a eteindre les couleurs de ce
+ * qui reste affiche.
+ */
 export class Logger {
   #level: LogLevel;
   readonly #plain: boolean;
-  readonly #out: NodeJS.WritableStream;
-  readonly #err: NodeJS.WritableStream;
+  readonly #stream: NodeJS.WritableStream;
   readonly #colors: ReturnType<typeof pc.createColors>;
 
   constructor(options?: LoggerOptions) {
     this.#level = options?.level ?? "info";
-    this.#plain = options?.plain ?? !process.stdout.isTTY;
-    this.#out = options?.out ?? process.stdout;
-    this.#err = options?.err ?? process.stderr;
+    this.#plain = options?.plain ?? !process.stderr.isTTY;
+    this.#stream = options?.stream ?? process.stderr;
     // createColors(false) renvoie des fonctions identite: aucun octet ANSI ne peut
     // sortir en mode plain, meme si une methode oublie de tester le drapeau.
     this.#colors = pc.createColors(!this.#plain);
@@ -167,14 +181,14 @@ export class Logger {
       return;
     }
     const prefix = this.#plain ? "[debug]" : this.#colors.dim(SYMBOL.debug);
-    this.#emit(this.#out, prefix, message, (line) => this.#colors.dim(line));
+    this.#emit(this.#stream, prefix, message, (line) => this.#colors.dim(line));
   }
 
   info(message: string): void {
     if (!this.#allows("info")) {
       return;
     }
-    this.#emit(this.#out, "", message);
+    this.#emit(this.#stream, "", message);
   }
 
   /** Encadre un titre de section. */
@@ -184,11 +198,13 @@ export class Logger {
     }
     const safe = redactSecrets(title);
     if (this.#plain) {
-      this.#out.write(`\n== ${safe} ==\n`);
+      this.#stream.write(`\n== ${safe} ==\n`);
       return;
     }
     const rule = SYMBOL.rule.repeat(displayWidth(safe));
-    this.#out.write(`\n${this.#colors.bold(this.#colors.cyan(safe))}\n${this.#colors.dim(rule)}\n`);
+    this.#stream.write(
+      `\n${this.#colors.bold(this.#colors.cyan(safe))}\n${this.#colors.dim(rule)}\n`,
+    );
   }
 
   success(message: string): void {
@@ -196,7 +212,7 @@ export class Logger {
       return;
     }
     const prefix = this.#plain ? "[ok]" : this.#colors.green(SYMBOL.success);
-    this.#emit(this.#out, prefix, message);
+    this.#emit(this.#stream, prefix, message);
   }
 
   warn(message: string): void {
@@ -204,7 +220,7 @@ export class Logger {
       return;
     }
     const prefix = this.#plain ? "[alerte]" : this.#colors.yellow(SYMBOL.warn);
-    this.#emit(this.#err, prefix, message, (line) => this.#colors.yellow(line));
+    this.#emit(this.#stream, prefix, message, (line) => this.#colors.yellow(line));
   }
 
   error(message: string): void {
@@ -212,7 +228,7 @@ export class Logger {
       return;
     }
     const prefix = this.#plain ? "[erreur]" : this.#colors.red(SYMBOL.error);
-    this.#emit(this.#err, prefix, message, (line) => this.#colors.red(line));
+    this.#emit(this.#stream, prefix, message, (line) => this.#colors.red(line));
   }
 
   /** Rend un tableau simple aligne. Utilise pour le recapitulatif des canaux a joindre. */
@@ -250,10 +266,10 @@ export class Logger {
     const separator = (this.#plain ? "-" : SYMBOL.rule).repeat(totalWidth);
     const headerLine = renderRow(safeHeaders);
 
-    this.#out.write(`${this.#plain ? headerLine : this.#colors.bold(headerLine)}\n`);
-    this.#out.write(`${this.#plain ? separator : this.#colors.dim(separator)}\n`);
+    this.#stream.write(`${this.#plain ? headerLine : this.#colors.bold(headerLine)}\n`);
+    this.#stream.write(`${this.#plain ? separator : this.#colors.dim(separator)}\n`);
     for (const row of safeRows) {
-      this.#out.write(`${renderRow(row)}\n`);
+      this.#stream.write(`${renderRow(row)}\n`);
     }
   }
 
@@ -288,7 +304,7 @@ export class Logger {
     rendered.push(`${frame.bottomLeft}${bar}${frame.bottomRight}`);
 
     for (const line of rendered) {
-      this.#out.write(`${paint(line)}\n`);
+      this.#stream.write(`${paint(line)}\n`);
     }
   }
 

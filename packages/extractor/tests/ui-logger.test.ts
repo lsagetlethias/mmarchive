@@ -46,16 +46,14 @@ const CHANNEL_ID = "y7t3q9w1e5r2u8i4o6p0a2s5d1";
 function makeLogger(options?: {
   readonly level?: "debug" | "info" | "warn" | "error";
   readonly plain?: boolean;
-}): { logger: Logger; out: MemoryStream; err: MemoryStream } {
-  const out = new MemoryStream();
-  const err = new MemoryStream();
+}): { logger: Logger; flux: MemoryStream } {
+  const flux = new MemoryStream();
   const logger = new Logger({
     level: options?.level ?? "debug",
     plain: options?.plain ?? true,
-    out,
-    err,
+    stream: flux,
   });
-  return { logger, out, err };
+  return { logger, flux };
 }
 
 function exerciseEveryMethod(logger: Logger): void {
@@ -78,30 +76,30 @@ describe("Logger, longueurs et secrets du token", () => {
 
 describe("Logger en mode plain", () => {
   it("n emet aucun octet d echappement ANSI, quelle que soit la methode appelee", () => {
-    const { logger, out, err } = makeLogger({ plain: true });
+    const { logger, flux } = makeLogger({ plain: true });
     exerciseEveryMethod(logger);
 
-    expect(out.text.length).toBeGreaterThan(0);
-    expect(err.text.length).toBeGreaterThan(0);
-    expect(out.text).not.toMatch(ANSI);
-    expect(err.text).not.toMatch(ANSI);
-    expect(out.text).not.toContain("\u001B");
-    expect(err.text).not.toContain("\u001B");
+    expect(flux.text.length).toBeGreaterThan(0);
+    expect(flux.text.length).toBeGreaterThan(0);
+    expect(flux.text).not.toMatch(ANSI);
+    expect(flux.text).not.toMatch(ANSI);
+    expect(flux.text).not.toContain("\u001B");
+    expect(flux.text).not.toContain("\u001B");
   });
 
   it("n emet aucun caractere decoratif hors ASCII", () => {
-    const { logger, out, err } = makeLogger({ plain: true });
+    const { logger, flux } = makeLogger({ plain: true });
     exerciseEveryMethod(logger);
 
-    expect(out.text).not.toMatch(DECORATIVE);
-    expect(err.text).not.toMatch(DECORATIVE);
+    expect(flux.text).not.toMatch(DECORATIVE);
+    expect(flux.text).not.toMatch(DECORATIVE);
   });
 
   it("encadre le callout avec un cadre ASCII lisible dans un fichier de log", () => {
-    const { logger, out } = makeLogger({ plain: true });
+    const { logger, flux } = makeLogger({ plain: true });
     logger.callout("Joins", ["tech-archi"]);
 
-    expect(out.lines).toEqual([
+    expect(flux.lines).toEqual([
       "+------------+",
       "| Joins      |",
       "+------------+",
@@ -113,19 +111,19 @@ describe("Logger en mode plain", () => {
 
 describe("Logger en mode colore", () => {
   it("emet des sequences ANSI quand le mode plain est desactive", () => {
-    const { logger, out, err } = makeLogger({ plain: false });
+    const { logger, flux } = makeLogger({ plain: false });
     logger.success("extraction terminee");
     logger.error("echec reseau");
 
-    expect(out.text).toMatch(ANSI);
-    expect(err.text).toMatch(ANSI);
+    expect(flux.text).toMatch(ANSI);
+    expect(flux.text).toMatch(ANSI);
   });
 
   it("colore chaque ligne separement pour ne jamais laisser une sequence ouverte", () => {
-    const { logger, err } = makeLogger({ plain: false });
+    const { logger, flux } = makeLogger({ plain: false });
     logger.error("ligne un\nligne deux");
 
-    const lines = err.lines;
+    const lines = flux.lines;
     expect(lines).toHaveLength(2);
     for (const line of lines) {
       expect(line).toMatch(/\u001B\[39m$/);
@@ -134,58 +132,77 @@ describe("Logger en mode colore", () => {
 });
 
 describe("Logger, routage des flux", () => {
-  it("ecrit warn et error sur le flux d erreur", () => {
-    const { logger, out, err } = makeLogger();
-    logger.warn("attention");
-    logger.error("echec");
-
-    expect(out.text).toBe("");
-    expect(err.text).toContain("attention");
-    expect(err.text).toContain("echec");
+  it("n ecrit rien sur la sortie standard, quelle que soit la methode", () => {
+    // La progression et les diagnostics partaient sur stdout, alors que l aide
+    // de --verbose et le README les annoncaient sur la sortie d erreur. Un
+    // resultat destine a une machine ne passe pas par le logger : il s ecrit
+    // avec process.stdout.write, comme verify --json le fait.
+    const surStdout: string[] = [];
+    const surStderr: string[] = [];
+    const capturer = (cible: string[]) =>
+      ((chunk: string) => {
+        cible.push(String(chunk));
+        return true;
+      }) as typeof process.stdout.write;
+    const stdout = process.stdout.write.bind(process.stdout);
+    const stderr = process.stderr.write.bind(process.stderr);
+    process.stdout.write = capturer(surStdout);
+    process.stderr.write = capturer(surStderr);
+    try {
+      // Sans `stream` : c est le flux par defaut qui est en cause ici.
+      exerciseEveryMethod(new Logger({ level: "debug", plain: true }));
+    } finally {
+      process.stdout.write = stdout;
+      process.stderr.write = stderr;
+    }
+    expect(surStdout).toEqual([]);
+    expect(surStderr.join("")).toContain("inventaire en cours");
   });
 
-  it("ecrit debug, info, section, success, table et callout sur le flux standard", () => {
-    const { logger, out, err } = makeLogger();
-    logger.debug("mise au point");
-    logger.info("information");
-    logger.section("Titre");
-    logger.success("ok");
-    logger.table(["A"], [["1"]]);
-    logger.callout("Titre", ["ligne"]);
+  it("envoie sur le flux tout ce qu un humain doit lire", () => {
+    const { logger, flux } = makeLogger();
+    exerciseEveryMethod(logger);
 
-    expect(err.text).toBe("");
-    expect(out.text).toContain("mise au point");
-    expect(out.text).toContain("information");
-    expect(out.text).toContain("Titre");
-    expect(out.text).toContain("ligne");
+    for (const attendu of [
+      "trace de mise au point",
+      "inventaire en cours",
+      "Selection",
+      "34 canaux retenus",
+      "canal archive illisible",
+      "403 sur un canal public",
+      "general",
+      "tech-archi",
+    ]) {
+      expect(flux.text, attendu).toContain(attendu);
+    }
   });
 });
 
 describe("Logger, filtrage par niveau", () => {
   it("laisse tout passer au niveau debug", () => {
-    const { logger, out, err } = makeLogger({ level: "debug" });
+    const { logger, flux } = makeLogger({ level: "debug" });
     logger.debug("d");
     logger.info("i");
     logger.warn("w");
     logger.error("e");
 
-    expect(out.text).toContain("d");
-    expect(out.text).toContain("i");
-    expect(err.text).toContain("w");
-    expect(err.text).toContain("e");
+    expect(flux.text).toContain("d");
+    expect(flux.text).toContain("i");
+    expect(flux.text).toContain("w");
+    expect(flux.text).toContain("e");
   });
 
   it("supprime debug au niveau info", () => {
-    const { logger, out } = makeLogger({ level: "info" });
+    const { logger, flux } = makeLogger({ level: "info" });
     logger.debug("invisible");
     logger.info("visible");
 
-    expect(out.text).not.toContain("invisible");
-    expect(out.text).toContain("visible");
+    expect(flux.text).not.toContain("invisible");
+    expect(flux.text).toContain("visible");
   });
 
   it("supprime info et debug au niveau warn, y compris section, success et table", () => {
-    const { logger, out, err } = makeLogger({ level: "warn" });
+    const { logger, flux } = makeLogger({ level: "warn" });
     logger.debug("invisible");
     logger.info("invisible");
     logger.section("invisible");
@@ -193,33 +210,32 @@ describe("Logger, filtrage par niveau", () => {
     logger.table(["invisible"], [["invisible"]]);
     logger.warn("visible");
 
-    expect(out.text).toBe("");
-    expect(err.text).toContain("visible");
+    expect(flux.text).not.toContain("invisible");
+    expect(flux.text).toContain("visible");
   });
 
   it("laisse passer le callout au niveau warn car il annonce des effets de bord", () => {
-    const { logger, out } = makeLogger({ level: "warn" });
+    const { logger, flux } = makeLogger({ level: "warn" });
     logger.callout("Joins", ["tech-archi"]);
 
-    expect(out.text).toContain("tech-archi");
+    expect(flux.text).toContain("tech-archi");
   });
 
   it("ne laisse plus que error au niveau error", () => {
-    const { logger, out, err } = makeLogger({ level: "error" });
+    const { logger, flux } = makeLogger({ level: "error" });
     logger.info("invisible");
     logger.warn("invisible");
     logger.callout("invisible", []);
     logger.error("visible");
 
-    expect(out.text).toBe("");
-    expect(err.text).toContain("visible");
-    expect(err.text).not.toContain("invisible");
+    expect(flux.text).toContain("visible");
+    expect(flux.text).not.toContain("invisible");
   });
 });
 
 describe("Logger.table", () => {
   it("aligne les colonnes sur le contenu le plus large, accents compris", () => {
-    const { logger, out } = makeLogger({ plain: true });
+    const { logger, flux } = makeLogger({ plain: true });
     // "cafe" suivi d un accent aigu combinant: 5 unites JavaScript, 4 colonnes affichees.
     logger.table(
       ["Canal", "Messages"],
@@ -229,7 +245,7 @@ describe("Logger.table", () => {
       ],
     );
 
-    expect(out.lines).toEqual([
+    expect(flux.lines).toEqual([
       "Canal    Messages",
       "-".repeat(17),
       "general  12",
@@ -238,7 +254,7 @@ describe("Logger.table", () => {
   });
 
   it("fait demarrer la seconde colonne a la meme position visuelle sur toutes les lignes", () => {
-    const { logger, out } = makeLogger({ plain: true });
+    const { logger, flux } = makeLogger({ plain: true });
     logger.table(
       ["Canal", "Messages"],
       [
@@ -248,7 +264,7 @@ describe("Logger.table", () => {
       ],
     );
 
-    const [header, , ...rows] = out.lines;
+    const [header, , ...rows] = flux.lines;
     expect(header?.normalize("NFC").indexOf("Messages")).toBe(9);
     expect(rows[0]?.normalize("NFC").indexOf("12")).toBe(9);
     expect(rows[1]?.normalize("NFC").indexOf("7")).toBe(9);
@@ -256,32 +272,32 @@ describe("Logger.table", () => {
   });
 
   it("complete les lignes plus courtes que l en tete", () => {
-    const { logger, out } = makeLogger({ plain: true });
+    const { logger, flux } = makeLogger({ plain: true });
     logger.table(["A", "B", "C"], [["1"]]);
 
-    expect(out.lines).toEqual(["A  B  C", "-".repeat(7), "1"]);
+    expect(flux.lines).toEqual(["A  B  C", "-".repeat(7), "1"]);
   });
 
   it("prend en compte les colonnes supplementaires absentes de l en tete", () => {
-    const { logger, out } = makeLogger({ plain: true });
+    const { logger, flux } = makeLogger({ plain: true });
     logger.table(["A"], [["1", "surnumeraire"]]);
 
-    expect(out.lines).toEqual(["A", "-".repeat(15), "1  surnumeraire"]);
+    expect(flux.lines).toEqual(["A", "-".repeat(15), "1  surnumeraire"]);
   });
 
   it("n ecrit rien quand il n y a ni en tete ni ligne", () => {
-    const { logger, out } = makeLogger({ plain: true });
+    const { logger, flux } = makeLogger({ plain: true });
     logger.table([], []);
 
-    expect(out.text).toBe("");
+    expect(flux.text).toBe("");
   });
 
   it("masque un token qui traine dans une cellule", () => {
-    const { logger, out } = makeLogger({ plain: true });
+    const { logger, flux } = makeLogger({ plain: true });
     logger.table(["Canal", "Detail"], [["general", `token=${TOKEN}`]]);
 
-    expect(out.text).not.toContain(TOKEN);
-    expect(out.text).toContain("token=***");
+    expect(flux.text).not.toContain(TOKEN);
+    expect(flux.text).toContain("token=***");
   });
 });
 
@@ -367,32 +383,32 @@ describe("redactSecrets, motifs de token", () => {
 
 describe("Logger, masquage automatique", () => {
   it("masque un token avant de l ecrire sur le flux standard", () => {
-    const { logger, out } = makeLogger();
+    const { logger, flux } = makeLogger();
     logger.info(`appel avec token=${TOKEN}`);
 
-    expect(out.text).not.toContain(TOKEN);
-    expect(out.text).toContain("token=***");
+    expect(flux.text).not.toContain(TOKEN);
+    expect(flux.text).toContain("token=***");
   });
 
   it("masque un token avant de l ecrire sur le flux d erreur", () => {
-    const { logger, err } = makeLogger();
+    const { logger, flux } = makeLogger();
     logger.error(`401 sur Authorization: Bearer ${TOKEN}`);
 
-    expect(err.text).not.toContain(TOKEN);
+    expect(flux.text).not.toContain(TOKEN);
   });
 
   it("masque un token dans un callout", () => {
-    const { logger, out } = makeLogger();
+    const { logger, flux } = makeLogger();
     logger.callout("Configuration", [`MM_TOKEN=${TOKEN}`]);
 
-    expect(out.text).not.toContain(TOKEN);
+    expect(flux.text).not.toContain(TOKEN);
   });
 
   it("preserve les identifiants de canaux dans un tableau recapitulatif", () => {
-    const { logger, out } = makeLogger();
+    const { logger, flux } = makeLogger();
     logger.table(["Id", "Nom"], [[CHANNEL_ID, "tech-archi"]]);
 
-    expect(out.text).toContain(CHANNEL_ID);
+    expect(flux.text).toContain(CHANNEL_ID);
   });
 });
 
