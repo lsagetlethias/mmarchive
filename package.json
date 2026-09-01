@@ -20,6 +20,7 @@
     "fmt:check": "biome check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "bash tests/integration/run.sh",
     "verify": "pnpm typecheck && pnpm lint:check && pnpm test && pnpm build",
     "lint:check": "biome check . && eslint .",
     "mm": "node --env-file-if-exists=.env --import tsx packages/extractor/src/cli.ts",

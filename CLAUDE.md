@@ -29,22 +29,37 @@ Deux blocs :
 
 ## Le problème central : les permissions
 
-`GET /channels/{id}/posts` exige `read_channel`, accordée aux seuls membres du canal.
-Un compte standard ne peut donc lire que les canaux qu'il a déjà rejoints. Rejoindre un
-canal **publie un message système `system_join_channel` visible par tous ses membres**.
-Sur des dizaines de canaux, c'est du spam très visible juste avant une décommission.
+`GET /channels/{id}/posts` exige `read_channel`. Un compte qui ne l'a pas doit rejoindre
+le canal, et rejoindre un canal **publie un message système `system_join_channel` visible
+par tous ses membres**. Sur des dizaines de canaux, c'est du spam très visible juste avant
+une décommission.
+
+**Mais cette permission n'est pas toujours refusée, et c'est mesuré.** Un Mattermost neuf
+accorde `read_public_channel` au rôle `team_user` : un compte standard lit alors les
+messages d'un canal public de sa team sans en être membre, et aucun join n'est nécessaire.
+Sur l'archive de référence, 758 canaux ont été extraits dont 88 seulement où le compte
+était déjà membre, et **aucun n'a eu besoin d'être rejoint**.
+
+Le nombre de joins nécessaires dépend donc de la configuration de l'instance, et l'outil ne
+le suppose jamais : il le **sonde**, par une requête en lecture par canal, et classe. C'est
+`probeChannelReadable` puis `categorizeChannel`, et le test d'intégration vérifie les deux
+configurations sur un vrai serveur.
 
 D'où le modèle de sélection en trois temps : `inventory` (aucune écriture) → `select`
 (l'utilisateur coche) → `run` (confirmation nominative des joins). Il n'existe **aucun**
 mode où l'outil joint un canal que l'utilisateur n'a pas désigné explicitement.
 
-Trois catégories à distinguer partout, dans le code comme dans l'UX :
+Quatre catégories à distinguer partout, dans le code comme dans l'UX :
 
-| Catégorie          | Lisible                      | Join requis | Effet de bord          |
-| ------------------ | ---------------------------- | ----------- | ---------------------- |
-| Public déjà membre | oui                          | non         | aucun                  |
-| Public non rejoint | non                          | oui         | message système public |
-| Public archivé     | selon `ViewArchivedChannels` | impossible  | aucun                  |
+| Catégorie                  | Lisible                      | Join requis | Effet de bord          |
+| -------------------------- | ---------------------------- | ----------- | ---------------------- |
+| Public déjà membre         | oui                          | non         | aucun                  |
+| Public lisible sans join   | oui, sondage concluant       | non         | aucun                  |
+| Public non rejoint         | non                          | oui         | message système public |
+| Public archivé             | selon `ViewArchivedChannels` | impossible  | aucun                  |
+
+La deuxième ligne est celle que la documentation omettait, et c'est la plus fréquente sur
+l'instance de référence.
 
 La logique vit dans `packages/shared/src/selection.ts` (`categorizeChannel`,
 `requiresJoin`, `defaultSelected`, `summarizeSelection`) et est testée unitairement.

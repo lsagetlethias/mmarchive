@@ -1,0 +1,57 @@
+name: Integration
+
+# Ce test monte un vrai Mattermost, ce qui coute trois a quatre minutes : il ne
+# tourne donc pas sur chaque pull request, seulement quand l extracteur ou le
+# test lui-meme changent, et a la demande.
+#
+# Ce qu il apporte que la suite ordinaire ne peut pas apporter : celle-ci verifie
+# contre un simulateur, c est a dire contre ce que nous croyons de l API. Les six
+# champs que l extracteur ecrivait a vide sont passes au travers de toute la
+# suite pour cette raison exacte.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/extractor/**"
+      - "packages/shared/**"
+      - "tests/integration/**"
+      - ".github/workflows/integration.yml"
+  pull_request:
+    paths:
+      - "packages/extractor/**"
+      - "packages/shared/**"
+      - "tests/integration/**"
+      - ".github/workflows/integration.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    # Le serveur met une bonne minute a demarrer, le reste est rapide.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Aucune etape n a besoin de Git authentifie, et les scripts de cycle de
+          # vie que `pnpm install` execute lisent .git/config.
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Le script monte le compose, attend l API depuis l hote et demonte en
+      # sortie, y compris sur echec.
+      - run: pnpm test:integration
