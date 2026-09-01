@@ -5,6 +5,7 @@ import { isMattermostId, type Manifest, manifestSchema } from "@mmarchive/shared
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AnonymizeError, anonymizeArchive } from "../src/redact/anonymize-archive.js";
 import { buildIdentityTable } from "../src/redact/identity-table.js";
+import type { NiveauAnonymisation } from "../src/redact/niveau.js";
 import { Logger } from "../src/ui/logger.js";
 import { verifyArchive } from "../src/verify/checks.js";
 
@@ -322,8 +323,8 @@ afterEach(async () => {
   await rm(join(sortie, ".."), { recursive: true, force: true });
 });
 
-async function anonymiser(): Promise<void> {
-  await anonymizeArchive({ archiveDir: source, outDir: sortie, logger: silent });
+async function anonymiser(niveau: NiveauAnonymisation = "noms"): Promise<void> {
+  await anonymizeArchive({ archiveDir: source, outDir: sortie, niveau, logger: silent });
 }
 
 describe("l archive source", () => {
@@ -492,7 +493,11 @@ describe("la table de correspondance", () => {
   it("ne substitue un nom qu en jeton entier, jamais dans un mot", async () => {
     // Un remplacement brut de la valeur de props atteindrait l interieur des
     // mots : un compte nomme « bob » transformerait « bobsleigh ».
-    await anonymiser();
+    //
+    // Au niveau « formes », qui ne remplace pas les noms ecrits en clair : ce
+    // test isole la substitution par props, et le niveau superieur remplacerait
+    // « martin » par ailleurs, ce qui melangerait deux mesures.
+    await anonymiser("formes");
     const bob = await fiche(BOB_ROLES);
     const posts = await lire(`posts/${CHANNEL}.ndjson`);
     const message = posts.find((p) => p.id === "w".repeat(26))?.message as string;
@@ -576,11 +581,14 @@ describe("le manifeste", () => {
     // Le manifeste enumere ce qui a ETE FAIT, jamais ce qui reste : l absence de
     // « noms » se lit sans etre commentee, et une liste de residus vide se
     // lirait un jour comme le verdict positif que le rapport s interdit.
+    // Le niveau par defaut remplace les noms : le manifeste doit le dire, sans
+    // quoi il ment par omission sur ce qui a ete fait.
+    const formes = ["mentions", "adresses", "telephones", "identifiants", "noms"];
     expect(manifest.anonymized?.text_rewritten).toEqual({
-      message: ["mentions", "adresses", "telephones", "identifiants"],
-      "props.attachments": ["mentions", "adresses", "telephones", "identifiants"],
+      message: formes,
+      "props.attachments": formes,
     });
-    expect(manifest.anonymized?.text_rewritten.message).not.toContain("noms");
+    expect(manifest.anonymized?.niveau).toBe("noms");
   });
 
   it("recale les sept compteurs, pas seulement ceux que redact recalait", async () => {

@@ -275,6 +275,26 @@ donc toutes les mentions deviendraient orphelines et seraient neutralisées. Le 
 résiduel ne le verrait pas, puisqu'il est positif contre le nouvel ensemble, cohérent avec
 lui-même.
 
+## Trois niveaux, parce que le coût n'est pas le même
+
+Les étapes ne coûtent pas la même chose. Pseudonymiser les comptes ne touche à rien de ce
+qu'on lit ; remplacer les noms écrits en clair abîme du texte, puisque aucun ancrage ne
+distingue un prénom d'un mot ordinaire. Un réglage unique obligerait à en faire trop pour qui
+veut relire, et pas assez pour qui doit diffuser.
+
+`comptes` s'arrête aux fiches, aux métadonnées et aux binaires. `formes` ajoute ce qui est
+ancré : mentions, adresses, numéros, identifiants. `noms` ajoute les noms écrits en clair, et
+c'est le seul qui vise une diffusion. Le défaut est `noms`, parce qu'une archive livrée sans
+mention du niveau doit être la plus protégée.
+
+Ce qui les distingue n'est pas un degré de zèle mais une **promesse différente**, et le
+manifeste comme le rapport disent laquelle a été tenue.
+
+Une seule chose ne dépend d'aucun niveau : la substitution des noms que les métadonnées d'un
+message système désignent. Ce n'est pas une réécriture de confort mais ce qui empêche une ligne
+d'apparier une identité réelle et son pseudonyme. La rendre optionnelle laisserait le niveau le
+plus bas porter la table de correspondance en clair.
+
 ## Le remplacement des noms en clair, et son revers
 
 C'est la partie qui décide de la valeur du résultat, et la seule qui ne peut pas être exacte.
@@ -292,8 +312,39 @@ mots courants du français sont aussi des noms de comptes ici : `pierre`, `rose`
 transformerait « une pierre angulaire » en « une Obsidienne Discrete angulaire ».
 
 **L'arbitrage retenu privilégie l'anonymat.** Un texte un peu abîmé reste exploitable ; une
-identité qui fuit ne se rattrape pas une fois l'archive diffusée. Le remplacement est donc
-large, et c'est le rapport qui rend le coût visible.
+identité qui fuit ne se rattrape pas une fois l'archive diffusée. Mais cette phrase n'a de
+valeur qu'accompagnée d'un chiffre, et le voici.
+
+Le critère décisif n'est ni la longueur ni le nombre de porteurs, c'est la **fréquence dans le
+corpus**, et elle ne se devine pas : elle demande une passe de lecture. Une forme qui paraît
+plus de deux cents fois n'est presque jamais une personne citée deux cents fois. Neuf formes
+font à elles seules la moitié des occurrences du vocabulaire, et ce sont toutes des mots
+ordinaires que quelqu'un porte aussi comme nom.
+
+Le seuil retenu est 200, et c'est le point d'inflexion mesuré :
+
+| Seuil de fréquence | Comptes couverts | Restant nommables | Messages touchés |
+| --- | --- | --- | --- |
+| 50 | 1 035 | 1 151 | 1,2 % |
+| **200** | **1 509** | **677** | **4,8 %** |
+| 500 | 1 793 | 393 | 11,0 % |
+| 1 000 | 1 928 | 258 | 17,8 % |
+| aucun | 2 000 | 186 | 40,4 % |
+
+Au delà de 200, le volume de texte touché double bien plus vite que le nombre de personnes
+protégées n'augmente. Le seuil est réglable par `--seuil-noms`, parce que l'arbitrage
+appartient à qui diffuse et non à l'outil.
+
+**Une forme que plusieurs comptes portent ne reçoit jamais le pseudonyme de l'un d'eux.** Le
+cadrage a écarté le générateur de noms réalistes parce qu'attribuer les propos de quelqu'un au
+nom d'une personne réelle fabrique une identité fausse ; or un pseudonyme est le nom d'une
+personne de l'archive comme une autre. Remplacer « Martin », porté par trois comptes, par le
+pseudonyme du premier ferait exactement cela, sur 9 901 occurrences mesurées. Ces formes
+reçoivent donc un substitut neutre : on perd le fil, on ne fabrique pas d'attribution.
+
+**186 comptes resteront nommables quel que soit le réglage.** Leurs formes font moins de quatre
+lettres ou sont partagées par trop de comptes. Ce chiffre figure au rapport, et il ne descendra
+pas.
 
 ## Le rapport des occurrences résiduelles
 
@@ -419,9 +470,11 @@ Deux noms distincts rendent la confusion impossible à commettre plutôt que rar
    245 313 mentions substituées et 15 591 neutralisées dans les corps, 73 191 adresses et
    1 235 numéros retirés, 11 identifiants de comptes substitués. Après la passe, plus aucune
    adresse ni aucun numéro, et zéro mention portant le nom d'un compte connu.
-5. Le remplacement des noms en clair, la partie risquée, à mesurer sur un échantillon avant
-   de l'appliquer à l'archive entière. Elle porte désormais sur deux surfaces, le corps des
-   messages et le texte des blocs `attachments`.
+5. Le remplacement des noms en clair, sur les deux surfaces. **Livré**, derrière le niveau
+   `noms`. Mesuré sur l'archive de référence avec le seuil par défaut : 1 715 formes retenues,
+   590 écartées comme trop fréquentes, 1 504 comptes couverts et 683 laissés nommables. Les
+   occurrences de noms de comptes passent de 1 358 817 à 795 860, celles qui restent portant
+   sur les formes écartées.
 
 ## Ce qui reste à trancher
 

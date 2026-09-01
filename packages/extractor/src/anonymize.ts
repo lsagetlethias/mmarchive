@@ -10,6 +10,13 @@ import {
   anonymizeArchive,
   refuserCheminInterne,
 } from "./redact/anonymize-archive.js";
+import {
+  DESCRIPTION_NIVEAUX,
+  estNiveau,
+  NIVEAU_PAR_DEFAUT,
+  NIVEAUX,
+  SEUIL_FREQUENCE_PAR_DEFAUT,
+} from "./redact/niveau.js";
 import { type ContexteRapport, rendreReleve, rendreSynthese } from "./redact/report-render.js";
 import {
   checkResidualIdentities,
@@ -44,6 +51,8 @@ interface Options {
   archive: string;
   out: string;
   force?: boolean;
+  niveau?: string;
+  seuilNoms?: string;
   rapport?: string;
   releve?: string;
 }
@@ -60,6 +69,18 @@ program
     "--force",
     "Remplace une sortie qui porte deja une archive anonymisee. Refuse tout autre repertoire non vide.",
   )
+  .option(
+    "--niveau <niveau>",
+    [
+      `Jusqu ou aller. Par defaut ${NIVEAU_PAR_DEFAUT}.`,
+      ...NIVEAUX.map((n) => `  ${n} : ${DESCRIPTION_NIVEAUX[n]}`),
+    ].join("\n"),
+    NIVEAU_PAR_DEFAUT,
+  )
+  .option(
+    "--seuil-noms <n>",
+    `Au dela de N occurrences dans le corpus, une forme est traitee comme un mot ordinaire et non comme un nom. Par defaut ${String(SEUIL_FREQUENCE_PAR_DEFAUT)}. N a d effet qu au niveau noms.`,
+  )
   .option("--rapport <fichier>", "Ou ecrire la synthese. Par defaut, a cote de la sortie.")
   .option(
     "--releve <fichier>",
@@ -67,6 +88,20 @@ program
   )
   .action(async (opts: Options) => {
     const logger = new Logger();
+    const niveau = opts.niveau ?? NIVEAU_PAR_DEFAUT;
+    if (!estNiveau(niveau)) {
+      logger.error(
+        `--niveau doit valoir ${NIVEAUX.join(", ")}, recu "${niveau}". ` +
+          "Chaque niveau porte une promesse differente, il n y a pas de valeur par defaut raisonnable a deviner.",
+      );
+      process.exitCode = 2;
+      return;
+    }
+    if (opts.seuilNoms !== undefined && !/^[1-9]\d*$/.test(opts.seuilNoms)) {
+      logger.error(`--seuil-noms doit etre un entier positif, recu "${opts.seuilNoms}".`);
+      process.exitCode = 2;
+      return;
+    }
     const horodatage = new Date().toISOString();
     // Les deux-points d une date ISO sont interdits dans un nom de fichier sous
     // Windows, ou l ecriture echouerait. L horodatage complet reste dans le
@@ -90,8 +125,11 @@ program
       archiveDir: opts.archive,
       outDir: opts.out,
       force: opts.force ?? false,
+      niveau,
+      ...(opts.seuilNoms === undefined ? {} : { seuilFrequence: Number(opts.seuilNoms) }),
       logger,
     });
+    logger.info(`Niveau ${niveau} : ${DESCRIPTION_NIVEAUX[niveau]}`);
     resumer(resultat, logger);
 
     logger.info("Controle des identites residuelles.");

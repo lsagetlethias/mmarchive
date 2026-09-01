@@ -27,6 +27,7 @@ import {
   TELEPHONE_INTERNATIONAL,
   TELEPHONE_NATIONAL,
 } from "./measure.js";
+import { normaliserForme } from "./name-vocabulary.js";
 import type { ResolveurIdentite } from "./props-filter.js";
 
 /**
@@ -68,6 +69,14 @@ export interface CompteursTexte {
    * traiter 11. Ce residu est indecidable et se compte comme tel.
    */
   identifiantsIndecidables: number;
+  /**
+   * Noms ecrits en clair remplaces.
+   *
+   * Compte a part des mentions : une mention est ancree et sure, un nom en clair
+   * ne l est pas, et fondre les deux masquerait le seul chiffre qui dit combien
+   * de texte a ete pris au risque de l abimer.
+   */
+  nomsRemplaces: number;
 }
 
 export function compteursTexteVides(): CompteursTexte {
@@ -80,6 +89,7 @@ export function compteursTexteVides(): CompteursTexte {
     telephonesRetires: 0,
     identifiantsSubstitues: 0,
     identifiantsIndecidables: 0,
+    nomsRemplaces: 0,
   };
 }
 
@@ -97,7 +107,7 @@ export function compteursTexteVides(): CompteursTexte {
  */
 const DOMAINE = String.raw`[\p{L}\p{N}.-]+\.[\p{L}]{2,}`;
 
-const FORMES = new RegExp(
+const FORMES: RegExp = new RegExp(
   [
     // Ancree a gauche comme les autres, et le domaine est repetable. Deux
     // corrections qu un seul message de l archive de reference a revelees, en
@@ -114,6 +124,23 @@ const FORMES = new RegExp(
     String.raw`(?<telephone>(?<![\p{L}\p{M}\p{N}_])(?:${TELEPHONE_INTERNATIONAL}|${TELEPHONE_NATIONAL})(?![\p{L}\p{M}\p{N}_]))`,
     String.raw`(?<mention>(?<![\p{L}\p{N}_%+])@(?:${CORPS_MENTION}))`,
   ].join("|"),
+  "gu",
+);
+
+/**
+ * La meme alternation, plus une branche qui capture tout mot assez long.
+ *
+ * Le remplacement des noms rejoint l alternation au lieu de passer apres, pour
+ * la meme raison que tout le reste : le texte rendu par le callback n est jamais
+ * relu. Une passe posterieure pourrait remanger un mot du pseudonyme injecte,
+ * « Anon-Obsidienne-Discrete » etant fait de mots ordinaires.
+ *
+ * La branche capture largement et c est le callback qui decide, plutot qu une
+ * alternation de deux mille cinq cents formes que le moteur devrait essayer a
+ * chaque position.
+ */
+const FORMES_AVEC_NOMS = new RegExp(
+  `${FORMES.source}|(?<nom>(?<![\\p{L}\\p{M}\\p{N}_-])[\\p{L}\\p{M}]{4,}(?![\\p{L}\\p{M}\\p{N}_-]))`,
   "gu",
 );
 
@@ -163,9 +190,14 @@ export function reecrireFormesAncrees(
   texte: string,
   resolveur: ResolveurIdentite,
   compteurs: CompteursTexte,
+  /**
+   * Vocabulaire des noms ecrits en clair, absent aux niveaux qui n y touchent
+   * pas. Explicite : son absence veut dire « ne pas remplacer les noms ».
+   */
+  noms?: ReadonlyMap<string, string>,
 ): string {
   if (texte === "") return texte;
-  return texte.replace(FORMES, (trouve, ...args) => {
+  return texte.replace(noms === undefined ? FORMES : FORMES_AVEC_NOMS, (trouve, ...args) => {
     const groupes = args.at(-1) as Record<string, string | undefined>;
 
     if (groupes["adresseMention"] !== undefined) {
@@ -198,6 +230,13 @@ export function reecrireFormesAncrees(
     if (groupes["telephone"] !== undefined) {
       compteurs.telephonesRetires += 1;
       return TELEPHONE_RETIRE;
+    }
+
+    if (groupes["nom"] !== undefined) {
+      const substitut = noms?.get(normaliserForme(trouve));
+      if (substitut === undefined) return trouve;
+      compteurs.nomsRemplaces += 1;
+      return substitut;
     }
 
     return substituerMention(trouve.slice(1), resolveur, compteurs);

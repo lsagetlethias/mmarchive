@@ -123,20 +123,23 @@ export function compteursPropsVides(): CompteursProps {
 function valeurReecrite(
   valeur: unknown,
   resolveur: ResolveurIdentite,
-  texte: CompteursTexte,
+  texte: CompteursTexte | undefined,
+  noms: ReadonlyMap<string, string> | undefined,
 ): unknown {
-  return typeof valeur === "string" ? reecrireFormesAncrees(valeur, resolveur, texte) : valeur;
+  if (texte === undefined || typeof valeur !== "string") return valeur;
+  return reecrireFormesAncrees(valeur, resolveur, texte, noms);
 }
 
 function reduireField(
   field: unknown,
   resolveur: ResolveurIdentite,
-  texte: CompteursTexte,
+  texte: CompteursTexte | undefined,
+  noms: ReadonlyMap<string, string> | undefined,
 ): Record<string, unknown> | undefined {
   if (!estObjet(field)) return undefined;
   const out: Record<string, unknown> = {};
   for (const [cle, valeur] of Object.entries(field)) {
-    if (CHAMPS_FIELD.has(cle)) out[cle] = valeurReecrite(valeur, resolveur, texte);
+    if (CHAMPS_FIELD.has(cle)) out[cle] = valeurReecrite(valeur, resolveur, texte, noms);
   }
   return Object.keys(out).length === 0 ? undefined : out;
 }
@@ -144,17 +147,18 @@ function reduireField(
 function reduireAttachment(
   bloc: unknown,
   resolveur: ResolveurIdentite,
-  texte: CompteursTexte,
+  texte: CompteursTexte | undefined,
+  noms: ReadonlyMap<string, string> | undefined,
 ): Record<string, unknown> | undefined {
   if (!estObjet(bloc)) return undefined;
   const out: Record<string, unknown> = {};
   for (const [cle, valeur] of Object.entries(bloc)) {
-    if (ATTACHMENT_TEXTE.has(cle)) out[cle] = valeurReecrite(valeur, resolveur, texte);
+    if (ATTACHMENT_TEXTE.has(cle)) out[cle] = valeurReecrite(valeur, resolveur, texte, noms);
   }
   const fields = bloc.fields;
   if (Array.isArray(fields)) {
     const gardes = fields
-      .map((field) => reduireField(field, resolveur, texte))
+      .map((field) => reduireField(field, resolveur, texte, noms))
       .filter((f) => f !== undefined);
     if (gardes.length > 0) out.fields = gardes;
   }
@@ -172,9 +176,10 @@ export function reduireProps(
   props: Record<string, unknown>,
   resolveur: ResolveurIdentite,
   compteurs: CompteursProps,
-  // Obligatoire, jamais optionnel : un futur appelant doit trancher plutot
-  // qu heriter d un defaut qui laisserait du texte non reecrit.
-  texte: CompteursTexte,
+  // Explicite, jamais implicite : `undefined` veut dire « ne pas reecrire ce
+  // texte », ce qui est le niveau le plus bas, et non « heriter d un defaut ».
+  texte: CompteursTexte | undefined,
+  noms?: ReadonlyMap<string, string>,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
 
@@ -187,7 +192,7 @@ export function reduireProps(
     if (cle === "attachments") {
       if (Array.isArray(valeur)) {
         const gardes = valeur
-          .map((bloc) => reduireAttachment(bloc, resolveur, texte))
+          .map((bloc) => reduireAttachment(bloc, resolveur, texte, noms))
           .filter((b) => b !== undefined);
         compteurs.attachmentsReduits += gardes.length;
         if (gardes.length > 0) out[cle] = gardes;
