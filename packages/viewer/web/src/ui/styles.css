@@ -128,6 +128,65 @@ a:focus-visible {
   gap: 0.5rem;
 }
 
+/* Le champ porte la liste : elle se positionne sur lui, pas sur le formulaire,
+   sans quoi elle deborderait sous le bouton. */
+.champ-recherche {
+  position: relative;
+  flex: 1;
+}
+
+.champ-recherche input {
+  width: 100%;
+}
+
+.suggestions {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0.25rem 0;
+  background: var(--fond);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.suggestion {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+}
+
+.suggestion.active {
+  background: var(--accent-doux);
+}
+
+.suggestion-valeur {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--accent);
+}
+
+.suggestion-libelle {
+  color: var(--texte);
+  /* Le libelle cede la place avant la valeur, qui est ce qu on insere. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestion-detail {
+  margin-left: auto;
+  color: var(--texte-doux);
+  font-size: 0.85em;
+  flex: none;
+}
+
 .corps {
   display: flex;
   flex: 1;

@@ -1,8 +1,9 @@
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import type { Message, MessageBundle } from "./client/archive-client.js";
 import { formatDate, useArchive } from "./data.js";
 import { channelHref, navigate, type Route, searchHref, useRoute } from "./route.js";
 import { MessageList } from "./ui/MessageList.js";
+import { SearchBox } from "./ui/SearchBox.js";
 import { SearchView } from "./ui/SearchView.js";
 import { TakeAwayView } from "./ui/TakeAwayView.js";
 import { ThreadPanel } from "./ui/ThreadPanel.js";
@@ -250,7 +251,9 @@ export function App(): ReactNode {
   // Une copie deja autonome n a personne a qui demander la suivante.
   const servedByServer = globalThis.location.protocol !== "file:";
   const [thread, setThread] = useState<Message | undefined>();
-  const [draft, setDraft] = useState(route.view === "recherche" ? route.query : "");
+  // Le champ repart de la requete courante a chaque changement de recherche : la
+  // cle du composant force le remontage, ce qui evite un etat a synchroniser.
+  const draftInitial = route.view === "recherche" ? route.query : "";
 
   // Changer de vue ferme le fil ouvert : il appartient au canal qu on quitte.
   // La dependance est volontaire, l effet ne lit rien mais doit rejouer a chaque
@@ -260,31 +263,13 @@ export function App(): ReactNode {
     setThread(undefined);
   }, [route.view]);
 
-  const submit = (event: FormEvent): void => {
-    event.preventDefault();
-    navigate(searchHref(draft).slice(1));
-  };
-
   return (
     <div className="application">
       <header className="barre-haut">
         <a className="marque" href="#/">
           Archive
         </a>
-        <search className="recherche">
-          <form onSubmit={submit}>
-            <input
-              type="search"
-              value={draft}
-              onChange={(event) => {
-                setDraft(event.target.value);
-              }}
-              placeholder="Rechercher, par exemple from:alice in:general"
-              aria-label="Rechercher dans l archive"
-            />
-            <button type="submit">Chercher</button>
-          </form>
-        </search>
+        <SearchBox key={route.view === "recherche" ? route.query : ""} initial={draftInitial} />
         <a className="lien-annuaire" href="#/annuaire">
           Annuaire
         </a>
