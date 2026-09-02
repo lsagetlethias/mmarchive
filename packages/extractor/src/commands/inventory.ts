@@ -79,9 +79,12 @@ export async function inventoryCommand(
   logger.success(`Fichier de selection ecrit : ${outPath}`);
 
   if (raw.json === true) {
-    // Les quatre categories du modele de selection, telles quelles : c est sur
-    // elles que se decide ce qu il faudra cocher, et un script qui les recompte
-    // depuis le YAML dupliquerait `categorizeChannel`.
+    // Les cinq categories que rend `categorizeChannel`, telles quelles : c est
+    // sur elles que se decide ce qu il faudra cocher, et un script qui les
+    // recompterait depuis le YAML dupliquerait cette logique. Le tableau
+    // affiche plus haut en montre les memes, la table du CLAUDE.md n en
+    // distingue que quatre parce qu elle ne separe pas les canaux archives
+    // selon leur lisibilite.
     process.stdout.write(
       `${JSON.stringify(
         {
