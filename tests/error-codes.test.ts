@@ -112,6 +112,17 @@ describe("points d entree", () => {
     expect(sansBinaire, "ces paquets ne declarent plus aucun binaire").toEqual([]);
   });
 
+  it("appliquent tous la meme decision de code de sortie", () => {
+    // Le README annonce 2 pour un argument invalide. Deux binaires sur quatre
+    // laissaient commander appliquer son defaut et sortaient en 1, et
+    // mmarchive-index etait incoherent avec lui-meme : 2 sur une valeur
+    // invalide, 1 sur une option inconnue.
+    const sansOverride = pointsDEntree()
+      .filter(({ source }) => !readFileSync(source, "utf8").includes("codeDeSortieCommander("))
+      .map(({ binaire, source }) => `${binaire} (${source})`);
+    expect(sansOverride, "ces binaires laissent commander choisir leur code de sortie").toEqual([]);
+  });
+
   it("affichent tous le code de l erreur qui les arrete", () => {
     const muets = pointsDEntree()
       // L appel, pas l import : un describeError importe puis inutilise

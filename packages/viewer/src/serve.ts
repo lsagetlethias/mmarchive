@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { describeError } from "@mmarchive/shared";
+import { codeDeSortieCommander, describeError } from "@mmarchive/shared";
 import { Command } from "commander";
 import pc from "picocolors";
 import { NodeSqlDriver } from "./query/node-driver.js";
@@ -7,6 +7,9 @@ import { createServer } from "./server/app.js";
 import { TOOL_VERSION } from "./version.js";
 
 const program = new Command();
+program.exitOverride((erreur) => {
+  process.exit(codeDeSortieCommander(erreur.code));
+});
 program
   .name("mmarchive-serve")
   .description("Sert une archive mmarchive en lecture seule.")
