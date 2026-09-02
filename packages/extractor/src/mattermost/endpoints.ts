@@ -223,9 +223,12 @@ export const MM = {
 } as const;
 
 /**
- * Gabarits des trois seules mutations declarees. Un test verifie que le
- * catalogue n en contient pas d autres : si quelqu un ajoute un endpoint
- * mutant, le test casse et la relecture est forcee.
+ * Gabarits des trois seules mutations declarees.
+ *
+ * Les tests derivent leur inventaire de `MM` par `Object.keys`, et leur table
+ * d arguments est un `Record` sur ses cles : un endpoint ajoute ici sans y etre
+ * declare ne compile pas, et un endpoint mutant fait rougir la comparaison avec
+ * cette liste. La relecture est forcee par le typage, pas seulement esperee.
  */
 export const DECLARED_MUTATION_TEMPLATES: readonly string[] = [
   "/channels/{channel_id}/members",
