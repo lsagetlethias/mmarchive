@@ -67,13 +67,54 @@ export function isErrorCode(value: unknown): value is ErrorCode {
  * evite de confondre nos codes avec ceux que Node pose sur ses propres erreurs,
  * ou "code" vaut ENOENT ou EACCES.
  */
-export function describeError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+/**
+ * Codes qui designent une panne de l outil et non une saisie fautive.
+ *
+ * Le registre les distingue deja en prose. Les nommer ici permet au message
+ * affiche d inviter a signaler, sans le faire sur une erreur que l utilisateur
+ * corrige lui-meme en relisant sa commande.
+ */
+const ANOMALIES_INTERNES = new Set<ErrorCode>([
+  ERROR_CODES.ForbiddenMutationError,
+  ERROR_CODES.ConsentViolationError,
+  ERROR_CODES.NonPublicChannelError,
+  ERROR_CODES.NdjsonSerializeError,
+  ERROR_CODES.ResidualIdentityError,
+]);
+
+/** Ou signaler une anomalie. Rendu avec le message, jamais dans une archive. */
+export const BUG_REPORT_URL = "https://github.com/lsagetlethias/mmarchive/issues";
+
+/**
+ * Message affiche quand un binaire s arrete, version de l outil comprise.
+ *
+ * Une panne est souvent rapportee par capture d ecran, des mois plus tard : sans
+ * le numero de version, le code d erreur seul ne dit pas contre quel code il
+ * faut relire la trace. Le registre des codes le documentait, aucun message ne
+ * le portait.
+ */
+export function describeFailure(error: unknown, toolVersion: string): string {
+  const lignes = [describeError(error), `mmarchive ${toolVersion}`];
+  const code = errorCodeOf(error);
+  if (code !== undefined && ANOMALIES_INTERNES.has(code)) {
+    lignes.push(`Cette erreur signale une anomalie de l outil : ${BUG_REPORT_URL}`);
+  }
+  return lignes.join("\n  ");
+}
+
+/** Code du registre porte par une erreur, s il y en a un. */
+export function errorCodeOf(error: unknown): ErrorCode | undefined {
   if (typeof error === "object" && error !== null && "code" in error) {
     const { code } = error as { code: unknown };
-    if (isErrorCode(code)) return `[${code}] ${message}`;
+    if (isErrorCode(code)) return code;
   }
-  return message;
+  return undefined;
+}
+
+export function describeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = errorCodeOf(error);
+  return code === undefined ? message : `[${code}] ${message}`;
 }
 
 /**

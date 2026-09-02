@@ -123,15 +123,17 @@ describe("points d entree", () => {
     expect(sansOverride, "ces binaires laissent commander choisir leur code de sortie").toEqual([]);
   });
 
-  it("affichent tous le code de l erreur qui les arrete", () => {
+  it("affichent tous le code et la version de l erreur qui les arrete", () => {
     const muets = pointsDEntree()
-      // L appel, pas l import : un describeError importe puis inutilise
+      // L appel, pas l import : un describeFailure importe puis inutilise
       // laisserait passer exactement l oubli que ce test doit attraper.
-      .filter(({ source }) => !readFileSync(source, "utf8").includes("describeError("))
+      .filter(({ source }) => !readFileSync(source, "utf8").includes("describeFailure("))
       .map(({ binaire, source }) => `${binaire} (${source})`);
     // Un binaire qui rend un message sans son code laisse l utilisateur sans
-    // rien a chercher, et la table des codes ne sert plus a rien pour lui.
-    expect(muets, "ces binaires rendent une erreur sans son code").toEqual([]);
+    // rien a chercher, et la table des codes ne sert plus a rien pour lui. Sans
+    // la version, le code ne dit pas non plus contre quel etat du depot le
+    // relire, ce qui compte quand la seule trace est une capture d ecran.
+    expect(muets, "ces binaires rendent une erreur sans son code ni sa version").toEqual([]);
   });
 });
 

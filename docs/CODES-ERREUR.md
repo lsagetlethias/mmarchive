@@ -26,6 +26,19 @@ Un test d'invariant refuse toute classe d'erreur qui n'y figure pas, tout code a
 deux fois, et toute entrée devenue orpheline : cette page ne peut donc pas se désynchroniser
 silencieusement du code.
 
+
+## Où signaler
+
+Les codes marqués « anomalie interne » ci-dessous désignent une panne de l'outil et non
+une saisie fautive : `E2009`, `E2010`, `E2011`, `E3004` et `E3009`. Le binaire les
+accompagne de son numéro de version et de cette adresse :
+
+<https://github.com/lsagetlethias/mmarchive/issues>
+
+Joignez le code, la version affichée sous le message, et ce que vous faisiez. Le message
+lui-même suffit : n'y joignez ni archive, ni `channels.yaml`, ni relevé d'anonymisation,
+ils portent des échanges internes.
+
 ## E10xx, ce que vous avez fourni
 
 | Code    | Situation                                                                | Que faire                                                                 |
