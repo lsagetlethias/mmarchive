@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.2.0](https://github.com/lsagetlethias/mmarchive/compare/v1.1.0...v1.2.0) (2026-09-02)
+
+
+### Features
+
+* **cli:** shell completion, structured output, and where to report a bug ([#32](https://github.com/lsagetlethias/mmarchive/issues/32)) ([5fa2b3b](https://github.com/lsagetlethias/mmarchive/commit/5fa2b3b8d00b005c40a45b2d024ba07d0f3584ee))
+* **extractor:** anonymise a whole archive, and state what it does not cover ([#21](https://github.com/lsagetlethias/mmarchive/issues/21)) ([55b06aa](https://github.com/lsagetlethias/mmarchive/commit/55b06aae6dfce2d103e9396c377e4928061ae173))
+* **extractor:** generate anonymisation pseudonyms, and scope the work around them ([#19](https://github.com/lsagetlethias/mmarchive/issues/19)) ([f697cd9](https://github.com/lsagetlethias/mmarchive/commit/f697cd92dd005b321a1ec9f6bf10ac2e72e9856d))
+* **extractor:** replace clear-text names, behind three anonymisation levels ([#25](https://github.com/lsagetlethias/mmarchive/issues/25)) ([28e0842](https://github.com/lsagetlethias/mmarchive/commit/28e084294015cdfc3bdfc00c3e87ee32711c8424))
+* **extractor:** report what the anonymisation left behind, without becoming the key ([#23](https://github.com/lsagetlethias/mmarchive/issues/23)) ([902609f](https://github.com/lsagetlethias/mmarchive/commit/902609ffa4e48dc663ac1d6daaeea0655dd14841))
+* **extractor:** rewrite the anchored forms in both text surfaces ([#24](https://github.com/lsagetlethias/mmarchive/issues/24)) ([930cfaa](https://github.com/lsagetlethias/mmarchive/commit/930cfaabd1f8da393fec674d841812708c548598))
+* **viewer:** complete from: and in: while typing ([#27](https://github.com/lsagetlethias/mmarchive/issues/27)) ([6dc37d6](https://github.com/lsagetlethias/mmarchive/commit/6dc37d67d51ccaf4bbbb4265438bc611f6030c68))
+
+
+### Bug fixes
+
+* **cli:** honour the exit codes and output streams the README promises ([#29](https://github.com/lsagetlethias/mmarchive/issues/29)) ([1feaf08](https://github.com/lsagetlethias/mmarchive/commit/1feaf08d4bb6092ab86c7e12ed363ec792c25e5e))
+* **extractor:** stop claiming guarantees the code does not hold ([#28](https://github.com/lsagetlethias/mmarchive/issues/28)) ([279004d](https://github.com/lsagetlethias/mmarchive/commit/279004d99ee35430dd0b37db742d32edf8e3ae25))
+* **extractor:** stop leaking identities the archive was meant to hide ([#22](https://github.com/lsagetlethias/mmarchive/issues/22)) ([62eaf9a](https://github.com/lsagetlethias/mmarchive/commit/62eaf9ad8322887a5babb4f550bcd4f302d6e612))
+
+
+### Performance
+
+* **viewer:** stop rebuilding the message list on every render ([#30](https://github.com/lsagetlethias/mmarchive/issues/30)) ([3db7821](https://github.com/lsagetlethias/mmarchive/commit/3db7821091d045d7b1dcd14a71609662f40f5850))
+
 ## [1.1.0](https://github.com/lsagetlethias/mmarchive/compare/v1.0.0...v1.1.0) (2026-08-30)
 
 
