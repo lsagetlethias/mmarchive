@@ -102,6 +102,14 @@ export interface CanalCandidat {
   readonly porteurs: number;
 }
 
+/**
+ * Plafond du detail des identifiants colles.
+ *
+ * Le releve sert a corriger a la main : passe cette taille, il ne se corrige
+ * plus a la main, et les deux totaux disent alors ce qu il faut savoir.
+ */
+export const PLAFOND_IDENTIFIANTS_COLLES = 500;
+
 /** Identifiant de compte colle en clair dans le corps d un message. */
 export interface IdentifiantColle {
   readonly postId: string;
@@ -136,7 +144,18 @@ export interface MesuresSortie {
   messagesAvecAdresse: number;
   adressesDistinctes: number;
   telephones: number;
+  /**
+   * Detail des identifiants colles, plafonne a PLAFOND_IDENTIFIANTS_COLLES.
+   *
+   * C est la seule structure du controle qui grandissait avec les messages et
+   * non avec les comptes. Le volume observe est trivial, sept messages sur
+   * l archive de reference, mais rien dans le code ne le garantissait : une
+   * archive ou l usage des permaliens serait courant faisait croitre la liste
+   * sans borne. Les deux totaux ci-dessous restent exacts.
+   */
   identifiantsColles: IdentifiantColle[];
+  identifiantsCollesMessages: number;
+  identifiantsCollesOccurrences: number;
   /**
    * Messages systeme dont le texte porte encore le nom d un compte.
    *
@@ -175,6 +194,8 @@ export function mesuresVides(): MesuresSortie {
     adressesDistinctes: 0,
     telephones: 0,
     identifiantsColles: [],
+    identifiantsCollesMessages: 0,
+    identifiantsCollesOccurrences: 0,
     nomsResiduelsSysteme: 0,
     canauxCandidats: [],
     canauxDistincts: 0,

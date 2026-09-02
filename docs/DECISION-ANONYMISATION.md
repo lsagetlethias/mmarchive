@@ -402,16 +402,27 @@ d'un document qui s'ouvre sur « diffusable ».
 
 ## Ce que cela garantit, et ce que cela ne garantit pas
 
-**L'archive n'est pas diffusable à ce stade.** Le manifeste le dit par ce qu'il n'énumère
-pas : `anonymized.text_rewritten` liste les formes traitées, et `noms` n'y figure pas.
+**La garantie dépend du niveau appliqué, et le manifeste dit lequel l'a été.**
+`anonymized.niveau` le nomme, `anonymized.text_rewritten` énumère les formes réellement
+traitées, par surface. Un lecteur qui n'y trouve pas `noms` sait que le corps des messages
+porte encore des noms écrits en clair, et donc qu'il ne tient pas une archive diffusable.
 
-Est garanti dès maintenant, et uniquement sur les champs **structurés** : plus aucun
-identifiant ni nom de compte parmi les auteurs de messages, les réactions, les déposants de
-pièces jointes, les créateurs d'emoji, les fiches de comptes et les clés de référence de
-`props` ; plus aucune adresse électronique de compte, plus aucun avatar, aucune pièce
-jointe, aucune image d'emoji, plus d'URL d'instance, plus d'identité d'opérateur ; et la
-correspondance vers les identités d'origine n'existe nulle part **pour qui ne détient pas
-l'archive source**.
+### Garanti aux trois niveaux, sur les champs structurés
+
+Plus aucun identifiant ni nom de compte parmi les auteurs de messages, les réactions, les
+déposants de pièces jointes, les créateurs d'emoji, les fiches de comptes et les clés de
+référence de `props` ; plus aucune adresse électronique de compte, plus aucun avatar,
+aucune pièce jointe, aucune image d'emoji, plus d'URL d'instance, plus d'identité
+d'opérateur.
+
+S'y ajoute une réécriture de texte qui ne dépend d'aucun niveau : **les noms que les
+métadonnées d'un message désignent** sont substitués dans son corps. Sans elle, une ligne
+apparie l'identité réelle et son pseudonyme, et le niveau le plus bas porterait la table de
+correspondance en clair. C'est mesuré : 65 577 messages système sur 67 401 portent un texte
+de ce type, assez pour couvrir 3 237 comptes sur 3 277.
+
+Et la correspondance vers les identités d'origine n'existe nulle part **pour qui ne détient
+pas l'archive source**.
 
 Cette dernière réserve est nécessaire et ne doit pas être retirée. Les identifiants de
 messages, de canaux et de pièces jointes sont conservés délibérément, parce que la
@@ -419,26 +430,63 @@ vérification les exige et que les permaliens en dépendent : qui possède l'arc
 peut donc apparier ligne à ligne, quel que soit le soin apporté au reste. La forme absolue
 serait plus belle et un juriste la prendrait au mot.
 
-Le **texte** conservé dans `props`, celui des blocs `attachments`, n'entre pas dans cette
-garantie. `props` reste une structure ouverte, et ce texte est traité exactement comme le
-corps des messages, c'est-à-dire pas encore : mesuré sur l'archive de référence, il porte
-13 054 valeurs de `fields` et 1 896 champs de texte contenant un nom de compte.
+### Ce que chaque niveau ajoute, et ce qu'il laisse
 
-N'est pas garanti, et le contrôle l'énumère à chaque exécution plutôt que de le taire : le
-corps des messages, qui porte encore mentions, noms écrits en clair et adresses ; le texte
-des blocs `attachments`, conservé pour ne pas vider 312 183 messages ; le nom et l'objet des
-canaux ; le nom des emojis personnalisés, souvent formé sur un prénom ; le nom et la
-description de la team, qui désignent l'organisation.
+`comptes` **n'ajoute rien sur le texte**. Le corps des messages et le texte des blocs
+`attachments` portent encore mentions, adresses, numéros, identifiants collés et noms
+écrits en clair. C'est le niveau de qui veut relire, pas de qui veut diffuser.
 
-Trois résidus méritent d'être nommés parce qu'ils ont été mesurés sur l'archive produite.
-Un prénom porté par plusieurs comptes reste en clair dans les messages système, et c'est
-voulu : « vanessa » désigne quatre comptes de l'archive de référence, donc le substituer
-serait arbitraire, et il n'apparie rien puisqu'il ne désigne personne en particulier.
-Onze identifiants de comptes réels sont **collés dans le corps de sept messages**, sous
-forme de permalien ou d'identifiant brut : la réécriture du texte devra donc traiter les
-identifiants de 26 caractères, et pas seulement les mentions et les noms. Et une personne
-désignée par un surnom, une initiale ou une orthographe approximative passera au travers,
-ce qu'aucune règle automatique ne rattrapera.
+`formes` traite ce qui est **ancré**, dans les deux surfaces de texte : mentions, adresses,
+numéros de téléphone et identifiants de comptes collés dans le corps. Une mention qui ne
+désigne aucun compte est neutralisée plutôt que laissée, puisqu'une mention non résolue
+reste un nom. Restent les noms écrits en clair, qu'aucun ancrage ne distingue d'un mot
+ordinaire.
+
+`noms` ajoute les **noms écrits en clair** tirés du vocabulaire, et c'est le seul niveau
+qui vise une diffusion. Il abîme du texte là où un nom est aussi un mot ordinaire, et
+c'est l'arbitrage assumé plus haut. Restent, et ce chiffre est le seul à lire : les
+**186 comptes qui demeurent nommables quel que soit le réglage**, parce que leurs formes
+font moins de quatre lettres, sont partagées par trop de comptes, ou paraissent trop
+souvent dans le corpus pour être remplacées sans détruire la lecture.
+
+Le rapport ne rend jamais de verdict positif, à aucun niveau. Une identité trouvée est une
+preuve ; aucune identité trouvée n'en est pas une. `noms` ne délivre donc pas une
+autorisation de diffuser, il porte la seule promesse qui la rende envisageable.
+
+### N'est garanti à aucun niveau
+
+Le nom et l'objet des canaux, conservés pour ne pas casser les permaliens ; le nom des
+emojis personnalisés, souvent formé sur un prénom ; le nom et la description de la team,
+qui désignent l'organisation et dont le maintien est un choix assumé ; les identités
+contenues dans les images ; et la réversibilité par recoupement, qu'aucune
+pseudonymisation ne traite.
+
+Le contrôle résiduel énumère ces limites à chaque exécution, ajustées au niveau appliqué,
+plutôt que de les taire.
+
+### Trois résidus nommés, parce qu'ils ont été mesurés
+
+Un prénom porté par plusieurs comptes ne reçoit jamais le pseudonyme de l'un d'eux :
+« vanessa » désigne quatre comptes de l'archive de référence, donc le substituer serait
+arbitraire et fabriquerait une attribution fausse. Au niveau `noms` il reçoit un substitut
+neutre, ce qui perd le fil sans désigner personne ; en dessous, il reste en clair.
+
+Onze identifiants de comptes réels sont collés dans le corps de sept messages, sous forme
+de permalien ou d'identifiant brut. Ils sont traités **à partir du niveau `formes`**, ce
+qui est précisément la raison pour laquelle la réécriture ne s'est pas limitée aux mentions
+et aux noms.
+
+Une personne désignée par un surnom, une initiale ou une orthographe approximative passe au
+travers à tous les niveaux, et aucune règle automatique ne rattrapera cela.
+
+### Le texte des blocs `attachments`
+
+Il entre dans le périmètre depuis que les deux surfaces sont traitées ensemble : le même
+moteur et la même table tournent sur `message` et sur `props.attachments`, et le manifeste
+les énumère toutes deux. `props` reste néanmoins une **structure ouverte**, et c'est la
+raison pour laquelle sa réduction procède par liste blanche de clés plutôt que par liste
+noire. La surface est large : 13 054 valeurs de `fields` et 1 896 champs de texte y portent
+un nom de compte sur l'archive de référence.
 
 C'est cette section, et non la commande, qu'il faut soumettre au juridique.
 

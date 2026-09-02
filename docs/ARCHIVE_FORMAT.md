@@ -145,6 +145,20 @@ Document unique décrivant l'archive. C'est le point d'entrée de tout lecteur.
 }
 ```
 
+### `options.since` : présent seulement après une extraction incrémentale
+
+Champ optionnel, absent d'une extraction complète. Il porte la date ISO passée à
+`--since`, c'est-à-dire la borne basse de la remontée chronologique : aucun message
+antérieur ne figure dans l'archive, quel que soit le canal.
+
+Un lecteur qui le trouve sait que l'archive est **volontairement partielle dans le
+temps**, ce que `post_range.first_create_at` ne dit pas à lui seul, puisque celui-ci
+rend seulement le plus ancien message effectivement extrait.
+
+Cette borne est appliquée côté client. Le paramètre `since` de l'API Mattermost n'est
+pas utilisé : il sélectionne les messages *modifiés*, est plafonné à 1 000 et interdit
+la pagination.
+
 ### `selection` : la complétude est auditable
 
 `channels_total_public` est le nombre de canaux publics **visibles sur l'instance** au

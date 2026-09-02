@@ -251,15 +251,22 @@ export function rendreSynthese(contexte: ContexteRapport): string {
     "comptees dans la section precedente.",
   );
 
-  if (m.identifiantsColles.length > 0) {
-    const total = m.identifiantsColles.reduce((n, x) => n + x.occurrences, 0);
+  if (m.identifiantsCollesMessages > 0) {
+    const tronque = m.identifiantsCollesMessages > m.identifiantsColles.length;
     ajouter(
       "## Identifiants de comptes colles dans le corps",
       "",
-      `${String(total)} occurrence(s) dans ${String(m.identifiantsColles.length)} message(s).`,
+      `${String(m.identifiantsCollesOccurrences)} occurrence(s) dans ` +
+        `${String(m.identifiantsCollesMessages)} message(s).`,
       "Detection par appartenance exacte a l ensemble des identifiants d origine, donc sans faux",
-      "positif. Le volume est trivial et la correction est manuelle : le releve les designe un",
-      "par un.",
+      "positif. La correction est manuelle : le releve les designe un par un.",
+      ...(tronque
+        ? [
+            "",
+            `Le releve n en detaille que ${String(m.identifiantsColles.length)}. A ce volume, la`,
+            "correction ne se fait plus a la main : les deux totaux ci-dessus sont ce qu il faut lire.",
+          ]
+        : []),
     );
   }
 

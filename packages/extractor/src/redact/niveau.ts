@@ -42,7 +42,7 @@ export const SEUIL_FREQUENCE_PAR_DEFAUT = 200;
 /** Ce que chaque niveau ajoute, pour l aide de la commande et le rapport. */
 export const DESCRIPTION_NIVEAUX: Record<NiveauAnonymisation, string> = {
   comptes:
-    "Fiches de comptes, metadonnees et references. Les binaires ne sont pas repris. Le texte n est pas touche : les mentions, les adresses et les noms y restent en clair.",
+    "Fiches de comptes, metadonnees et references. Les binaires ne sont pas repris. Les mentions, les adresses et les noms ecrits en clair restent dans le texte ; seuls les noms que les metadonnees d un message designent y sont substitues, ce que tous les niveaux font.",
   formes:
     "Ajoute les formes ancrees du texte : mentions, adresses, numeros de telephone et identifiants colles. Les noms ecrits en clair restent.",
   noms: "Ajoute les noms ecrits en clair, ce qui abime du texte la ou un nom est aussi un mot ordinaire. C est le seul niveau qui vise une diffusion.",
