@@ -733,10 +733,22 @@ describe("ce que le controle declare ne pas couvrir", () => {
     return rapport.horsControle;
   }
 
-  it("annonce le texte entier au niveau qui ne le reecrit pas", async () => {
+  it("annonce les formes ancrees au niveau qui ne les reecrit pas", async () => {
     const dit = (await limites("comptes")).join(" | ");
-    expect(dit).toContain("que ce niveau ne reecrit pas");
+    expect(dit).toContain("mentions, adresses, numeros et identifiants");
     expect(dit).toContain("blocs attachments");
+  });
+
+  it("ne pretend jamais que le corps des messages est laisse intact", async () => {
+    // Meme au niveau le plus bas, la substitution des noms que les metadonnees
+    // designent reecrit le corps de dizaines de milliers de messages systeme.
+    // Une limite qui annoncerait « le corps des messages, que ce niveau ne
+    // reecrit pas » reproduirait, en la corrigeant, la faute d origine.
+    for (const niveau of ["comptes", "formes", "noms"] as const) {
+      for (const limite of await limites(niveau)) {
+        expect(limite, niveau).not.toMatch(/corps des messages[^|]*ne reecrit pas/);
+      }
+    }
   });
 
   it("n annonce plus que les noms une fois les formes ancrees traitees", async () => {

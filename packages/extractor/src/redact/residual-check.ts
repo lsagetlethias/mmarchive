@@ -324,8 +324,13 @@ function controlerProps(post: ArchivePost, emplacement: string, collecteur: Coll
 function limitesDuControle(niveau: NiveauAnonymisation): string[] {
   const surface: string[] = [];
   if (!reecritLesFormes(niveau)) {
+    // Enonce ce qui n est pas reecrit, et non la surface ou cela se trouve : ce
+    // niveau touche quand meme au corps des messages, ou il substitue les noms
+    // que les metadonnees designent. Dire « le corps des messages, que ce
+    // niveau ne reecrit pas » serait faux de la meme facon que la liste figee
+    // qu on remplace ici.
     surface.push(
-      "le corps des messages et le texte des blocs attachments, que ce niveau ne reecrit pas : mentions, adresses, numeros et identifiants y restent en clair",
+      "les formes ancrees, mentions, adresses, numeros et identifiants, que ce niveau ne reecrit ni dans le corps des messages ni dans les blocs attachments",
     );
   } else if (!reecritLesNoms(niveau)) {
     surface.push(

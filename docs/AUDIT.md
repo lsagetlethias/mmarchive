@@ -179,13 +179,17 @@ message. La fonction traite tout message système, plus tout message dont `props
 
 Établi par exécution, sur la fixture des tests existants, au niveau `comptes` :
 
-```
+```text
 messages au total : 8
 messages dont le corps a change : 2
   type: "system_add_to_channel"
     avant : "alice.martin a ete ajoute au canal par bob."
     apres : "anon-quartz-ample a ete ajoute au canal par anon-basalte-agile."
 ```
+
+La fixture comptait alors huit messages ; la correction lui en a ajouté un neuvième, qui
+porte une mention, une adresse et un nom en clair, pour que les trois niveaux se
+distinguent.
 
 L'ordre de grandeur réel est dans `system-message.ts:5-8` : 65 577 messages système sur
 67 401 portent un texte de ce type sur l'archive de référence. Au niveau censé ne pas
