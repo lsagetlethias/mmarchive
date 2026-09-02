@@ -74,7 +74,7 @@ export function isErrorCode(value: unknown): value is ErrorCode {
  * affiche d inviter a signaler, sans le faire sur une erreur que l utilisateur
  * corrige lui-meme en relisant sa commande.
  */
-const ANOMALIES_INTERNES = new Set<string>([
+const ANOMALIES_INTERNES = new Set<ErrorCode>([
   ERROR_CODES.ForbiddenMutationError,
   ERROR_CODES.ConsentViolationError,
   ERROR_CODES.NonPublicChannelError,
