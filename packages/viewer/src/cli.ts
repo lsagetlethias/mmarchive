@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { describeError } from "@mmarchive/shared";
+import { codeDeSortieCommander, describeError } from "@mmarchive/shared";
 import { Command } from "commander";
 import pc from "picocolors";
 import { type BuildProgress, type BuildReport, buildIndex } from "./index/build.js";
@@ -114,6 +114,9 @@ function printReport(report: BuildReport, output: string): void {
 }
 
 const program = new Command();
+program.exitOverride((erreur) => {
+  process.exit(codeDeSortieCommander(erreur.code));
+});
 program
   .name("mmarchive-index")
   .description("Construit l index de consultation d une archive mmarchive.")

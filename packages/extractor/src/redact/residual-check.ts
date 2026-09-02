@@ -37,6 +37,7 @@ import {
 import { readNdjson } from "@mmarchive/shared/ndjson";
 import { createArchivePaths } from "../archive/paths.js";
 import { adressesDe, identifiantsDe, mentionsDe, telephonesDe } from "./measure.js";
+import { type NiveauAnonymisation, reecritLesFormes, reecritLesNoms } from "./niveau.js";
 import { PROPS_POSITIONS_REFERENCE } from "./props-filter.js";
 import { FORME_PSEUDONYME } from "./pseudonym.js";
 import {
@@ -44,6 +45,7 @@ import {
   type FormeResiduelle,
   type MesuresSortie,
   mesuresVides,
+  PLAFOND_IDENTIFIANTS_COLLES,
 } from "./report-data.js";
 
 export class ResidualIdentityError extends Error {
@@ -310,10 +312,48 @@ function controlerProps(post: ArchivePost, emplacement: string, collecteur: Coll
   }
 }
 
+/**
+ * Ce que le controle ne peut pas garantir, au niveau applique.
+ *
+ * Cette liste part dans la synthese et s affiche en fin de run. Elle dit ce que
+ * le controle NE VERIFIE PAS ; elle n affirme jamais ce que l archive porte.
+ * Une constante figee annoncait « le corps des messages, qui porte encore
+ * mentions, noms en clair et adresses » : c etait vrai avant les niveaux, et
+ * faux des que le defaut s est mis a remplacer les noms.
+ */
+function limitesDuControle(niveau: NiveauAnonymisation): string[] {
+  const surface: string[] = [];
+  if (!reecritLesFormes(niveau)) {
+    // Enonce ce qui n est pas reecrit, et non la surface ou cela se trouve : ce
+    // niveau touche quand meme au corps des messages, ou il substitue les noms
+    // que les metadonnees designent. Dire « le corps des messages, que ce
+    // niveau ne reecrit pas » serait faux de la meme facon que la liste figee
+    // qu on remplace ici.
+    surface.push(
+      "les formes ancrees, mentions, adresses, numeros et identifiants, que ce niveau ne reecrit ni dans le corps des messages ni dans les blocs attachments",
+    );
+  } else if (!reecritLesNoms(niveau)) {
+    surface.push(
+      "les noms ecrits en clair, dans le corps des messages comme dans les blocs attachments, que ce niveau ne remplace pas",
+    );
+  } else {
+    surface.push(
+      "les noms que le vocabulaire n a pas retenus, trop courts, portes par trop de comptes ou trop frequents dans le corpus pour etre remplaces sans detruire le texte",
+    );
+  }
+  return [
+    ...surface,
+    "le nom et l objet des canaux, conserves pour ne pas casser les permaliens",
+    "le nom des emojis personnalises, souvent forme sur un prenom",
+    "le nom et la description de la team, qui designent l organisation",
+  ];
+}
+
 export async function checkResidualIdentities(options: {
   outDir: string;
   origine: IdentitesOrigine;
   substitution: Substitution;
+  niveau: NiveauAnonymisation;
 }): Promise<ResidualReport> {
   const paths = createArchivePaths(options.outDir);
   const collecteur = new Collecteur(options.origine, options.substitution);
@@ -445,11 +485,17 @@ export async function checkResidualIdentities(options: {
       // appartenance exacte a l ensemble d origine, donc sans faux positif.
       const colles = identifiantsDe(texte).filter((id) => options.origine.ids.has(id));
       if (colles.length > 0) {
-        mesures.identifiantsColles.push({
-          postId: post.id,
-          canal,
-          occurrences: colles.length,
-        });
+        mesures.identifiantsCollesMessages += 1;
+        mesures.identifiantsCollesOccurrences += colles.length;
+        // Les totaux se comptent toujours, le detail se plafonne : c est la
+        // seule structure du controle qui croissait avec les messages.
+        if (mesures.identifiantsColles.length < PLAFOND_IDENTIFIANTS_COLLES) {
+          mesures.identifiantsColles.push({
+            postId: post.id,
+            canal,
+            occurrences: colles.length,
+          });
+        }
       }
 
       // Un message systeme dont le texte porte encore le nom d un compte. La
@@ -516,12 +562,6 @@ export async function checkResidualIdentities(options: {
     valeursVerifiees: collecteur.valeursVerifiees,
     manquements: collecteur.manquements,
     mesures,
-    horsControle: [
-      "le corps des messages, qui porte encore mentions, noms en clair et adresses",
-      "le texte des blocs attachments, conserve pour ne pas vider 312 183 messages",
-      "le nom et l objet des canaux, conserves pour ne pas casser les permaliens",
-      "le nom des emojis personnalises, souvent forme sur un prenom",
-      "le nom et la description de la team, qui designent l organisation",
-    ],
+    horsControle: limitesDuControle(options.niveau),
   };
 }

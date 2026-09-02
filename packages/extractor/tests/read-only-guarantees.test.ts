@@ -16,32 +16,55 @@ const CHANNEL = "aaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OTHER_CHANNEL = "bbbbbbbbbbbbbbbbbbbbbbbbbb";
 const TEAM = "tttttttttttttttttttttttttt";
 const USER = "uuuuuuuuuuuuuuuuuuuuuuuuuu";
+const POST = "pppppppppppppppppppppppppp";
+const EMOJI = "eeeeeeeeeeeeeeeeeeeeeeeeee";
+const FILE = "ffffffffffffffffffffffffff";
 
-/** Invoque chaque entree du catalogue avec des arguments plausibles. */
+type NomEndpoint = keyof typeof MM;
+
+/**
+ * Arguments plausibles, un jeu par entree du catalogue.
+ *
+ * Le type est un `Record` sur `keyof typeof MM`, et c est tout l interet : une
+ * methode ajoutee au catalogue et oubliee ici ne compile plus. La version
+ * precedente enumerait les appels a la main, si bien qu un endpoint mutant
+ * ajoute a `MM` et absent de la liste passait les quatorze tests de ce fichier
+ * sans en rougir un seul. `getTeam` y manquait d ailleurs deja.
+ *
+ * Les valeurs importent peu : aucune requete n est emise, seul le descripteur
+ * d appel est inspecte.
+ */
+const ARGUMENTS: Record<NomEndpoint, readonly unknown[]> = {
+  getMe: [],
+  ping: [],
+  getClientConfig: [],
+  getMyTeams: [],
+  getAllTeams: [0, 200],
+  getTeam: [TEAM],
+  getMyChannelsForTeam: [TEAM],
+  getPublicChannelsForTeam: [TEAM, 0, 200],
+  getDeletedChannelsForTeam: [TEAM, 0, 200],
+  getChannel: [CHANNEL],
+  getChannelPosts: [CHANNEL, { perPage: 200 }],
+  getPinnedPosts: [CHANNEL],
+  getUsersByIds: [[USER]],
+  getBulkReactions: [[POST]],
+  getUserImage: [USER],
+  getCustomEmojis: [0, 200],
+  getEmojiImage: [EMOJI],
+  getFile: [FILE],
+  getFileInfo: [FILE],
+  addChannelMember: [CHANNEL, USER],
+  removeChannelMember: [CHANNEL, USER],
+  addTeamMember: [TEAM, USER],
+};
+
+/** Invoque chaque entree du catalogue, derivee de `MM` et jamais listee. */
 function everyEndpointCall(): EndpointCall[] {
-  return [
-    MM.getMe(),
-    MM.ping(),
-    MM.getClientConfig(),
-    MM.getMyTeams(),
-    MM.getAllTeams(0, 200),
-    MM.getMyChannelsForTeam(TEAM),
-    MM.getPublicChannelsForTeam(TEAM, 0, 200),
-    MM.getDeletedChannelsForTeam(TEAM, 0, 200),
-    MM.getChannel(CHANNEL),
-    MM.getChannelPosts(CHANNEL, { perPage: 200 }),
-    MM.getPinnedPosts(CHANNEL),
-    MM.getUsersByIds([USER]),
-    MM.getBulkReactions(["p".repeat(26)]),
-    MM.getUserImage(USER),
-    MM.getCustomEmojis(0, 200),
-    MM.getEmojiImage("e".repeat(26)),
-    MM.getFile("f".repeat(26)),
-    MM.getFileInfo("f".repeat(26)),
-    MM.addChannelMember(CHANNEL, USER),
-    MM.removeChannelMember(CHANNEL, USER),
-    MM.addTeamMember(TEAM, USER),
-  ];
+  return (Object.keys(MM) as NomEndpoint[]).map((nom) => {
+    const fabrique = MM[nom] as (...args: readonly unknown[]) => EndpointCall;
+    return fabrique(...ARGUMENTS[nom]);
+  });
 }
 
 function fetchSpy(
@@ -77,6 +100,13 @@ describe("catalogue d endpoints", () => {
     const mutating = everyEndpointCall().filter((call) => call.mutates);
     const templates = [...new Set(mutating.map((c) => c.template))].sort();
     expect(templates).toEqual([...DECLARED_MUTATION_TEMPLATES].sort());
+  });
+
+  it("est parcouru en entier, chaque entree de MM etant invoquee", () => {
+    // Ceinture et bretelles : le type l impose deja, ce test attrape le jour ou
+    // quelqu un ferait sauter la contrainte avec un cast.
+    expect(Object.keys(ARGUMENTS).sort()).toEqual(Object.keys(MM).sort());
+    expect(everyEndpointCall()).toHaveLength(Object.keys(MM).length);
   });
 
   it("n autorise que deux POST de lecture, et ils sont documentes comme tels", () => {

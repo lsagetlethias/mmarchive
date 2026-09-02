@@ -1,4 +1,4 @@
-import { describeError } from "@mmarchive/shared";
+import { codeDeSortieCommander, describeError } from "@mmarchive/shared";
 import { Command } from "commander";
 import { ArchivePathError } from "./archive/paths.js";
 import { type RedactMode, redactArchive } from "./redact/redact-archive.js";
@@ -11,22 +11,8 @@ import { TOOL_VERSION } from "./version.js";
  * impossible a tester, l import suffisant a terminer le processus.
  */
 const program = new Command();
-// Commander sort en 0 quand une option requise manque, ce qui ferait croire a un
-// script que la commande a fait son travail. Le README documente 2 pour un
-// argument invalide, et c est ce que rendent les autres commandes.
-//
-// Toute erreur signalee par commander est une erreur de saisie : option inconnue,
-// argument manquant, valeur absente. Les enumerer une par une laisserait passer
-// celles qu une version ulterieure ajoutera, alors que le code 1 doit rester
-// reserve a ce qui echoue pendant l effacement lui meme. Commander a deja ecrit
-// le message, le repeter le ferait paraitre deux fois.
-const SORTIES_NORMALES = new Set([
-  "commander.help",
-  "commander.helpDisplayed",
-  "commander.version",
-]);
 program.exitOverride((erreur) => {
-  process.exit(SORTIES_NORMALES.has(erreur.code) ? 0 : 2);
+  process.exit(codeDeSortieCommander(erreur.code));
 });
 program
   .name("mmarchive-redact")

@@ -1,4 +1,4 @@
-import { describeError } from "@mmarchive/shared";
+import { codeDeSortieCommander, describeError } from "@mmarchive/shared";
 import { Command } from "commander";
 import { doctorCommand } from "./commands/doctor.js";
 import { inventoryCommand } from "./commands/inventory.js";
@@ -12,6 +12,9 @@ import { TOOL_VERSION } from "./version.js";
 const logger = new Logger();
 
 const program = new Command();
+program.exitOverride((erreur) => {
+  process.exit(codeDeSortieCommander(erreur.code));
+});
 program
   .name("mmarchive-extract")
   .description(

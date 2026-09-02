@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { type ArchiveUser, describeError } from "@mmarchive/shared";
+import { type ArchiveUser, codeDeSortieCommander, describeError } from "@mmarchive/shared";
 import { readNdjson } from "@mmarchive/shared/ndjson";
 import { Command } from "commander";
 import { ArchivePathError, createArchivePaths } from "./archive/paths.js";
@@ -15,6 +15,7 @@ import {
   estNiveau,
   NIVEAU_PAR_DEFAUT,
   NIVEAUX,
+  type NiveauAnonymisation,
   SEUIL_FREQUENCE_PAR_DEFAUT,
 } from "./redact/niveau.js";
 import { type ContexteRapport, rendreReleve, rendreSynthese } from "./redact/report-render.js";
@@ -38,13 +39,8 @@ import { TOOL_VERSION } from "./version.js";
  */
 const program = new Command();
 
-const SORTIES_NORMALES = new Set([
-  "commander.help",
-  "commander.helpDisplayed",
-  "commander.version",
-]);
 program.exitOverride((erreur) => {
-  process.exit(SORTIES_NORMALES.has(erreur.code) ? 0 : 2);
+  process.exit(codeDeSortieCommander(erreur.code));
 });
 
 interface Options {
@@ -133,7 +129,7 @@ program
     resumer(resultat, logger);
 
     logger.info("Controle des identites residuelles.");
-    const controle = await controler(opts.archive, opts.out);
+    const controle = await controler(opts.archive, opts.out, niveau);
 
     // Le releve s ecrit d office quand le controle a trouve quelque chose : il
     // n y a alors rien a diffuser, et le detail est ce qu on cherche.
@@ -198,7 +194,11 @@ function resumer(resultat: AnonymizeResult, logger: Logger): void {
   );
 }
 
-async function controler(archiveDir: string, outDir: string): Promise<ResidualReport> {
+async function controler(
+  archiveDir: string,
+  outDir: string,
+  niveau: NiveauAnonymisation,
+): Promise<ResidualReport> {
   const source = createArchivePaths(archiveDir);
   const sortie = createArchivePaths(outDir);
 
@@ -213,7 +213,12 @@ async function controler(archiveDir: string, outDir: string): Promise<ResidualRe
     usernames.add(user.username);
   }
 
-  return checkResidualIdentities({ outDir, origine, substitution: { uids, usernames } });
+  return checkResidualIdentities({
+    outDir,
+    origine,
+    substitution: { uids, usernames },
+    niveau,
+  });
 }
 
 try {

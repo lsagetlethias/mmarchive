@@ -88,6 +88,8 @@ describe("la synthese", () => {
           ],
           canauxDistincts: 1,
           identifiantsColles: [{ postId: "p".repeat(26), canal: "c".repeat(26), occurrences: 1 }],
+          identifiantsCollesMessages: 1,
+          identifiantsCollesOccurrences: 1,
         },
       }),
     );
@@ -98,6 +100,38 @@ describe("la synthese", () => {
     // l archive diffusee, donc ce serait une cle de jointure exacte.
     expect(texte).not.toContain("p".repeat(26));
     expect(texte).not.toContain("c".repeat(26));
+  });
+
+  it("compte les identifiants colles sur le corpus entier, pas sur le detail retenu", () => {
+    // Le detail est plafonne parce qu il grandissait avec les messages ; les
+    // deux totaux, eux, restent exacts. Les lire dans la liste les aurait fait
+    // mentir des le premier depassement.
+    const texte = rendreSynthese(
+      contexte({
+        mesures: {
+          identifiantsColles: [{ postId: "p".repeat(26), canal: "c".repeat(26), occurrences: 2 }],
+          identifiantsCollesMessages: 900,
+          identifiantsCollesOccurrences: 1300,
+        },
+      }),
+    );
+    expect(texte).toContain("1300 occurrence(s) dans 900 message(s)");
+    expect(texte).toContain("Le releve n en detaille que 1.");
+    expect(texte).not.toContain("p".repeat(26));
+  });
+
+  it("n annonce aucune troncature quand le detail est complet", () => {
+    const texte = rendreSynthese(
+      contexte({
+        mesures: {
+          identifiantsColles: [{ postId: "p".repeat(26), canal: "c".repeat(26), occurrences: 2 }],
+          identifiantsCollesMessages: 1,
+          identifiantsCollesOccurrences: 2,
+        },
+      }),
+    );
+    expect(texte).toContain("2 occurrence(s) dans 1 message(s)");
+    expect(texte).not.toContain("Le releve n en detaille que");
   });
 
   it("dit d abord qu elle ne se diffuse pas", () => {
