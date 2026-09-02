@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo } from "react";
+import { memo, type ReactNode, useMemo } from "react";
 import type { Attachment, Message, Reaction } from "../client/archive-client.js";
 import { formatSize, formatTime, useArchive, useAssetUrl, useAuthor } from "../data.js";
 import { standardEmoji } from "./emoji.js";
@@ -129,7 +129,16 @@ export interface MessageRowProps {
   onOpenThread?(message: Message): void;
 }
 
-export function MessageRow({
+/**
+ * Memoise parce que la liste rend a chaque frame de defilement et que le
+ * virtualiseur lui redonne les memes messages.
+ *
+ * La memoisation ne tient que parce que la liste passe des references stables :
+ * ses index sont memoises, et le cas vide passe par une constante partagee. Un
+ * `?? []` a l appel recreerait un tableau a chaque rendu et la comparaison
+ * superficielle echouerait a tous les coups.
+ */
+export const MessageRow = memo(function MessageRow({
   message,
   reactions,
   attachments,
@@ -196,4 +205,4 @@ export function MessageRow({
       </div>
     </article>
   );
-}
+});
