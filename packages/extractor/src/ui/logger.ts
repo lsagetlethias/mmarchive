@@ -146,8 +146,8 @@ export function redactSecrets(text: string, secrets?: readonly string[]): string
  *
  * La progression et les diagnostics partaient sur stdout, ce que l aide de
  * `--verbose` et le README annoncaient pourtant sur la sortie d erreur. Un
- * `mm-verify --archive ./a > rapport.txt` melangeait donc le titre de section et
- * le chemin de l archive au resultat, et rien ne restait a l ecran.
+ * `mmarchive-extract verify --archive ./a > rapport.txt` melangeait donc le titre de
+ * section et le chemin de l archive au resultat, et rien ne restait a l ecran.
  *
  * Un resultat destine a une machine ne passe pas par ici : il s ecrit avec
  * `process.stdout.write`, comme `verify --json` le fait.

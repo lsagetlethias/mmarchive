@@ -521,8 +521,9 @@ Toutes les commandes se comportent correctement hors terminal :
   un lecteur humain passe par la sortie d'erreur, y compris les tableaux récapitulatifs ;
 - les **codes de sortie** sont exploitables : `0` succès, `1` échec, `2` argument invalide,
   `130` interruption par l'utilisateur ;
-- `NO_COLOR` et `--no-color` sont respectés, la couleur est désactivée automatiquement
-  quand la sortie est redirigée.
+- `NO_COLOR` et `--no-color` sont respectés, et la couleur est désactivée automatiquement
+  quand **la sortie d'erreur** est redirigée, puisque c'est elle qui porte l'affichage.
+  Rediriger la seule sortie standard ne l'éteint pas.
 
 ## Codes d'erreur
 

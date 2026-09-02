@@ -80,10 +80,7 @@ describe("Logger en mode plain", () => {
     exerciseEveryMethod(logger);
 
     expect(flux.text.length).toBeGreaterThan(0);
-    expect(flux.text.length).toBeGreaterThan(0);
     expect(flux.text).not.toMatch(ANSI);
-    expect(flux.text).not.toMatch(ANSI);
-    expect(flux.text).not.toContain("\u001B");
     expect(flux.text).not.toContain("\u001B");
   });
 
@@ -91,7 +88,6 @@ describe("Logger en mode plain", () => {
     const { logger, flux } = makeLogger({ plain: true });
     exerciseEveryMethod(logger);
 
-    expect(flux.text).not.toMatch(DECORATIVE);
     expect(flux.text).not.toMatch(DECORATIVE);
   });
 
@@ -115,7 +111,6 @@ describe("Logger en mode colore", () => {
     logger.success("extraction terminee");
     logger.error("echec reseau");
 
-    expect(flux.text).toMatch(ANSI);
     expect(flux.text).toMatch(ANSI);
   });
 
