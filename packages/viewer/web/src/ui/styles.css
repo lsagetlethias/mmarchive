@@ -240,6 +240,9 @@ a:focus-visible {
 }
 
 .canal-nom {
+  /* Un span est inline, et text-overflow ne tronque que dans un bloc : la
+     barre laterale le blockifie via son conteneur flex, la grille non. */
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
