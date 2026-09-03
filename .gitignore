@@ -18,8 +18,10 @@
 manifest.json
 .extract-state.json
 *.ndjson
-index.db
-index.db-*
+# Toute base SQLite, pas seulement index.db : un index construit sous un autre
+# nom porte exactement les memes donnees.
+*.db
+*.db-*
 
 # Fichier de selection genere (contient la topologie de l instance : URL,
 # identifiants et noms de tous les canaux).
