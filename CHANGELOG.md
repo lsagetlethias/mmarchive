@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/lsagetlethias/mmarchive/compare/v2.0.0...v2.0.1) (2026-09-03)
+
+
+### Bug fixes
+
+* **viewer:** keep the channel filter inside the sidebar ([#38](https://github.com/lsagetlethias/mmarchive/issues/38)) ([e4b3a55](https://github.com/lsagetlethias/mmarchive/commit/e4b3a55305a97ec2d318dc3d402fc8721ebf32c5))
+
 ## [2.0.0](https://github.com/lsagetlethias/mmarchive/compare/v1.2.0...v2.0.0) (2026-09-03)
 
 
