@@ -76,4 +76,4 @@ ENTRYPOINT ["node", "/app/dist/serve.js", \
     "--web", "/app/web/dist", \
     "--standalone", "/app/web/dist-standalone/archive.html", \
     "--host", "0.0.0.0"]
-CMD ["--index", "/data/index.db", "--archive", "/data/archive"]
+CMD ["--index", "/data/index/index.db", "--archive", "/data/archive"]

@@ -1,10 +1,10 @@
 name: mmarchive
 
 # Chemins surchargeables sans toucher a ce fichier :
-#   MMARCHIVE_ARCHIVE   repertoire de l archive        (defaut ./archive)
-#   MMARCHIVE_INDEX     fichier d index deja construit (defaut ./index.db)
-#   MMARCHIVE_PORT      port publie sur la machine     (defaut 4173)
-#   MMARCHIVE_IMAGE     image a executer               (defaut :latest)
+#   MMARCHIVE_ARCHIVE   repertoire de l archive       (defaut ./archive)
+#   MMARCHIVE_INDEX_DIR repertoire qui porte l index  (defaut ./index)
+#   MMARCHIVE_PORT      port publie sur la machine    (defaut 4173)
+#   MMARCHIVE_IMAGE     image a executer              (defaut :latest)
 #
 # Deux facons de faire tourner ce compose :
 #   docker compose pull && docker compose up -d   execute l image publiee
@@ -22,9 +22,20 @@ services:
     # L archive et l index restent dehors, montes en lecture seule. Ils pesent
     # des dizaines de Go et portent des echanges internes : les copier dans
     # l image reviendrait a les rendre poussables sur un registre.
+    #
+    # L index est monte par son repertoire, jamais par son fichier. Un bind mount
+    # de fichier fige un inode : remplacer l index par une reconstruction laisse
+    # le conteneur servir l ancien jusqu au redemarrage. Et un orchestrateur qui
+    # propose d editer les fichiers montes en lit le contenu pour l afficher, ce
+    # qui le fait tomber sur plusieurs centaines de Mo de SQLite.
     volumes:
       - ${MMARCHIVE_ARCHIVE:-./archive}:/data/archive:ro
-      - ${MMARCHIVE_INDEX:-./index.db}:/data/index.db:ro
+      - ${MMARCHIVE_INDEX_DIR:-./index}:/data/index:ro
+
+    # Le chemin de l index est repris ici plutot que laisse au CMD de l image :
+    # celle ci n est republiee qu a la sortie d une version, donc un compose a
+    # jour peut se retrouver en face d une image qui ne l est pas encore.
+    command: ["--index", "/data/index/index.db", "--archive", "/data/archive"]
 
     # Publie sur la boucle locale uniquement. Le viewer n a aucune
     # authentification : tout ce qui l atteint peut tout lire. Pour un acces
@@ -61,7 +72,7 @@ services:
     # pour l archive et en ecriture pour l index, ce qui ne peut pas coexister.
     volumes:
       - ${MMARCHIVE_ARCHIVE:-./archive}:/archive:ro
-      - ${MMARCHIVE_INDEX_DIR:-.}:/sortie
+      - ${MMARCHIVE_INDEX_DIR:-./index}:/sortie
 
     # Numeroter les messages dans l ordre chronologique trie plus d un million de
     # lignes, ce que SQLite deverse dans des fichiers temporaires. Les envoyer
