@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/lsagetlethias/mmarchive/compare/v2.0.1...v2.0.2) (2026-09-03)
+
+
+### Bug fixes
+
+* **release:** fix docker build ([f9bdb9d](https://github.com/lsagetlethias/mmarchive/commit/f9bdb9da9da2b8ade8e2567210960beef0f15126))
+
 ## [2.0.1](https://github.com/lsagetlethias/mmarchive/compare/v2.0.0...v2.0.1) (2026-09-03)
 
 
