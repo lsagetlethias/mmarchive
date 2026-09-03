@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.0.0](https://github.com/lsagetlethias/mmarchive/compare/v1.2.0...v2.0.0) (2026-09-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* **viewer:** mount the index directory instead of the index file ([#35](https://github.com/lsagetlethias/mmarchive/issues/35))
+
+### Bug fixes
+
+* **viewer:** mount the index directory instead of the index file ([#35](https://github.com/lsagetlethias/mmarchive/issues/35)) ([30e7378](https://github.com/lsagetlethias/mmarchive/commit/30e73789c560290e3d1a9a894cac6d1d17316829))
+* **viewer:** stop creating an anonymous volume on every start ([#36](https://github.com/lsagetlethias/mmarchive/issues/36)) ([d33f434](https://github.com/lsagetlethias/mmarchive/commit/d33f434622b48dfbefe18fec360b30bbdfbb81fa))
+* **viewer:** truncate long channel names in the home grid ([#33](https://github.com/lsagetlethias/mmarchive/issues/33)) ([91a60fc](https://github.com/lsagetlethias/mmarchive/commit/91a60fca2bcb65d9a081e17e389035d4602fb475))
+
+
+### Other changes
+
+* ignore every SQLite index, not just index.db ([#34](https://github.com/lsagetlethias/mmarchive/issues/34)) ([986b7d0](https://github.com/lsagetlethias/mmarchive/commit/986b7d02ce6ccd7e5b9a27ed373771f6d7ab86c0))
+
 ## [1.2.0](https://github.com/lsagetlethias/mmarchive/compare/v1.1.0...v1.2.0) (2026-09-02)
 
 
