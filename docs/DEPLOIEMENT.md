@@ -47,17 +47,31 @@ publication du port qui fait la frontière.
 docker compose up -d
 ```
 
-Par défaut, le compose cherche `./archive` et `./index.db`. Trois variables permettent de
-pointer ailleurs sans toucher au fichier :
+Par défaut, le compose cherche l'archive dans `./archive` et l'index dans `./index`. Trois
+variables permettent de pointer ailleurs sans toucher au fichier :
 
 ```bash
 MMARCHIVE_ARCHIVE=/srv/mmarchive/archive \
-MMARCHIVE_INDEX=/srv/mmarchive/index.db \
+MMARCHIVE_INDEX_DIR=/srv/mmarchive/index \
 MMARCHIVE_PORT=8080 \
 docker compose up -d
 ```
 
 L'archive est servie sur `http://127.0.0.1:4173`.
+
+L'index est monté par son **répertoire**, jamais par son fichier, et les deux services
+partagent le même. Un bind mount de fichier fige un inode : reconstruire l'index produit un
+nouveau fichier que le conteneur ne voit pas, et celui-ci continue de servir l'ancien jusqu'à
+son redémarrage. Un orchestrateur qui propose d'éditer les fichiers montés en lit par ailleurs
+le contenu pour l'afficher, ce qui le fait tomber sur plusieurs centaines de mégaoctets de
+SQLite.
+
+Si vous veniez d'une version où le compose montait `./index.db` directement, déplacez le
+fichier dans le répertoire désormais attendu :
+
+```bash
+mkdir -p index && mv index.db index/index.db
+```
 
 ## Construire l'index
 
@@ -67,7 +81,8 @@ Si l'index n'existe pas encore, ou si l'archive a changé :
 docker compose --profile outils run --rm index
 ```
 
-Le service écrit `index.db` à côté du compose, ou dans `MMARCHIVE_INDEX_DIR`. L'archive
+Le service écrit `index.db` dans `MMARCHIVE_INDEX_DIR`, le répertoire même que le viewer
+monte en lecture. L'archive
 est montée en lecture seule pendant l'opération : une construction d'index ne peut pas
 abîmer la donnée dont elle dérive.
 
