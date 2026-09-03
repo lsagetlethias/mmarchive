@@ -78,6 +78,12 @@ button:hover {
   border-color: var(--accent);
 }
 
+/*
+ * Apparence seule, jamais de largeur. Un selecteur d element avec attribut pese
+ * plus lourd qu une classe : un width pose ici l emporterait sur celui de la
+ * classe qui habille le champ, et le sien resterait sans effet. C est la
+ * largeur qui appartient au contexte, pas l inverse.
+ */
 input[type="search"] {
   font: inherit;
   color: inherit;
@@ -85,7 +91,6 @@ input[type="search"] {
   border: 1px solid var(--bordure);
   border-radius: var(--rayon);
   padding: 0.4rem 0.6rem;
-  width: 100%;
 }
 
 input[type="search"]:focus-visible,
