@@ -54,10 +54,15 @@ COPY --from=build /app/packages/viewer/dist ./dist
 COPY --from=build /app/packages/viewer/web/dist ./web/dist
 COPY --from=build /app/packages/viewer/web/dist-standalone ./web/dist-standalone
 
-# L archive et l index sont montes ici, en lecture seule. Ils ne sont jamais
-# copies dans l image : 27 Go de donnees internes n ont rien a faire dans un
-# artefact qui se pousse sur un registre.
-VOLUME ["/data"]
+# L archive et l index sont montes sous /data, en lecture seule. Ils ne sont
+# jamais copies dans l image : 27 Go de donnees internes n ont rien a faire dans
+# un artefact qui se pousse sur un registre.
+#
+# Pas de VOLUME ["/data"] pour autant. Les montages portent sur ses sous
+# repertoires, jamais sur lui : la declaration ne ferait que creer un volume
+# anonyme de plus a chaque lancement, orphelin des le suivant. Mesure a un par
+# cycle. La donnee vient toujours de montages explicites, et le process n ecrit
+# jamais.
 
 USER node
 EXPOSE 4173
