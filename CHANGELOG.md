@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.0](https://github.com/lsagetlethias/mmarchive/compare/v2.0.2...v2.1.0) (2026-09-15)
+
+
+### Features
+
+* relay to reach an instance behind an authentication proxy ([#42](https://github.com/lsagetlethias/mmarchive/issues/42)) ([2f1a17c](https://github.com/lsagetlethias/mmarchive/commit/2f1a17c8e2cd6479017f3fffec4326dc83b21f78))
+
+
+### Bug fixes
+
+* **ci:** restore ESLint coverage of source files ([#41](https://github.com/lsagetlethias/mmarchive/issues/41)) ([18ee901](https://github.com/lsagetlethias/mmarchive/commit/18ee9016ff24f80320c5cf1906468b0a2199bc62))
+
 ## [2.0.2](https://github.com/lsagetlethias/mmarchive/compare/v2.0.1...v2.0.2) (2026-09-03)
 
 
