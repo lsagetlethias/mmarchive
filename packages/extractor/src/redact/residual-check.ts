@@ -173,10 +173,34 @@ function formesCandidates(valeur: string): Set<string> {
   return candidates;
 }
 
+/**
+ * String() reduirait un objet residuel a [object Object], soit precisement
+ * l information que le rapport doit montrer. JSON.stringify le rend lisible,
+ * mais leve sur un cycle ou un bigint imbrique : ce rapport doit survivre a une
+ * archive mal formee, puisque c est exactement ce qu il sert a detecter.
+ */
+function texteDe(valeur: unknown): string {
+  if (typeof valeur === "string") return valeur;
+  if (
+    valeur === null ||
+    valeur === undefined ||
+    typeof valeur === "number" ||
+    typeof valeur === "boolean" ||
+    typeof valeur === "bigint" ||
+    typeof valeur === "symbol" ||
+    typeof valeur === "function"
+  ) {
+    return String(valeur);
+  }
+  try {
+    return JSON.stringify(valeur);
+  } catch {
+    return "[valeur non serialisable]";
+  }
+}
+
 function extrait(valeur: unknown): string {
-  // String() reduirait un objet residuel a [object Object], soit precisement
-  // l information que le rapport doit montrer.
-  const texte = typeof valeur === "string" ? valeur : JSON.stringify(valeur);
+  const texte = texteDe(valeur);
   return texte.length <= 32 ? texte : `${texte.slice(0, 32)}...`;
 }
 

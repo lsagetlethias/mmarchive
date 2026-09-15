@@ -34,10 +34,12 @@ export default defineConfig([
   },
   tseslint.configs.base,
   {
-    // Sans ce motif, aucune config ne declare l extension .ts et ESLint n examine
-    // plus un seul fichier source : configs.base ne porte pas de files, alors que
-    // le preset strictTypeChecked utilise auparavant en embarquait un.
-    files: ["**/*.ts"],
+    // Sans ce motif, aucune config ne declare les extensions TypeScript et ESLint
+    // n examine plus un seul fichier source : configs.base ne porte pas de files,
+    // alors que le preset strictTypeChecked utilise auparavant en embarquait un.
+    // Le jeu reproduit celui de ce preset : omettre .tsx laisserait les dix
+    // fichiers du viewer web hors du lint.
+    files: ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
     languageOptions: {
       parserOptions: {
         projectService: true,
