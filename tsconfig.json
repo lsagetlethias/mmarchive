@@ -13,6 +13,7 @@
     "packages/viewer/web/src/lite/block-cache.ts",
     "packages/*/*.config.ts",
     "tests/**/*.ts",
+    "oauth2-proxy/**/*.ts",
     "eslint.config.ts",
     "vitest.config.ts"
   ],
