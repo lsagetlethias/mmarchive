@@ -189,7 +189,7 @@ function call(method: string, args: unknown[]): unknown {
       return withDetails(all, undefined);
     }
     case "search": {
-      const options = args[1] as PageArgs & { timeZoneOffsetMinutes?: number };
+      const options = args[1] as (PageArgs & { timeZoneOffsetMinutes?: number }) | undefined;
       const result = searchMessages(driver, String(args[0]), {
         ...pageOptions(options),
         ...(options?.timeZoneOffsetMinutes === undefined

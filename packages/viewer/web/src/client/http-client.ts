@@ -43,7 +43,7 @@ export class HttpArchiveClient implements ArchiveClient {
         .json()
         .then((body: unknown) =>
           typeof body === "object" && body !== null && "error" in body
-            ? String((body as { error: unknown }).error)
+            ? String(body.error)
             : response.statusText,
         )
         .catch(() => response.statusText);

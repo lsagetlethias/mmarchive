@@ -63,7 +63,6 @@ const PLAIN_FRAME: FrameChars = {
   vertical: "|",
 };
 
-// eslint-disable-next-line no-control-regex -- l octet ESC est precisement ce que l on retire
 const ANSI_SEQUENCE = /\u001B\[[0-9;]*[A-Za-z]/g;
 
 /** Marques combinantes: elles se posent sur le glyphe precedent et n occupent aucune colonne. */
