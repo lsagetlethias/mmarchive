@@ -88,6 +88,24 @@ MM_TOKEN=votre-token
 
 ---
 
+## Instance derrière un proxy d'authentification
+
+Si un proxy d'authentification est placé devant l'instance, il intercepte les appels d'API
+avant Mattermost et l'extraction échoue sur une erreur trompeuse :
+
+```
+[E2003] GET /users/me a repondu 401 : {}
+```
+
+Ce `401` vient du proxy, pas de Mattermost, et votre token est probablement valide. Le signe
+qui tranche est l'absence de l'en-tête `x-version-id` sur la réponse.
+
+`oauth2-proxy/` contient un relais local autonome qui traverse ce genre de proxy en rejouant
+la session de votre navigateur, sans rien changer à mmarchive. Voir
+[oauth2-proxy/README.md](oauth2-proxy/README.md).
+
+---
+
 ## Le point important : rejoindre un canal laisse une trace
 
 `GET /channels/{id}/posts` exige la permission `read_channel`. Un compte qui ne l'a pas
