@@ -293,8 +293,8 @@ async function porteUneArchiveAnonymisee(racine: string): Promise<boolean> {
       typeof brut === "object" &&
       brut !== null &&
       "anonymized" in brut &&
-      typeof (brut as { anonymized: unknown }).anonymized === "object" &&
-      (brut as { anonymized: unknown }).anonymized !== null
+      typeof brut.anonymized === "object" &&
+      brut.anonymized !== null
     );
   } catch {
     return false;

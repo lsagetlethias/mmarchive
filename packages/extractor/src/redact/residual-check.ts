@@ -173,8 +173,35 @@ function formesCandidates(valeur: string): Set<string> {
   return candidates;
 }
 
-function extrait(valeur: string): string {
-  return valeur.length <= 32 ? valeur : `${valeur.slice(0, 32)}...`;
+/**
+ * String() reduirait un objet residuel a [object Object], soit precisement
+ * l information que le rapport doit montrer. JSON.stringify le rend lisible,
+ * mais leve sur un cycle ou un bigint imbrique : ce rapport doit survivre a une
+ * archive mal formee, puisque c est exactement ce qu il sert a detecter.
+ */
+function texteDe(valeur: unknown): string {
+  if (typeof valeur === "string") return valeur;
+  if (
+    valeur === null ||
+    valeur === undefined ||
+    typeof valeur === "number" ||
+    typeof valeur === "boolean" ||
+    typeof valeur === "bigint" ||
+    typeof valeur === "symbol" ||
+    typeof valeur === "function"
+  ) {
+    return String(valeur);
+  }
+  try {
+    return JSON.stringify(valeur);
+  } catch {
+    return "[valeur non serialisable]";
+  }
+}
+
+function extrait(valeur: unknown): string {
+  const texte = texteDe(valeur);
+  return texte.length <= 32 ? texte : `${texte.slice(0, 32)}...`;
 }
 
 class Collecteur {
@@ -235,7 +262,7 @@ class Collecteur {
       emplacement,
       champ,
       genre: "identite-survivante",
-      extrait: extrait(typeof valeur === "string" ? valeur : String(valeur)),
+      extrait: extrait(valeur),
     });
   }
 
@@ -247,7 +274,7 @@ class Collecteur {
       emplacement,
       champ,
       genre: "identite-survivante",
-      extrait: extrait(typeof valeur === "string" ? valeur : String(valeur)),
+      extrait: extrait(valeur),
     });
   }
 

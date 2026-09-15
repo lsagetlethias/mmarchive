@@ -105,7 +105,7 @@ export function describeFailure(error: unknown, toolVersion: string): string {
 /** Code du registre porte par une erreur, s il y en a un. */
 export function errorCodeOf(error: unknown): ErrorCode | undefined {
   if (typeof error === "object" && error !== null && "code" in error) {
-    const { code } = error as { code: unknown };
+    const { code } = error;
     if (isErrorCode(code)) return code;
   }
   return undefined;

@@ -920,3 +920,31 @@ describe("buildIdentityTable", () => {
     expect(a?.uid).not.toBe(b?.uid);
   });
 });
+
+describe("le controle residuel face a une archive incomplete", () => {
+  it("signale un champ de nom absent au lieu de s interrompre", async () => {
+    // readNdjson caste sans valider : un first_name absent traverse jusqu au
+    // collecteur. Une conversion de valeur qui ne couvrirait pas undefined
+    // ferait tomber tout le controle, et une archive non verifiee passerait
+    // alors pour une archive sans residu.
+    await anonymiser();
+    const originaux = (await lire("users.ndjson", source)) as never[];
+    const fiches = await lire("users.ndjson");
+    for (const fiche of fiches) delete fiche.first_name;
+    await writeNdjson(join(sortie, "users.ndjson"), fiches);
+
+    const rapport = await checkResidualIdentities({
+      outDir: sortie,
+      origine: collecterIdentitesOrigine(originaux),
+      substitution: {
+        uids: new Set(fiches.map((u) => u.id as string)),
+        usernames: new Set(fiches.map((u) => u.username as string)),
+      },
+      niveau: "noms",
+    });
+
+    const surLePrenom = rapport.manquements.filter((m) => m.champ === "first_name");
+    expect(surLePrenom.length).toBeGreaterThan(0);
+    expect(surLePrenom[0]?.extrait).toBe("undefined");
+  });
+});
