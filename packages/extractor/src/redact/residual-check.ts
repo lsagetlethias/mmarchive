@@ -173,8 +173,11 @@ function formesCandidates(valeur: string): Set<string> {
   return candidates;
 }
 
-function extrait(valeur: string): string {
-  return valeur.length <= 32 ? valeur : `${valeur.slice(0, 32)}...`;
+function extrait(valeur: unknown): string {
+  // String() reduirait un objet residuel a [object Object], soit precisement
+  // l information que le rapport doit montrer.
+  const texte = typeof valeur === "string" ? valeur : JSON.stringify(valeur);
+  return texte.length <= 32 ? texte : `${texte.slice(0, 32)}...`;
 }
 
 class Collecteur {
@@ -235,7 +238,7 @@ class Collecteur {
       emplacement,
       champ,
       genre: "identite-survivante",
-      extrait: extrait(typeof valeur === "string" ? valeur : String(valeur)),
+      extrait: extrait(valeur),
     });
   }
 
@@ -247,7 +250,7 @@ class Collecteur {
       emplacement,
       champ,
       genre: "identite-survivante",
-      extrait: extrait(typeof valeur === "string" ? valeur : String(valeur)),
+      extrait: extrait(valeur),
     });
   }
 

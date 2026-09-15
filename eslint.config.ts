@@ -34,6 +34,10 @@ export default defineConfig([
   },
   tseslint.configs.base,
   {
+    // Sans ce motif, aucune config ne declare l extension .ts et ESLint n examine
+    // plus un seul fichier source : configs.base ne porte pas de files, alors que
+    // le preset strictTypeChecked utilise auparavant en embarquait un.
+    files: ["**/*.ts"],
     languageOptions: {
       parserOptions: {
         projectService: true,

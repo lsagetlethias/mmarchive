@@ -1,7 +1,7 @@
 import { codeDeSortieCommander, describeFailure } from "@mmarchive/shared";
 import { Command } from "commander";
 import { ArchivePathError } from "./archive/paths.js";
-import { type RedactMode, redactArchive } from "./redact/redact-archive.js";
+import { redactArchive } from "./redact/redact-archive.js";
 import { Logger } from "./ui/logger.js";
 import { TOOL_VERSION } from "./version.js";
 
@@ -35,7 +35,7 @@ program
     const result = await redactArchive({
       archiveDir: opts.archive,
       userId: opts.user,
-      mode: opts.mode as RedactMode,
+      mode: opts.mode,
       dryRun: opts.dryRun ?? false,
       logger,
     });

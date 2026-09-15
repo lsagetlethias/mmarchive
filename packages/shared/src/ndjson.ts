@@ -350,7 +350,6 @@ async function openForRead(filePath: string): Promise<FileHandle> {
 
 // T est un simple typage au site d appel : le contenu d une archive relue n est
 // pas validable ici, la validation zod se fait chez l appelant.
-// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
 function parseLine<T>(line: string, filePath: string, lineNumber: number): T {
   let parsed: unknown;
   try {
