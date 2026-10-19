@@ -147,8 +147,17 @@ export class CookieJar {
     return this.cookies;
   }
 
+  /**
+   * Seuls les cookies du portier partent vers l amont. Un en-tete copie depuis le
+   * navigateur porte aussi MMAUTHTOKEN, que Mattermost prefere au bearer : la
+   * requete s authentifie alors comme la session du navigateur, et tout appel
+   * non GET echoue au controle CSRF avec un 401 « session expiree ».
+   */
   header(): string {
-    return [...this.cookies.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
+    return [...this.cookies.entries()]
+      .filter(([name]) => name.startsWith(SESSION_COOKIE))
+      .map(([name, value]) => `${name}=${value}`)
+      .join("; ");
   }
 
   /**

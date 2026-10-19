@@ -34,7 +34,10 @@ pnpm mm:run --url http://127.0.0.1:8787 --file channels.yaml
 ```
 
 Il n'ajoute que le cookie : le `Authorization: Bearer` de mmarchive traverse intact et reste
-ce qui authentifie auprès de Mattermost.
+ce qui authentifie auprès de Mattermost. Des cookies copiés, seuls ceux du portier
+(`_oauth2_proxy*`) sont transmis. `MMAUTHTOKEN` est écarté : Mattermost le préfère au bearer,
+et les appels en POST de l'extraction échoueraient alors au contrôle CSRF avec un 401
+« Session invalide ou expirée ».
 
 | Variable              | Rôle                                                              |
 | --------------------- | ----------------------------------------------------------------- |
