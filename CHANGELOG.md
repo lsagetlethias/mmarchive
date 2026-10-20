@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.0.0](https://github.com/lsagetlethias/mmarchive/compare/v2.0.2...v3.0.0) (2026-10-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* **viewer:** the export page and /lite.zip are disabled unless MMARCHIVE_EXPORT=1 or --export is set. Deployments that relied on them must set the variable.
+
+### Features
+
+* relay to reach an instance behind an authentication proxy ([#42](https://github.com/lsagetlethias/mmarchive/issues/42)) ([2f1a17c](https://github.com/lsagetlethias/mmarchive/commit/2f1a17c8e2cd6479017f3fffec4326dc83b21f78))
+* **viewer:** sort channels and gate the export page behind MMARCHIVE_EXPORT ([#44](https://github.com/lsagetlethias/mmarchive/issues/44)) ([6f405c2](https://github.com/lsagetlethias/mmarchive/commit/6f405c2e998aa9c8654ccefe291a6eefabde04d8))
+
+
+### Bug fixes
+
+* **ci:** restore ESLint coverage of source files ([#41](https://github.com/lsagetlethias/mmarchive/issues/41)) ([18ee901](https://github.com/lsagetlethias/mmarchive/commit/18ee9016ff24f80320c5cf1906468b0a2199bc62))
+* forward only gatekeeper cookies through the relay ([cd3d7eb](https://github.com/lsagetlethias/mmarchive/commit/cd3d7eb3fe5bdfe5e102770ad68ed4498c680780))
+
 ## [2.0.2](https://github.com/lsagetlethias/mmarchive/compare/v2.0.1...v2.0.2) (2026-09-03)
 
 
