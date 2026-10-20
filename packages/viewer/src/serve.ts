@@ -4,6 +4,7 @@ import { Command } from "commander";
 import pc from "picocolors";
 import { NodeSqlDriver } from "./query/node-driver.js";
 import { createServer } from "./server/app.js";
+import { parseExportFlag } from "./server/export-flag.js";
 import { TOOL_VERSION } from "./version.js";
 
 const program = new Command();
@@ -27,6 +28,10 @@ program
     "Viewer en un seul fichier, inclus dans la copie autonome",
     "packages/viewer/web/dist-standalone/archive.html",
   )
+  .option(
+    "--export",
+    "Active la page Exporter et la copie autonome (ou MMARCHIVE_EXPORT=1). Desactivees par defaut.",
+  )
   .option("--verbose", "Journalise chaque requete")
   .action(
     async (opts: {
@@ -36,6 +41,7 @@ program
       host: string;
       web?: string;
       standalone?: string;
+      export?: boolean;
       verbose?: boolean;
     }) => {
       const port = Number(opts.port);
@@ -45,6 +51,8 @@ program
         return;
       }
 
+      const exportFromEnv = parseExportFlag(process.env.MMARCHIVE_EXPORT);
+      const exportEnabled = opts.export === true || exportFromEnv;
       const driver = new NodeSqlDriver(opts.index);
       const app = createServer({
         driver,
@@ -54,6 +62,7 @@ program
           ? {}
           : { standalonePath: opts.standalone }),
         indexPath: opts.index,
+        exportEnabled,
         logger: opts.verbose ?? false,
       });
       if (opts.web !== undefined && !existsSync(opts.web)) {
@@ -74,6 +83,9 @@ program
       process.stdout.write(
         `${pc.green("Archive servie")} sur http://${opts.host}:${String(port)}\n`,
       );
+      if (exportEnabled) {
+        process.stdout.write(`${pc.yellow("Note")} : page Exporter active (/lite.zip).\n`);
+      }
       if (opts.host !== "127.0.0.1" && opts.host !== "localhost") {
         process.stderr.write(
           `${pc.yellow("Attention")} : l ecoute n est pas limitee a cette machine. Ces echanges ne sont pas destines a etre exposes.\n`,

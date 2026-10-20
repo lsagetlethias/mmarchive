@@ -31,6 +31,11 @@ export interface ViewerServerOptions {
   readonly indexPath?: string | undefined;
   /** Viewer en un seul fichier, pour la copie ouvrable par double clic. */
   readonly standalonePath?: string | undefined;
+  /**
+   * Page Exporter et copie autonome. Desactivees par defaut : la copie emporte
+   * toute l archive hors pieces jointes, a quiconque atteint le serveur.
+   */
+  readonly exportEnabled?: boolean | undefined;
   readonly logger?: boolean;
 }
 
@@ -83,6 +88,7 @@ export function createServer(options: ViewerServerOptions): FastifyInstance {
   // @fastify/static exige une racine absolue, et l appelant vient de la ligne de
   // commande ou "./archive" est la forme naturelle.
   const archiveRoot = resolve(options.archiveRoot);
+  const exportEnabled = options.exportEnabled === true;
   const app = Fastify({ logger: options.logger ?? false });
 
   /**
@@ -160,6 +166,7 @@ export function createServer(options: ViewerServerOptions): FastifyInstance {
               channels: num(counts, "channels"),
               users: num(counts, "users"),
             },
+      exportEnabled,
     };
   });
 
@@ -256,7 +263,7 @@ export function createServer(options: ViewerServerOptions): FastifyInstance {
   }));
 
   registerFileRoutes(app, driver, archiveRoot);
-  registerLiteRoutes(app, options);
+  if (exportEnabled) registerLiteRoutes(app, options);
   registerWebRoutes(app, options.webRoot);
   return app;
 }

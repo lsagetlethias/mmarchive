@@ -388,9 +388,15 @@ pnpm mm:serve --index ./index.db --archive ./archive
 L'archive est alors lisible sur `http://127.0.0.1:4173` : navigation par canal, fils de
 discussion, recherche plein texte, pièces jointes et permaliens.
 
-Depuis cette interface, le bouton de copie autonome produit un zip qui contient l'archive
-et un viewer en un seul fichier HTML. Il s'ouvre en double-clic, sans serveur ni
-installation : c'est le mode de consultation qui survivra le plus longtemps.
+Depuis cette interface, la page **Exporter** produit un zip qui contient l'archive et un
+viewer en un seul fichier HTML. Il s'ouvre en double-clic, sans serveur ni installation :
+c'est le mode de consultation qui survivra le plus longtemps. Elle est désactivée par
+défaut, puisque le zip emporte toute l'archive hors pièces jointes. `--export` l'active,
+ou `MMARCHIVE_EXPORT=1` dans l'environnement :
+
+```bash
+pnpm mm:serve --index ./index.db --archive ./archive --export
+```
 
 Pour héberger le viewer plutôt que de le lancer à la main, un `Dockerfile` et un
 `compose.yaml` sont fournis :
