@@ -163,6 +163,7 @@ function call(method: string, args: unknown[]): unknown {
           channels: Number(counts?.channels ?? 0),
           users: Number(counts?.users ?? 0),
         },
+        exportEnabled: false,
       };
     }
     case "channels":

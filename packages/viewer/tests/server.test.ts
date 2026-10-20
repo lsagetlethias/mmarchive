@@ -74,6 +74,27 @@ describe("lecture seule", () => {
   });
 });
 
+describe("export", () => {
+  it("est desactive par defaut, routes comprises", async () => {
+    expect(body((await app.inject("/api/meta")).payload).exportEnabled).toBe(false);
+    expect((await app.inject("/api/lite")).statusCode).toBe(404);
+    expect((await app.inject("/lite.zip")).statusCode).toBe(404);
+  });
+
+  it("s annonce et sert ses routes une fois active", async () => {
+    const server = createServer({
+      driver,
+      archiveRoot: archiveDir,
+      indexPath,
+      exportEnabled: true,
+    });
+    await server.ready();
+    expect(body((await server.inject("/api/meta")).payload).exportEnabled).toBe(true);
+    expect((await server.inject("/api/lite")).statusCode).toBe(200);
+    await server.close();
+  });
+});
+
 describe("api de lecture", () => {
   it("expose les canaux", async () => {
     const response = await app.inject("/api/channels");

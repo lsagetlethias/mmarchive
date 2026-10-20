@@ -2,25 +2,35 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react
 import type { Message, MessageBundle } from "./client/archive-client.js";
 import { formatDate, useArchive } from "./data.js";
 import { channelHref, navigate, type Route, searchHref, useRoute } from "./route.js";
+import {
+  CHANNEL_ORDERS,
+  type ChannelOrder,
+  parseChannelOrder,
+  sortChannels,
+} from "./ui/channel-sort.js";
+import { ExportView } from "./ui/ExportView.js";
 import { MessageList } from "./ui/MessageList.js";
 import { SearchBox } from "./ui/SearchBox.js";
 import { SearchView } from "./ui/SearchView.js";
-import { TakeAwayView } from "./ui/TakeAwayView.js";
 import { ThreadPanel } from "./ui/ThreadPanel.js";
 
 function ChannelSidebar({ current }: { readonly current: number | undefined }): ReactNode {
   const { channels } = useArchive();
   const [filter, setFilter] = useState("");
+  const [order, setOrder] = useState<ChannelOrder>("activite");
 
   const shown = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    if (needle === "") return channels;
-    return channels.filter(
-      (channel) =>
-        channel.name.toLowerCase().includes(needle) ||
-        channel.displayName.toLowerCase().includes(needle),
-    );
-  }, [channels, filter]);
+    const matching =
+      needle === ""
+        ? channels
+        : channels.filter(
+            (channel) =>
+              channel.name.toLowerCase().includes(needle) ||
+              channel.displayName.toLowerCase().includes(needle),
+          );
+    return sortChannels(matching, order);
+  }, [channels, filter, order]);
 
   return (
     <nav className="barre-canaux">
@@ -33,6 +43,20 @@ function ChannelSidebar({ current }: { readonly current: number | undefined }): 
           setFilter(event.target.value);
         }}
       />
+      <select
+        className="tri-canaux"
+        aria-label="Trier les canaux"
+        value={order}
+        onChange={(event) => {
+          setOrder(parseChannelOrder(event.target.value));
+        }}
+      >
+        {CHANNEL_ORDERS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
       <ul>
         {shown.map((channel) => (
           <li key={channel.id}>
@@ -256,8 +280,7 @@ function currentChannel(route: Route): number | undefined {
 
 export function App(): ReactNode {
   const route = useRoute();
-  // Une copie deja autonome n a personne a qui demander la suivante.
-  const servedByServer = globalThis.location.protocol !== "file:";
+  const { meta } = useArchive();
   const [thread, setThread] = useState<Message | undefined>();
   // Le champ repart de la requete courante a chaque changement de recherche : la
   // cle du composant force le remontage, ce qui evite un etat a synchroniser.
@@ -281,9 +304,9 @@ export function App(): ReactNode {
         <a className="lien-annuaire" href="#/annuaire">
           Annuaire
         </a>
-        {servedByServer ? (
-          <a className="lien-annuaire" href="#/emporter">
-            Emporter
+        {meta.exportEnabled ? (
+          <a className="lien-annuaire" href="#/exporter">
+            Exporter
           </a>
         ) : null}
       </header>
@@ -301,7 +324,13 @@ export function App(): ReactNode {
           ) : null}
           {route.view === "recherche" ? <SearchView query={route.query} /> : null}
           {route.view === "annuaire" ? <DirectoryView /> : null}
-          {route.view === "emporter" ? <TakeAwayView /> : null}
+          {route.view === "exporter" ? (
+            meta.exportEnabled ? (
+              <ExportView />
+            ) : (
+              <p className="erreur">L export n est pas active sur ce serveur.</p>
+            )
+          ) : null}
           {route.view === "permalien" ? <PermalinkView pid={route.pid} /> : null}
         </main>
         {thread === undefined ? null : (

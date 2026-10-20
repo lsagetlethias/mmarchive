@@ -95,6 +95,7 @@ describe("routes de la copie", () => {
       driver,
       archiveRoot: archiveDir,
       indexPath,
+      exportEnabled: true,
       ...(complete ? { webRoot, standalonePath } : {}),
     });
     await app.ready();

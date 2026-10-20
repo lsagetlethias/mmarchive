@@ -46,6 +46,7 @@ ils portent des échanges internes.
 | `E1001` | Une option est absente, contradictoire ou hors bornes                     | Relire le message, il nomme l'option fautive. `--help` liste les valeurs acceptées |
 | `E1002` | Le fichier de sélection est illisible, mal formé, ou viole une invariante | Le régénérer avec `inventory`, ou corriger la ligne signalée              |
 | `E1003` | Le fichier de sélection vient d'une autre instance que celle visée        | Vérifier `--url`. Un fichier de sélection est lié à l'instance qui l'a produit |
+| `E1004` | `MMARCHIVE_EXPORT` vaut autre chose que `1`, `true`, `0`, `false` ou vide  | Corriger la variable, le message cite la valeur reçue                      |
 
 ## E20xx, l'instance et les garde-fous
 

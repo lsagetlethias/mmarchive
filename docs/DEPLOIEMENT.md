@@ -101,6 +101,26 @@ double de la taille finale de l'index comme espace libre pendant l'opération.
 Après une opération `mmarchive-redact`, l'index doit être reconstruit, sinon il continue
 de servir ce qui vient d'être effacé.
 
+## Activer l'export
+
+La page **Exporter** et la route `/lite.zip` produisent une copie autonome : l'index et un
+viewer en un seul fichier HTML, qui s'ouvrent sans serveur. Elles sont **désactivées par
+défaut**. Le zip emporte toute l'archive hors pièces jointes, et quiconque atteint le viewer
+peut le télécharger.
+
+```bash
+MMARCHIVE_EXPORT=1 docker compose up -d
+```
+
+`1` ou `true` active, `0`, `false` ou une valeur vide désactive. Toute autre valeur fait
+échouer le démarrage plutôt que de laisser l'export dans un état que personne n'a choisi.
+Hors conteneur, `mmarchive-serve --export` a le même effet.
+
+Pour mettre une copie à disposition de plusieurs personnes, servez le dossier `web/` du zip
+avec `index.db` à côté, depuis n'importe quel serveur de fichiers. Il doit répondre aux
+requêtes par plage et ne pas recompresser les réponses, sans quoi les plages demandées ne
+correspondraient plus au fichier.
+
 ## Durcissement
 
 Le compose applique déjà ce qui est applicable à ce service :
@@ -114,8 +134,8 @@ Le compose applique déjà ce qui est applicable à ce service :
 | Utilisateur non privilégié   | L'image tourne en `node`, jamais en `root`                                      |
 | Montages `:ro`               | Le viewer est en lecture seule par construction, le montage le rend vrai au niveau du noyau |
 
-Le zip de la copie autonome, servi par `/lite.zip`, est assemblé en flux et n'est jamais
-écrit sur disque : c'est ce qui permet de garder le système de fichiers en lecture seule
+Le zip de la copie autonome, servi par `/lite.zip` quand l'export est activé, est assemblé
+en flux et n'est jamais écrit sur disque : c'est ce qui permet de garder le système de fichiers en lecture seule
 malgré une route qui produit un fichier de plusieurs centaines de mégaoctets.
 
 Sur un hôte Linux, les droits sont le seul point d'attention, et ils diffèrent selon le

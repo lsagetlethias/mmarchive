@@ -20,6 +20,7 @@ export const ERROR_CODES = {
   OptionsError: "E1001",
   SelectionFileError: "E1002",
   SelectionMismatchError: "E1003",
+  ExportFlagError: "E1004",
 
   MattermostError: "E2001",
   MattermostHttpError: "E2002",
