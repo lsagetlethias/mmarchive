@@ -51,7 +51,8 @@ program
         return;
       }
 
-      const exportEnabled = opts.export === true || parseExportFlag(process.env.MMARCHIVE_EXPORT);
+      const exportFromEnv = parseExportFlag(process.env.MMARCHIVE_EXPORT);
+      const exportEnabled = opts.export === true || exportFromEnv;
       const driver = new NodeSqlDriver(opts.index);
       const app = createServer({
         driver,
